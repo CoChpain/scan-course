@@ -62,12 +62,24 @@
         const aValideTour = tours[tour]?.some(r => r.dossard == dossard);
         const aValideTourPrecedent = tours[tour - 1]?.some(r => r.dossard == dossard && !r.horsDelai);
 
-        if (!aValideTour && aValideTourPrecedent && c.statut === "DNF") {
-          liste.push({
-            dossard,
-            timestamp: null,
-            dnf: true
-          });
+       // Cas général : DNF après un tour validé
+if (!aValideTour && aValideTourPrecedent && c.statut === "DNF") {
+    liste.push({
+        dossard,
+        timestamp: null,
+        dnf: true
+    });
+}
+
+// Cas spécial : Tour 1 → afficher les DNF même sans tour précédent
+if (tour === 1 && c.statut === "DNF" && !aValideTour) {
+    liste.push({
+        dossard,
+        timestamp: null,
+        dnf: true
+    });
+}
+
         }
       });
 
@@ -242,4 +254,5 @@
   </script>
 </body>
 </html>
+
 
