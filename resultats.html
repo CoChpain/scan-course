@@ -75,7 +75,13 @@
           const date = r.timestamp.toDate();
           const temps = formatTemps(date - depart);
 
-          const style = r.horsDelai ? "style='color:red;font-weight:bold;'" : "";
+          const rouge = (r.horsDelai || c.statut === "DNF" || c.statut === "ELIMINE");
+          const rose = (!rouge && c.categorie === "F");
+          const style = rouge
+            ? "style='color:red;font-weight:bold;'"
+            : rose
+              ? "style='color:#ff66cc;font-weight:bold;'"
+              : "style='color:white;'";
 
           html += `
             <tr ${style}>
@@ -113,6 +119,7 @@
           const date = dernier.timestamp.toDate();
           const temps = formatTemps(date - depart);
           const c = coureursMap[dossard] || {};
+
           classement.push({
             dossard,
             nom: c.nom || "",
@@ -120,7 +127,8 @@
             tour: dernier.tour,
             tempsMs: date - depart,
             temps,
-            horsDelai: dernier.horsDelai || c.statut === "DNF"
+            rouge: (dernier.horsDelai || c.statut === "DNF" || c.statut === "ELIMINE"),
+            categorie: c.categorie
           });
         });
 
@@ -131,7 +139,12 @@
 
         let rank = 1;
         classement.forEach(r => {
-          const style = r.horsDelai ? "style='color:red;font-weight:bold;'" : "";
+          const style = r.rouge
+            ? "style='color:red;font-weight:bold;'"
+            : r.categorie === "F"
+              ? "style='color:#ff66cc;font-weight:bold;'"
+              : "style='color:white;'";
+
           html += `
             <tr ${style}>
               <td>${rank++}</td>
