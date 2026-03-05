@@ -13,6 +13,12 @@
   <div id="reader" style="width:320px;margin:20px auto;"></div>
   <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
 
+  <!-- DNF MANUEL -->
+  <div style="margin-top:20px;">
+    <input id="dossard-manuel" type="text" placeholder="Dossard manuel" style="padding:10px;font-size:18px;">
+    <button id="btn-dnf" style="padding:10px 20px;font-size:18px;">DNF</button>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import { 
@@ -38,15 +44,15 @@
     // Limites de temps par tour (en minutes)
     const limitesTours = {
       1: 45,
-      2: 88,
-      3: 129,
-      4: 168,
-      5: 205,
-      6: 240,
-      7: 273,
-      8: 304,
-      9: 333,
-      10: 360
+      2: 43,
+      3: 41,
+      4: 39,
+      5: 37,
+      6: 35,
+      7: 33,
+      8: 31,
+      9: 29,
+      10: 27
     };
 
     function showMessage(msg, color="white"){
@@ -57,10 +63,8 @@
 
     async function handleScan(decodedText){
 
-      // Extraire le dossard après le tiret (COURSE2026-101 → 101)
       const dossard = decodedText.split("-").pop().trim();
 
-      // Vérifier si le coureur existe
       const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
       const snap = await getDocs(q);
 
@@ -73,13 +77,13 @@
       const docCoureur = snap.docs[0];
       const coureur = docCoureur.data();
 
-      if (coureur.statut === "ELIMINE") {
+      if (coureur.statut === "ELIMINE" || coureur.statut === "DNF") {
         beepError.play();
-        showMessage("⛔ COUREUR ÉLIMINÉ (" + dossard + ")", "red");
+        showMessage("⛔ COUREUR NON AUTORISÉ (" + dossard + ")", "red");
         return;
       }
 
-      // Vérifier le dernier scan (anti double-scan 15 sec)
+      // Anti double-scan
       const qLast = query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -101,41 +105,48 @@
         }
       }
 
-      // Déterminer le numéro du tour (nombre de scans précédents + 1)
+      // Déterminer le tour
       const qCount = query(collection(db, "resultats"), where("dossard", "==", dossard));
       const countSnap = await getDocs(qCount);
       const tour = countSnap.size + 1;
 
-      // Vérifier la limite de temps pour ce tour
+      // Vérifier hors délai
       const nowMs = Date.now();
       const ecouleMinutes = (nowMs - departMs) / 60000;
       const limite = limitesTours[tour];
 
+      let horsDelai = false;
+
       if (limite !== undefined && ecouleMinutes > limite) {
-        // Le coureur est éliminé pour ce tour
+        horsDelai = true;
+
+        // Éliminé pour les tours suivants
         await updateDoc(doc(db, "coureurs", docCoureur.id), {
           statut: "ELIMINE"
         });
-        beepError.play();
-        showMessage(
-          "⛔ Temps dépassé pour le tour " + tour + "<br>Dossard " + dossard + " ÉLIMINÉ",
-          "red"
-        );
-        return;
       }
 
       // Enregistrer le résultat
       await addDoc(collection(db, "resultats"), {
         dossard: dossard,
         tour: tour,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        horsDelai: horsDelai
       });
 
-      beepOk.play();
-      showMessage(
-        "✅ Scan OK<br>Dossard : " + dossard + "<br>🏁 Tour : " + tour,
-        "lime"
-      );
+      if (horsDelai) {
+        beepError.play();
+        showMessage(
+          "⚠️ Hors délai<br>Dossard : " + dossard + "<br>Tour : " + tour,
+          "orange"
+        );
+      } else {
+        beepOk.play();
+        showMessage(
+          "✅ Scan OK<br>Dossard : " + dossard + "<br>Tour : " + tour,
+          "lime"
+        );
+      }
     }
 
     function onScanSuccess(decodedText){
@@ -146,10 +157,9 @@
 
         handleScan(decodedText)
           .catch(err => {
-    beepError.play();
-    showMessage("❌ Erreur Firebase :<br>" + err.message, "red");
-})
-
+            beepError.play();
+            showMessage("❌ Erreur Firebase :<br>" + err.message, "red");
+          })
           .finally(()=>{
             setTimeout(()=>{
               scanner.resume();
@@ -160,9 +170,32 @@
 
     scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
     scanner.render(onScanSuccess);
+
+    // DNF MANUEL
+    document.getElementById("btn-dnf").addEventListener("click", async () => {
+      const dossard = document.getElementById("dossard-manuel").value.trim();
+      if (!dossard) return;
+
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        beepError.play();
+        showMessage("❌ Dossard inconnu : " + dossard, "red");
+        return;
+      }
+
+      const docCoureur = snap.docs[0];
+
+      await updateDoc(doc(db, "coureurs", docCoureur.id), {
+        statut: "DNF"
+      });
+
+      beepError.play();
+      showMessage("🏳️ Coureur " + dossard + " marqué DNF", "orange");
+    });
+
   </script>
 
 </body>
 </html>
-
-
