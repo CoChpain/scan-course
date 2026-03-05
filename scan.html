@@ -15,8 +15,10 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, limit } 
-      from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    import { 
+      getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, 
+      orderBy, limit, doc, updateDoc 
+    } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
     const app = initializeApp(firebaseConfig);
@@ -28,6 +30,25 @@
     const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
     const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
+    // Heure de départ : 16h00 aujourd'hui
+    const depart = new Date();
+    depart.setHours(16, 0, 0, 0);
+    const departMs = depart.getTime();
+
+    // Limites de temps par tour (en minutes)
+    const limitesTours = {
+      1: 45,
+      2: 43,
+      3: 41,
+      4: 39,
+      5: 37,
+      6: 35,
+      7: 33,
+      8: 31,
+      9: 29,
+      10: 27
+    };
+
     function showMessage(msg, color="white"){
         const fb = document.getElementById("feedback");
         fb.style.color = color;
@@ -36,7 +57,7 @@
 
     async function handleScan(decodedText){
 
-      // Extraire le dossard après le tiret
+      // Extraire le dossard après le tiret (COURSE2026-101 → 101)
       const dossard = decodedText.split("-").pop().trim();
 
       // Vérifier si le coureur existe
@@ -49,7 +70,8 @@
         return;
       }
 
-      const coureur = snap.docs[0].data();
+      const docCoureur = snap.docs[0];
+      const coureur = docCoureur.data();
 
       if (coureur.statut === "ELIMINE") {
         beepError.play();
@@ -79,10 +101,28 @@
         }
       }
 
-      // Déterminer le numéro du tour
+      // Déterminer le numéro du tour (nombre de scans précédents + 1)
       const qCount = query(collection(db, "resultats"), where("dossard", "==", dossard));
       const countSnap = await getDocs(qCount);
       const tour = countSnap.size + 1;
+
+      // Vérifier la limite de temps pour ce tour
+      const nowMs = Date.now();
+      const ecouleMinutes = (nowMs - departMs) / 60000;
+      const limite = limitesTours[tour];
+
+      if (limite !== undefined && ecouleMinutes > limite) {
+        // Le coureur est éliminé pour ce tour
+        await updateDoc(doc(db, "coureurs", docCoureur.id), {
+          statut: "ELIMINE"
+        });
+        beepError.play();
+        showMessage(
+          "⛔ Temps dépassé pour le tour " + tour + "<br>Dossard " + dossard + " ÉLIMINÉ",
+          "red"
+        );
+        return;
+      }
 
       // Enregistrer le résultat
       await addDoc(collection(db, "resultats"), {
