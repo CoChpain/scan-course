@@ -23,8 +23,9 @@
 
     const div = document.getElementById("contenu");
 
+    /* 🕒 Départ chrono = 19h00 */
     const depart = new Date();
-    depart.setHours(17, 0, 0, 0);
+    depart.setHours(19, 0, 0, 0);
 
     function formatTemps(ms) {
       if (!isFinite(ms)) return "--:--:--";
@@ -48,15 +49,20 @@
       document.getElementById("onglets").innerHTML = html;
     }
 
+    /* 🟦 AFFICHAGE D’UN TOUR */
     window.afficherTour = function(tour) {
       let liste = [...(tours[tour] || [])];
 
-      // Ajouter les coureurs qui ont validé le tour précédent mais pas celui-ci
+      /* Ajouter les DNF (ceux qui ont validé le tour précédent mais pas ce tour) */
       Object.keys(coureursMap).forEach(dossard => {
-        const aValideTour = tours[tour]?.some(r => r.dossard == dossard);
-        const aValideTourPrecedent = tours[tour - 1]?.some(r => r.dossard == dossard);
+        const c = coureursMap[dossard];
 
-        if (!aValideTour && aValideTourPrecedent) {
+        if (c.statut === "ELIMINE") return; // éliminé = jamais affiché
+
+        const aValideTour = tours[tour]?.some(r => r.dossard == dossard);
+        const aValideTourPrecedent = tours[tour - 1]?.some(r => r.dossard == dossard && !r.horsDelai);
+
+        if (!aValideTour && aValideTourPrecedent && c.statut === "DNF") {
           liste.push({
             dossard,
             timestamp: null,
@@ -65,10 +71,26 @@
         }
       });
 
+      /* Calcul du ratio */
+      const validesPrecedent = new Set();
+      const validesActuel = new Set();
+
+      (tours[tour - 1] || []).forEach(r => {
+        if (!r.horsDelai) validesPrecedent.add(r.dossard);
+      });
+
+      (tours[tour] || []).forEach(r => {
+        if (!r.horsDelai) validesActuel.add(r.dossard);
+      });
+
+      const total = validesPrecedent.size;
+      const arrives = validesActuel.size;
+
       let html = `<h2>Tour ${tour}</h2>`;
+      html += `<h3 style="color:yellow;">Arrivés : ${arrives} / ${total}</h3>`;
       html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Temps</th></tr>";
 
-      // Trier : les valides d'abord, puis les DNF
+      /* Trier : valides d'abord, puis DNF */
       liste.sort((a,b)=>{
         if (a.timestamp && b.timestamp) return a.timestamp.toDate() - b.timestamp.toDate();
         if (a.timestamp) return -1;
@@ -114,13 +136,14 @@
       div.innerHTML = html;
     };
 
+    /* 🟦 CLASSEMENT GÉNÉRAL */
     window.afficherGeneral = function() {
       let html = `<h2>Classement général</h2>`;
       html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Tour atteint</th><th>Temps</th></tr>";
 
       const classement = [];
 
-      // Coureurs avec résultats
+      /* Coureurs avec résultats */
       Object.keys(tousLesResultats).forEach(dossard => {
         const scans = tousLesResultats[dossard];
         scans.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
@@ -141,7 +164,7 @@
         });
       });
 
-      // Coureurs sans résultat
+      /* Coureurs sans résultat */
       Object.keys(coureursMap).forEach(dossard => {
         if (!tousLesResultats[dossard]) {
           const c = coureursMap[dossard];
@@ -187,7 +210,7 @@
       div.innerHTML = html;
     };
 
-    // 🔥 LISTENERS TEMPS RÉEL
+    /* 🔥 LISTENERS TEMPS RÉEL */
     onSnapshot(collection(db, "coureurs"), snap => {
       coureursMap = {};
       snap.forEach(doc => {
