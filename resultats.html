@@ -84,19 +84,32 @@
         }
       });
 
-      /* Calcul du ratio */
+      /* 🟨 CALCUL DU RATIO */
+      let total = 0;
       const validesPrecedent = new Set();
       const validesActuel = new Set();
 
-      (tours[tour - 1] || []).forEach(r => {
-        if (!r.horsDelai) validesPrecedent.add(r.dossard);
-      });
+      /* Cas général : tours > 1 */
+      if (tour > 1) {
+        (tours[tour - 1] || []).forEach(r => {
+          if (!r.horsDelai) validesPrecedent.add(r.dossard);
+        });
+        total = validesPrecedent.size;
+      }
 
+      /* Cas spécial : Tour 1 → total = coureurs inscrits (hors ELIMINÉS) */
+      else {
+        Object.keys(coureursMap).forEach(dossard => {
+          const c = coureursMap[dossard];
+          if (c.statut !== "ELIMINE") total++;
+        });
+      }
+
+      /* Arrivés du tour actuel */
       (tours[tour] || []).forEach(r => {
         if (!r.horsDelai) validesActuel.add(r.dossard);
       });
 
-      const total = validesPrecedent.size;
       const arrives = validesActuel.size;
 
       let html = `<h2>Tour ${tour}</h2>`;
