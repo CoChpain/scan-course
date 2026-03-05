@@ -22,7 +22,6 @@
 
     const div = document.getElementById("contenu");
 
-    // Départ à 16h00 aujourd'hui
     const depart = new Date();
     depart.setHours(16, 0, 0, 0);
 
@@ -50,13 +49,12 @@
 
       resSnap.forEach(doc => {
         const r = doc.data();
-        if (!r.tour) return; // sécurité
+        if (!r.tour) return;
         if (!tours[r.tour]) tours[r.tour] = [];
         tours[r.tour].push(r);
         tousLesResultats.push(r);
       });
 
-      // Création des onglets : Général + tours
       let ongletsHTML = `<button onclick="afficherGeneral()" style="margin:5px;">Général</button>`;
       const toursOrdonnés = Object.keys(tours).map(Number).sort((a,b)=>a-b);
       toursOrdonnés.forEach(t => {
@@ -64,13 +62,11 @@
       });
       document.getElementById("onglets").innerHTML = ongletsHTML;
 
-      // Fonction : classement par tour
       window.afficherTour = function(tour) {
         const liste = tours[tour] || [];
         let html = `<h2>Tour ${tour}</h2>`;
         html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Temps</th></tr>";
 
-        // Classement : ordre d'arrivée (timestamp)
         liste.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
 
         let rank = 1;
@@ -79,8 +75,10 @@
           const date = r.timestamp.toDate();
           const temps = formatTemps(date - depart);
 
+          const style = r.horsDelai ? "style='color:red;font-weight:bold;'" : "";
+
           html += `
-            <tr>
+            <tr ${style}>
               <td>${rank++}</td>
               <td>${r.dossard}</td>
               <td>${c.nom || ""}</td>
@@ -94,12 +92,10 @@
         div.innerHTML = html;
       };
 
-      // Fonction : classement général
       window.afficherGeneral = function() {
         let html = `<h2>Classement général</h2>`;
         html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Tour atteint</th><th>Temps</th></tr>";
 
-        // On prend le dernier tour de chaque coureur
         const parCoureur = {};
 
         tousLesResultats.forEach(r => {
@@ -123,11 +119,11 @@
             prenom: c.prenom || "",
             tour: dernier.tour,
             tempsMs: date - depart,
-            temps
+            temps,
+            horsDelai: dernier.horsDelai || c.statut === "DNF"
           });
         });
 
-        // Classement général : d'abord tour le plus élevé, puis temps le plus court
         classement.sort((a,b)=>{
           if (b.tour !== a.tour) return b.tour - a.tour;
           return a.tempsMs - b.tempsMs;
@@ -135,8 +131,9 @@
 
         let rank = 1;
         classement.forEach(r => {
+          const style = r.horsDelai ? "style='color:red;font-weight:bold;'" : "";
           html += `
-            <tr>
+            <tr ${style}>
               <td>${rank++}</td>
               <td>${r.dossard}</td>
               <td>${r.nom}</td>
@@ -151,7 +148,6 @@
         div.innerHTML = html;
       };
 
-      // Afficher le général par défaut
       afficherGeneral();
     }
 
