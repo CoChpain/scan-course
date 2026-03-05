@@ -5,6 +5,7 @@
   <title>SCAN COURSE</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
+
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
   <!-- 🔒 VERROUILLAGE PAR MOT DE PASSE -->
@@ -42,7 +43,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import { 
-      getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, 
+      getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp,
       orderBy, limit, doc, updateDoc 
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
@@ -56,25 +57,34 @@
     const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
     const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
+    /* 🕒 Départ chrono = 19h00 */
     const depart = new Date();
-    depart.setHours(18, 30, 0, 0);
+    depart.setHours(19, 0, 0, 0);
     const departMs = depart.getTime();
 
-    const limitesTours = {
-      1: 45, 2: 88, 3: 129, 4: 168, 5: 205,
-      6: 240, 7: 273, 8: 305, 9: 334, 10: 361
-    };
+    /* ⏱️ Durées des 10 tours */
+    const dureesTours = [45, 43, 41, 39, 37, 35, 33, 31, 29, 27];
+
+    /* ⏱️ Limites cumulées */
+    const limitesTours = {};
+    let cumul = 0;
+    dureesTours.forEach((duree, index) => {
+      cumul += duree;
+      limitesTours[index + 1] = cumul;
+    });
 
     function showMessage(msg, color="white"){
-        const fb = document.getElementById("feedback");
-        fb.style.color = color;
-        fb.innerHTML = msg;
+      const fb = document.getElementById("feedback");
+      fb.style.color = color;
+      fb.innerHTML = msg;
     }
 
+    /* 🔍 Fonction principale de scan */
     async function handleScan(decodedText){
 
       const dossard = decodedText.split("-").pop().trim();
 
+      /* Vérifier si le coureur existe */
       const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
       const snap = await getDocs(q);
 
@@ -87,12 +97,14 @@
       const docCoureur = snap.docs[0];
       const coureur = docCoureur.data();
 
+      /* ❌ Coureur éliminé ou DNF → interdit */
       if (coureur.statut === "ELIMINE" || coureur.statut === "DNF") {
         beepError.play();
-        showMessage("⛔ COUREUR NON AUTORISÉ (" + dossard + ")", "red");
+        showMessage("⛔ Coureur non autorisé (" + dossard + ")", "red");
         return;
       }
 
+      /* Anti double-scan 15 sec */
       const qLast = query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -114,24 +126,28 @@
         }
       }
 
+      /* Déterminer le numéro du tour */
       const qCount = query(collection(db, "resultats"), where("dossard", "==", dossard));
       const countSnap = await getDocs(qCount);
       const tour = countSnap.size + 1;
 
+      /* Vérifier limite du tour */
       const nowMs = Date.now();
-      const ecouleMinutes = (nowMs - departMs) / 60000;
+      const minutesDepuisDepart = (nowMs - departMs) / 60000;
       const limite = limitesTours[tour];
 
       let horsDelai = false;
 
-      if (limite !== undefined && ecouleMinutes > limite) {
+      if (limite !== undefined && minutesDepuisDepart > limite) {
         horsDelai = true;
 
+        /* ELIMINATION */
         await updateDoc(doc(db, "coureurs", docCoureur.id), {
           statut: "ELIMINE"
         });
       }
 
+      /* Enregistrer le scan */
       await addDoc(collection(db, "resultats"), {
         dossard: dossard,
         tour: tour,
@@ -139,43 +155,65 @@
         horsDelai: horsDelai
       });
 
+      /* Calcul du ratio (arrivés / total) */
+      let totalEnCourse = 0;
+      let dejaArrives = 0;
+
+      /* Coureurs ayant validé le tour précédent dans les délais */
+      const coureursSnap = await getDocs(collection(db, "coureurs"));
+      const resultatsSnap = await getDocs(collection(db, "resultats"));
+
+      const validesPrecedent = new Set();
+      const validesTourActuel = new Set();
+
+      resultatsSnap.forEach(doc => {
+        const r = doc.data();
+        if (r.tour === tour - 1 && !r.horsDelai) validesPrecedent.add(r.dossard);
+        if (r.tour === tour) validesTourActuel.add(r.dossard);
+      });
+
+      totalEnCourse = validesPrecedent.size;
+      dejaArrives = validesTourActuel.size;
+
+      /* Affichage */
       if (horsDelai) {
         beepError.play();
         showMessage(
-          "⚠️ Hors délai<br>Dossard : " + dossard + "<br>Tour : " + tour,
+          `⚠️ Hors délai<br>Dossard : ${dossard}<br>Tour : ${tour}<br><br>Arrivés : ${dejaArrives}/${totalEnCourse}`,
           "orange"
         );
       } else {
         beepOk.play();
         showMessage(
-          "✅ Scan OK<br>Dossard : " + dossard + "<br>Tour : " + tour,
+          `✅ Scan OK<br>Dossard : ${dossard}<br>Tour : ${tour}<br><br>Arrivés : ${dejaArrives}/${totalEnCourse}`,
           "lime"
         );
       }
     }
 
     function onScanSuccess(decodedText){
-        if(isProcessing) return;
+      if(isProcessing) return;
 
-        isProcessing = true;
-        scanner.pause(true);
+      isProcessing = true;
+      scanner.pause(true);
 
-        handleScan(decodedText)
-          .catch(err => {
-            beepError.play();
-            showMessage("❌ Erreur Firebase :<br>" + err.message, "red");
-          })
-          .finally(()=>{
-            setTimeout(()=>{
-              scanner.resume();
-              isProcessing = false;
-            }, 1200);
-          });
+      handleScan(decodedText)
+        .catch(err => {
+          beepError.play();
+          showMessage("❌ Erreur Firebase :<br>" + err.message, "red");
+        })
+        .finally(()=>{
+          setTimeout(()=>{
+            scanner.resume();
+            isProcessing = false;
+          }, 1200);
+        });
     }
 
     scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
     scanner.render(onScanSuccess);
 
+    /* DNF manuel */
     document.getElementById("btn-dnf").addEventListener("click", async () => {
       const dossard = document.getElementById("dossard-manuel").value.trim();
       if (!dossard) return;
@@ -203,4 +241,3 @@
 
 </body>
 </html>
-
