@@ -7,6 +7,26 @@
 </head>
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
+  <!-- 🔒 VERROUILLAGE PAR MOT DE PASSE -->
+  <div id="lock" style="position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
+    <h2>🔒 Accès protégé</h2>
+    <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
+    <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px;">Entrer</button>
+    <div id="err" style="color:red;margin-top:10px;"></div>
+  </div>
+
+  <script>
+  function checkPwd(){
+    const good = "3sRunTravel2026";
+    const val = document.getElementById("pwd").value;
+    if(val === good){
+      document.getElementById("lock").style.display = "none";
+    } else {
+      document.getElementById("err").innerHTML = "Mot de passe incorrect";
+    }
+  }
+  </script>
+
   <h1>🏁 SCAN</h1>
   <a href="index.html" style="color:gray;">⬅ Retour</a>
 
@@ -36,23 +56,13 @@
     const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
     const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-    // Heure de départ : 16h00 aujourd'hui
     const depart = new Date();
     depart.setHours(16, 0, 0, 0);
     const departMs = depart.getTime();
 
-    // Limites de temps par tour (en minutes)
     const limitesTours = {
-      1: 45,
-      2: 43,
-      3: 41,
-      4: 39,
-      5: 37,
-      6: 35,
-      7: 33,
-      8: 31,
-      9: 29,
-      10: 27
+      1: 45, 2: 43, 3: 41, 4: 39, 5: 37,
+      6: 35, 7: 33, 8: 31, 9: 29, 10: 27
     };
 
     function showMessage(msg, color="white"){
@@ -83,7 +93,6 @@
         return;
       }
 
-      // Anti double-scan
       const qLast = query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -105,12 +114,10 @@
         }
       }
 
-      // Déterminer le tour
       const qCount = query(collection(db, "resultats"), where("dossard", "==", dossard));
       const countSnap = await getDocs(qCount);
       const tour = countSnap.size + 1;
 
-      // Vérifier hors délai
       const nowMs = Date.now();
       const ecouleMinutes = (nowMs - departMs) / 60000;
       const limite = limitesTours[tour];
@@ -120,13 +127,11 @@
       if (limite !== undefined && ecouleMinutes > limite) {
         horsDelai = true;
 
-        // Éliminé pour les tours suivants
         await updateDoc(doc(db, "coureurs", docCoureur.id), {
           statut: "ELIMINE"
         });
       }
 
-      // Enregistrer le résultat
       await addDoc(collection(db, "resultats"), {
         dossard: dossard,
         tour: tour,
@@ -171,7 +176,6 @@
     scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
     scanner.render(onScanSuccess);
 
-    // DNF MANUEL
     document.getElementById("btn-dnf").addEventListener("click", async () => {
       const dossard = document.getElementById("dossard-manuel").value.trim();
       if (!dossard) return;
