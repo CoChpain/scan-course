@@ -24,42 +24,13 @@ h1 {
   text-shadow: 0 0 10px #ff66cc;
 }
 
-/* --- Bloc principal --- */
-.basket-team {
-  padding: 30px;
-  margin-top: 20px;
-}
-
-/* --- Menu tri / filtrage --- */
-.filters {
-  text-align: center;
-  margin-bottom: 25px;
-  font-size: 18px;
-}
-
-.filters select {
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: none;
-  background: #222;
-  color: #fff;
-  font-size: 16px;
-  margin-left: 8px;
-  outline: none;
-  transition: 0.2s;
-}
-
-.filters select:hover {
-  background: #333;
-}
-
 /* --- Grille responsive --- */
 .team-container {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 25px;
   justify-items: center;
-  margin-top: 20px;
+  margin: 40px 20px;
 }
 
 @media (min-width: 700px) {
@@ -80,6 +51,9 @@ h1 {
   align-items: center;
   cursor: pointer;
   transition: transform 0.3s ease;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeSlide 0.5s ease forwards;
 }
 
 .player-wrapper:hover {
@@ -141,26 +115,7 @@ h1 {
   color: #fff;
 }
 
-/* Bloc infos */
-.player-extra {
-  margin-top: 8px;
-  padding: 10px;
-  background: #111;
-  border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.4em;
-  width: 100%;
-  color: #ddd;
-  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
-}
-
 /* Animation d’apparition */
-.player-wrapper {
-  opacity: 0;
-  transform: translateY(10px);
-  animation: fadeSlide 0.5s ease forwards;
-}
-
 @keyframes fadeSlide {
   to {
     opacity: 1;
@@ -172,25 +127,9 @@ h1 {
 
 <body>
 
-<div class="basket-team">
-  <h1>🔥 LA TEAM RUNTRAVEL</h1>
+<h1>🔥 LA TEAM RUNTRAVEL</h1>
 
-  <!-- Menu de tri et filtrage -->
-  <div class="filters">
-    <strong>Tri :</strong>
-    <select id="tri-select">
-      <option value="date">Par date (prochaine course)</option>
-      <option value="nom">Par nom</option>
-    </select>
-
-    <strong style="margin-left:20px;">Filtrer par coureur :</strong>
-    <select id="filtre-nom">
-      <option value="">Tous</option>
-    </select>
-  </div>
-
-  <div class="team-container" id="arbitres-container"></div>
-</div>
+<div class="team-container" id="team-container"></div>
 
 <!-- PapaParse -->
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -198,191 +137,64 @@ h1 {
 <script>
 (function () {
 
-  const container = document.querySelector('#arbitres-container');
-  const selectTri = document.querySelector('#tri-select');
-  const selectNom = document.querySelector('#filtre-nom');
+  const container = document.querySelector('#team-container');
 
-  const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSnHB4b9ZyE_WryKMhYaOgl6TNZVV-T_lKXfZbHb4RcrsxG0efGEmTtUc_P-lcutCOhzT-ik2Sgx7PE/pub?output=csv";
+  const csvUrl =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSnHB4b9ZyE_WryKMhYaOgl6TNZVV-T_lKXfZbHb4RcrsxG0efGEmTtUc_P-lcutCOhzT-ik2Sgx7PE/pub?output=csv";
 
-  let arbitres = [];
+  let membres = [];
 
-  function extractDate(text) {
-    if (!text) return null;
-    const match = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-    if (!match) return null;
-    let [_, j, m, a] = match.map(Number);
-    if (a < 100) a += 2000;
-    const d = new Date(a, m - 1, j);
-    return isNaN(d) ? null : d;
-  }
-
-  function afficherArbitres() {
-    container.innerHTML = "";
-
-    const modeTri = selectTri.value;
-    const filtreNom = selectNom.value;
-
-    if (modeTri === "nom") {
-      let aAfficher = arbitres.filter(a => filtreNom === "" || a.nom === filtreNom);
-      aAfficher.sort((a, b) => a.nom.localeCompare(b.nom));
-      aAfficher.forEach(arb => afficherCarteStandard(arb));
-      return;
-    }
-
-    let cartesCourses = [];
-
-    arbitres.forEach(arb => {
-      arb.courses.forEach(c => {
-        if (filtreNom === "" || filtreNom === arb.nom) {
-          cartesCourses.push({
-            nom: arb.nom,
-            date: c.date,
-            texte: c.texte
-          });
-        }
-      });
-    });
-
-    cartesCourses.sort((a, b) => a.date - b.date);
-    cartesCourses.forEach(c => afficherCarteCourse(c));
-  }
-
-  function afficherCarteStandard(arb) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "player-wrapper";
-
-    const card = document.createElement("div");
-    card.className = "player-card";
-
-    const logo = document.createElement("div");
-    logo.className = "logo-bg";
-    logo.innerHTML = `<img src="https://s3-eu-west-2.amazonaws.com/superhalfs-production/sub_bucket/uploads/travel/b042c5fff425664439990b2a329e5fab0646/standard.png">`;
-    card.appendChild(logo);
-
-    const img = document.createElement("img");
-    img.className = "player-image";
-    img.src = "https://admin.sportsregions.fr/media/uploaded/sites/20376/kcupload/images/1000047083%20(4).png";
-    img.alt = arb.nom;
-    card.appendChild(img);
-
-    const name = document.createElement("div");
-    name.className = "player-name";
-    name.textContent = arb.nom;
-    card.appendChild(name);
-
-    wrapper.appendChild(card);
-
-    const extra = document.createElement("div");
-    extra.className = "player-extra";
-
-    if (arb.prochaineCourse) {
-      extra.innerHTML = `<strong>Prochaine course :</strong><br>${arb.prochaineCourse.texte}`;
-    } else {
-      extra.innerHTML = `<em>Aucune course à venir</em>`;
-    }
-
-    let detailsVisible = false;
-    let detailsDiv = null;
-
-    wrapper.addEventListener("click", () => {
-      if (arb.courses.length <= 1) return;
-
-      if (!detailsVisible) {
-        detailsDiv = document.createElement("div");
-        detailsDiv.style.marginTop = "10px";
-        detailsDiv.style.borderTop = "1px solid #444";
-        detailsDiv.style.paddingTop = "6px";
-        detailsDiv.innerHTML =
-          `<strong>Toutes les courses :</strong><br>${arb.courses.map(c => "- " + c.texte).join("<br>")}`;
-
-        extra.appendChild(detailsDiv);
-        detailsVisible = true;
-      } else {
-        if (detailsDiv) detailsDiv.remove();
-        detailsVisible = false;
-      }
-    });
-
-    wrapper.appendChild(extra);
-    container.appendChild(wrapper);
-  }
-
-  function afficherCarteCourse(c) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "player-wrapper";
-
-    const card = document.createElement("div");
-    card.className = "player-card";
-
-    const logo = document.createElement("div");
-    logo.className = "logo-bg";
-    logo.innerHTML = `<img src="https://s3-eu-west-2.amazonaws.com/superhalfs-production/sub_bucket/uploads/travel/b042c5fff425664439990b2a329e5fab0646/standard.png">`;
-    card.appendChild(logo);
-
-    const img = document.createElement("img");
-    img.className = "player-image";
-    img.src = "https://admin.sportsregions.fr/media/uploaded/sites/20376/kcupload/images/1000047083%20(4).png";
-    img.alt = c.nom;
-    card.appendChild(img);
-
-    const name = document.createElement("div");
-    name.className = "player-name";
-    name.textContent = c.nom;
-    card.appendChild(name);
-
-    wrapper.appendChild(card);
-
-    const extra = document.createElement("div");
-    extra.className = "player-extra";
-    extra.innerHTML = `<strong>Course :</strong><br>${c.texte}`;
-
-    wrapper.appendChild(extra);
-    container.appendChild(wrapper);
-  }
-
+  /* Lecture Google Sheet */
   fetch(csvUrl)
     .then(res => res.text())
     .then(csvText => {
       const parsed = Papa.parse(csvText, { header: false, skipEmptyLines: true });
       const data = parsed.data;
 
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 2);
-
       for (let i = 1; i < data.length; i++) {
         const ligne = data[i];
         const nom = (ligne[0] || "").trim();
         if (!nom) continue;
 
-        const infos = ligne.slice(1, 27).filter(v => v.trim() !== "");
-
-        let courses = [];
-        infos.forEach(info => {
-          const date = extractDate(info);
-          if (date && date >= cutoff) {
-            courses.push({ texte: info, date });
-          }
-        });
-
-        courses.sort((a, b) => a.date - b.date);
-
-        let prochaineCourse = courses[0] || null;
-
-        arbitres.push({ nom, infos, courses, prochaineCourse });
+        membres.push({ nom });
       }
 
-      arbitres.forEach(a => {
-        const opt = document.createElement("option");
-        opt.value = a.nom;
-        opt.textContent = a.nom;
-        selectNom.appendChild(opt);
-      });
-
-      afficherArbitres();
+      afficherMembres();
     });
 
-  selectTri.addEventListener("change", afficherArbitres);
-  selectNom.addEventListener("change", afficherArbitres);
+  /* Affichage simple : photo + nom */
+  function afficherMembres() {
+    container.innerHTML = "";
+
+    membres.forEach(m => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "player-wrapper";
+
+      const card = document.createElement("div");
+      card.className = "player-card";
+
+      const logo = document.createElement("div");
+      logo.className = "logo-bg";
+      logo.innerHTML =
+        `<img src="https://s3-eu-west-2.amazonaws.com/superhalfs-production/sub_bucket/uploads/travel/b042c5fff425664439990b2a329e5fab0646/standard.png">`;
+      card.appendChild(logo);
+
+      const img = document.createElement("img");
+      img.className = "player-image";
+      img.src =
+        "https://admin.sportsregions.fr/media/uploaded/sites/20376/kcupload/images/1000047083%20(4).png";
+      img.alt = m.nom;
+      card.appendChild(img);
+
+      const name = document.createElement("div");
+      name.className = "player-name";
+      name.textContent = m.nom;
+      card.appendChild(name);
+
+      wrapper.appendChild(card);
+      container.appendChild(wrapper);
+    });
+  }
 
 })();
 </script>
