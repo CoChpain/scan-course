@@ -2,204 +2,169 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>SCAN COURSE</title>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <title>Résultats</title>
 </head>
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
-
-  <!-- 🔒 VERROUILLAGE PAR MOT DE PASSE -->
-  <div id="lock" style="position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
-    <h2>🔒 Accès protégé</h2>
-    <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
-    <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px;">Entrer</button>
-    <div id="err" style="color:red;margin-top:10px;"></div>
-  </div>
-
-  <script>
-  function checkPwd(){
-    const good = "3sRunTravel2026";
-    const val = document.getElementById("pwd").value;
-    if(val === good){
-      document.getElementById("lock").style.display = "none";
-    } else {
-      document.getElementById("err").innerHTML = "Mot de passe incorrect";
-    }
-  }
-  </script>
-
-  <h1>🏁 SCAN</h1>
+  <h1>📊 Résultats</h1>
   <a href="index.html" style="color:gray;">⬅ Retour</a>
 
-  <div id="reader" style="width:320px;margin:20px auto;"></div>
-  <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
-
-  <!-- DNF MANUEL -->
-  <div style="margin-top:20px;">
-    <input id="dossard-manuel" type="text" placeholder="Dossard manuel" style="padding:10px;font-size:18px;">
-    <button id="btn-dnf" style="padding:10px 20px;font-size:18px;">DNF</button>
-  </div>
+  <div id="onglets" style="margin:20px;"></div>
+  <div id="contenu"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { 
-      getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, 
-      orderBy, limit, doc, updateDoc 
-    } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, query, orderBy } 
+      from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let scanner;
-    let isProcessing = false;
-
-    const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
-    const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    const div = document.getElementById("contenu");
 
     const depart = new Date();
     depart.setHours(16, 0, 0, 0);
-    const departMs = depart.getTime();
 
-    const limitesTours = {
-      1: 45, 2: 43, 3: 41, 4: 39, 5: 37,
-      6: 35, 7: 33, 8: 31, 9: 29, 10: 27
-    };
-
-    function showMessage(msg, color="white"){
-        const fb = document.getElementById("feedback");
-        fb.style.color = color;
-        fb.innerHTML = msg;
+    function formatTemps(ms) {
+      const totalSec = Math.floor(ms / 1000);
+      const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
+      const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
+      const s = String(totalSec % 60).padStart(2, "0");
+      return `${h}:${m}:${s}`;
     }
 
-    async function handleScan(decodedText){
+    async function chargerResultats(){
+      const coureursSnap = await getDocs(collection(db, "coureurs"));
+      const coureursMap = {};
+      coureursSnap.forEach(doc => {
+        const c = doc.data();
+        coureursMap[c.dossard] = c;
+      });
 
-      const dossard = decodedText.split("-").pop().trim();
+      const qRes = query(collection(db, "resultats"), orderBy("timestamp", "asc"));
+      const resSnap = await getDocs(qRes);
 
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
+      const tours = {};
+      const tousLesResultats = [];
 
-      if (snap.empty) {
-        beepError.play();
-        showMessage("❌ Dossard inconnu : " + dossard, "red");
-        return;
-      }
+      resSnap.forEach(doc => {
+        const r = doc.data();
+        if (!r.tour) return;
+        if (!tours[r.tour]) tours[r.tour] = [];
+        tours[r.tour].push(r);
+        tousLesResultats.push(r);
+      });
 
-      const docCoureur = snap.docs[0];
-      const coureur = docCoureur.data();
+      let ongletsHTML = `<button onclick="afficherGeneral()" style="margin:5px;">Général</button>`;
+      const toursOrdonnés = Object.keys(tours).map(Number).sort((a,b)=>a-b);
+      toursOrdonnés.forEach(t => {
+        ongletsHTML += `<button onclick="afficherTour(${t})" style="margin:5px;">Tour ${t}</button>`;
+      });
+      document.getElementById("onglets").innerHTML = ongletsHTML;
 
-      if (coureur.statut === "ELIMINE" || coureur.statut === "DNF") {
-        beepError.play();
-        showMessage("⛔ COUREUR NON AUTORISÉ (" + dossard + ")", "red");
-        return;
-      }
+      window.afficherTour = function(tour) {
+        const liste = tours[tour] || [];
+        let html = `<h2>Tour ${tour}</h2>`;
+        html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Temps</th></tr>";
 
-      const qLast = query(
-        collection(db, "resultats"),
-        where("dossard", "==", dossard),
-        orderBy("timestamp", "desc"),
-        limit(1)
-      );
+        liste.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
 
-      const lastSnap = await getDocs(qLast);
+        let rank = 1;
+        liste.forEach(r => {
+          const c = coureursMap[r.dossard] || {};
+          const date = r.timestamp.toDate();
+          const temps = formatTemps(date - depart);
 
-      if (!lastSnap.empty) {
-        const last = lastSnap.docs[0].data();
-        const lastTime = last.timestamp.toDate().getTime();
-        const now = Date.now();
+          const rouge = (r.horsDelai || c.statut === "DNF" || c.statut === "ELIMINE");
+          const rose = (!rouge && c.categorie === "F");
+          const style = rouge
+            ? "style='color:red;font-weight:bold;'"
+            : rose
+              ? "style='color:#ff66cc;font-weight:bold;'"
+              : "style='color:white;'";
 
-        if (now - lastTime < 15000) {
-          beepError.play();
-          showMessage("⏳ Attendre 15 sec avant un nouveau scan", "orange");
-          return;
-        }
-      }
-
-      const qCount = query(collection(db, "resultats"), where("dossard", "==", dossard));
-      const countSnap = await getDocs(qCount);
-      const tour = countSnap.size + 1;
-
-      const nowMs = Date.now();
-      const ecouleMinutes = (nowMs - departMs) / 60000;
-      const limite = limitesTours[tour];
-
-      let horsDelai = false;
-
-      if (limite !== undefined && ecouleMinutes > limite) {
-        horsDelai = true;
-
-        await updateDoc(doc(db, "coureurs", docCoureur.id), {
-          statut: "ELIMINE"
+          html += `
+            <tr ${style}>
+              <td>${rank++}</td>
+              <td>${r.dossard}</td>
+              <td>${c.nom || ""}</td>
+              <td>${c.prenom || ""}</td>
+              <td>${temps}</td>
+            </tr>
+          `;
         });
-      }
 
-      await addDoc(collection(db, "resultats"), {
-        dossard: dossard,
-        tour: tour,
-        timestamp: serverTimestamp(),
-        horsDelai: horsDelai
-      });
+        html += "</table>";
+        div.innerHTML = html;
+      };
 
-      if (horsDelai) {
-        beepError.play();
-        showMessage(
-          "⚠️ Hors délai<br>Dossard : " + dossard + "<br>Tour : " + tour,
-          "orange"
-        );
-      } else {
-        beepOk.play();
-        showMessage(
-          "✅ Scan OK<br>Dossard : " + dossard + "<br>Tour : " + tour,
-          "lime"
-        );
-      }
-    }
+      window.afficherGeneral = function() {
+        let html = `<h2>Classement général</h2>`;
+        html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Tour atteint</th><th>Temps</th></tr>";
 
-    function onScanSuccess(decodedText){
-        if(isProcessing) return;
+        const parCoureur = {};
 
-        isProcessing = true;
-        scanner.pause(true);
+        tousLesResultats.forEach(r => {
+          const d = r.dossard;
+          if (!parCoureur[d]) parCoureur[d] = [];
+          parCoureur[d].push(r);
+        });
 
-        handleScan(decodedText)
-          .catch(err => {
-            beepError.play();
-            showMessage("❌ Erreur Firebase :<br>" + err.message, "red");
-          })
-          .finally(()=>{
-            setTimeout(()=>{
-              scanner.resume();
-              isProcessing = false;
-            }, 1200);
+        const classement = [];
+
+        Object.keys(parCoureur).forEach(dossard => {
+          const scans = parCoureur[dossard];
+          scans.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
+          const dernier = scans[scans.length - 1];
+          const date = dernier.timestamp.toDate();
+          const temps = formatTemps(date - depart);
+          const c = coureursMap[dossard] || {};
+
+          classement.push({
+            dossard,
+            nom: c.nom || "",
+            prenom: c.prenom || "",
+            tour: dernier.tour,
+            tempsMs: date - depart,
+            temps,
+            rouge: (dernier.horsDelai || c.statut === "DNF" || c.statut === "ELIMINE"),
+            categorie: c.categorie
           });
+        });
+
+        classement.sort((a,b)=>{
+          if (b.tour !== a.tour) return b.tour - a.tour;
+          return a.tempsMs - b.tempsMs;
+        });
+
+        let rank = 1;
+        classement.forEach(r => {
+          const style = r.rouge
+            ? "style='color:red;font-weight:bold;'"
+            : r.categorie === "F"
+              ? "style='color:#ff66cc;font-weight:bold;'"
+              : "style='color:white;'";
+
+          html += `
+            <tr ${style}>
+              <td>${rank++}</td>
+              <td>${r.dossard}</td>
+              <td>${r.nom}</td>
+              <td>${r.prenom}</td>
+              <td>${r.tour}</td>
+              <td>${r.temps}</td>
+            </tr>
+          `;
+        });
+
+        html += "</table>";
+        div.innerHTML = html;
+      };
+
+      afficherGeneral();
     }
 
-    scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
-    scanner.render(onScanSuccess);
-
-    document.getElementById("btn-dnf").addEventListener("click", async () => {
-      const dossard = document.getElementById("dossard-manuel").value.trim();
-      if (!dossard) return;
-
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        beepError.play();
-        showMessage("❌ Dossard inconnu : " + dossard, "red");
-        return;
-      }
-
-      const docCoureur = snap.docs[0];
-
-      await updateDoc(doc(db, "coureurs", docCoureur.id), {
-        statut: "DNF"
-      });
-
-      beepError.play();
-      showMessage("🏳️ Coureur " + dossard + " marqué DNF", "orange");
-    });
-
+    chargerResultats();
   </script>
-
 </body>
 </html>
