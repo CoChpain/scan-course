@@ -146,10 +146,10 @@
 
         handleScan(decodedText)
           .catch(err => {
-            console.error(err);
-            beepError.play();
-            showMessage("❌ Erreur Firebase","red");
-          })
+    beepError.play();
+    showMessage("❌ Erreur Firebase :<br>" + err.message, "red");
+})
+
           .finally(()=>{
             setTimeout(()=>{
               scanner.resume();
@@ -164,3 +164,4 @@
 
 </body>
 </html>
+
