@@ -49,19 +49,49 @@
     }
 
     window.afficherTour = function(tour) {
-      const liste = tours[tour] || [];
+      let liste = [...(tours[tour] || [])];
+
+      // Ajouter les coureurs qui ont validé le tour précédent mais pas celui-ci
+      Object.keys(coureursMap).forEach(dossard => {
+        const aValideTour = tours[tour]?.some(r => r.dossard == dossard);
+        const aValideTourPrecedent = tours[tour - 1]?.some(r => r.dossard == dossard);
+
+        if (!aValideTour && aValideTourPrecedent) {
+          liste.push({
+            dossard,
+            timestamp: null,
+            dnf: true
+          });
+        }
+      });
+
       let html = `<h2>Tour ${tour}</h2>`;
       html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Temps</th></tr>";
 
-      liste.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
+      // Trier : les valides d'abord, puis les DNF
+      liste.sort((a,b)=>{
+        if (a.timestamp && b.timestamp) return a.timestamp.toDate() - b.timestamp.toDate();
+        if (a.timestamp) return -1;
+        if (b.timestamp) return 1;
+        return 0;
+      });
 
       let rank = 1;
       liste.forEach(r => {
         const c = coureursMap[r.dossard] || {};
-        const date = r.timestamp.toDate();
-        const temps = formatTemps(date - depart);
 
-        const rouge = (r.horsDelai || c.statut === "DNF" || c.statut === "ELIMINE");
+        let temps = "--:--:--";
+        let rouge = false;
+
+        if (r.timestamp) {
+          const date = r.timestamp.toDate();
+          temps = formatTemps(date - depart);
+          rouge = r.horsDelai ? true : false;
+        } else if (r.dnf) {
+          rouge = true;
+          temps = "DNF";
+        }
+
         const rose = (!rouge && c.categorie === "F");
         const style = rouge
           ? "style='color:red;font-weight:bold;'"
@@ -90,7 +120,7 @@
 
       const classement = [];
 
-      // Ajout des coureurs ayant des résultats
+      // Coureurs avec résultats
       Object.keys(tousLesResultats).forEach(dossard => {
         const scans = tousLesResultats[dossard];
         scans.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
@@ -111,7 +141,7 @@
         });
       });
 
-      // Ajout des coureurs SANS résultat
+      // Coureurs sans résultat
       Object.keys(coureursMap).forEach(dossard => {
         if (!tousLesResultats[dossard]) {
           const c = coureursMap[dossard];
