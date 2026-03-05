@@ -2,14 +2,103 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Accueil COURSE</title>
+  <title>APOLLO RUN</title>
+
+  <style>
+    body {
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+
+    h1 {
+      font-size: 60px;
+      margin-top: 40px;
+      letter-spacing: 4px;
+      color: #ffcc00;
+      text-shadow: 0 0 10px #ffcc00;
+    }
+
+    .menu {
+      margin-top: 50px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 60%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .btn {
+      display: block;
+      padding: 20px;
+      font-size: 26px;
+      font-weight: bold;
+      text-decoration: none;
+      color: white;
+      border-radius: 10px;
+      background: linear-gradient(90deg, #444, #222);
+      border: 2px solid #666;
+      transition: 0.2s;
+    }
+
+    .btn:hover {
+      background: linear-gradient(90deg, #666, #333);
+      transform: scale(1.03);
+      border-color: #ffcc00;
+    }
+
+    .scan-block {
+      margin-top: 80px;
+      padding: 40px 0;
+      background: #111;
+      border-top: 2px solid #333;
+    }
+
+    .scan-title {
+      font-size: 40px;
+      margin-bottom: 30px;
+      color: #00ff99;
+      text-shadow: 0 0 10px #00ff99;
+    }
+
+    .scan-btn {
+      display: inline-block;
+      padding: 20px 40px;
+      font-size: 28px;
+      font-weight: bold;
+      text-decoration: none;
+      color: black;
+      background: #00ff99;
+      border-radius: 10px;
+      transition: 0.2s;
+    }
+
+    .scan-btn:hover {
+      background: #00cc77;
+      transform: scale(1.05);
+    }
+  </style>
 </head>
-<body style="background:#000;color:#fff;font-family:Arial;text-align:center;">
-  <h1>🏁 COURSE 2026</h1>
-  <ul style="list-style:none;padding:0;font-size:22px;">
-    <li><a href="scan.html" style="color:lime;">📷 Page SCAN</a></li>
-    <li><a href="coureurs.html" style="color:cyan;">🏃 Base coureurs</a></li>
-    <li><a href="resultats.html" style="color:orange;">📊 Résultats</a></li>
-  </ul>
+
+<body>
+
+  <h1>APOLLO RUN</h1>
+
+  <div class="menu">
+    <a class="btn" href="coureurs.html">🏃 LISTE DES PARTICIPANTS</a>
+    <a class="btn" href="resultats.html">📊 RÉSULTATS</a>
+    <a class="btn" href="partenaires.html">🤝 NOS PARTENAIRES</a>
+    <a class="btn" href="team.html">🔥 LA TEAM RUNTRAVEL</a>
+  </div>
+
+  <div class="scan-block">
+    <div class="scan-title">SCAN COURSE 2026</div>
+    <a class="scan-btn" href="scan.html">📷 Accéder au SCAN</a>
+  </div>
+
 </body>
 </html>
