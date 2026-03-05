@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>SCAN COURSE</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body style="background:#000;color:white;font-family:Arial;text-align:center;">
+
+  <h1>🏁 SCAN</h1>
+  <a href="index.html" style="color:gray;">⬅ Retour</a>
+
+  <div id="reader" style="width:320px;margin:20px auto;"></div>
+  <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp } 
+      from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    import { firebaseConfig } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let scanner;
+    let isProcessing = false;
+
+    const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+    const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+
+    function showMessage(msg, color="white"){
+        const fb = document.getElementById("feedback");
+        fb.style.color = color;
+        fb.innerHTML = msg;
+    }
+
+    async function handleScan(dossard){
+      // Chercher le coureur dans Firestore
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        beepError.play();
+        showMessage("❌ Dossard inconnu : " + dossard, "red");
+        return;
+      }
+
+      const docCoureur = snap.docs[0];
+      const coureur = docCoureur.data();
+
+      if (coureur.statut === "ELIMINE") {
+        beepError.play();
+        showMessage("⛔ COUREUR ÉLIMINÉ (" + dossard + ")", "red");
+        return;
+      }
+
+      // Enregistrer un résultat
+      await addDoc(collection(db, "resultats"), {
+        dossard: dossard,
+        timestamp: serverTimestamp()
+      });
+
+      beepOk.play();
+      showMessage(
+        "✅ Scan OK<br>Dossard : " + dossard + "<br>⏱ Temps enregistré",
+        "lime"
+      );
+    }
+
+    function onScanSuccess(decodedText){
+        if(isProcessing) return;
+
+        isProcessing = true;
+        scanner.pause(true);
+
+        const dossard = decodedText.trim().replace(/\D/g,'');
+
+        handleScan(dossard)
+          .catch(err => {
+            console.error(err);
+            beepError.play();
+            showMessage("❌ Erreur Firebase","red");
+          })
+          .finally(()=>{
+            setTimeout(()=>{
+              scanner.resume();
+              isProcessing = false;
+            }, 1200);
+          });
+    }
+
+    scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
+    scanner.render(onScanSuccess);
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Coureurs</title>
+</head>
+<body style="background:#000;color:white;font-family:Arial;text-align:center;">
+  <h1>🏃 Base coureurs</h1>
+  <a href="index.html" style="color:gray;">⬅ Retour</a>
+
+  <h2>Ajouter un coureur</h2>
+  <form id="form-coureur" style="margin-bottom:20px;">
+    <input type="text" id="dossard" placeholder="Dossard" required>
+    <input type="text" id="nom" placeholder="Nom" required>
+    <input type="text" id="prenom" placeholder="Prénom" required>
+    <select id="statut">
+      <option value="OK">OK</option>
+      <option value="ELIMINE">ELIMINE</option>
+    </select>
+    <button type="submit">Ajouter</button>
+  </form>
+
+  <h2>Liste des coureurs</h2>
+  <table border="1" style="margin:auto;color:white;">
+    <thead>
+      <tr>
+        <th>Dossard</th><th>Nom</th><th>Prénom</th><th>Statut</th>
+      </tr>
+    </thead>
+    <tbody id="liste-coureurs"></tbody>
+  </table>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs } 
+      from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    import { firebaseConfig } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const form = document.getElementById("form-coureur");
+    const tbody = document.getElementById("liste-coureurs");
+
+    async function chargerCoureurs(){
+      tbody.innerHTML = "";
+      const snap = await getDocs(collection(db, "coureurs"));
+      snap.forEach(doc => {
+        const c = doc.data();
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${c.dossard}</td>
+          <td>${c.nom}</td>
+          <td>${c.prenom}</td>
+          <td>${c.statut}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    form.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const dossard = document.getElementById("dossard").value.trim();
+      const nom = document.getElementById("nom").value.trim();
+      const prenom = document.getElementById("prenom").value.trim();
+      const statut = document.getElementById("statut").value;
+
+      if(!dossard || !nom || !prenom) return;
+
+      await addDoc(collection(db, "coureurs"), { dossard, nom, prenom, statut });
+      form.reset();
+      chargerCoureurs();
+    });
+
+    chargerCoureurs();
+  </script>
+</body>
+</html>

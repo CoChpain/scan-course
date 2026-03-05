@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Résultats</title>
+</head>
+<body style="background:#000;color:white;font-family:Arial;text-align:center;">
+  <h1>📊 Résultats</h1>
+  <a href="index.html" style="color:gray;">⬅ Retour</a>
+
+  <div id="contenu"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, query, orderBy } 
+      from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    import { firebaseConfig } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const div = document.getElementById("contenu");
+
+    async function chargerResultats(){
+      const coureursSnap = await getDocs(collection(db, "coureurs"));
+      const coureursMap = {};
+      coureursSnap.forEach(doc => {
+        const c = doc.data();
+        coureursMap[c.dossard] = c;
+      });
+
+      const qRes = query(collection(db, "resultats"), orderBy("timestamp", "asc"));
+      const resSnap = await getDocs(qRes);
+
+      let html = "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Heure</th></tr>";
+      let rank = 1;
+
+      resSnap.forEach(doc => {
+        const r = doc.data();
+        const c = coureursMap[r.dossard] || {};
+        const date = r.timestamp ? r.timestamp.toDate() : null;
+        const heure = date ? date.toLocaleTimeString() : "-";
+
+        html += `
+          <tr>
+            <td>${rank++}</td>
+            <td>${r.dossard}</td>
+            <td>${c.nom || ""}</td>
+            <td>${c.prenom || ""}</td>
+            <td>${heure}</td>
+          </tr>
+        `;
+      });
+
+      html += "</table>";
+      div.innerHTML = html;
+    }
+
+    chargerResultats();
+  </script>
+</body>
+</html>
