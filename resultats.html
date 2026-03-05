@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Résultats</title>
 </head>
+
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
   <h1>📊 Résultats</h1>
   <a href="index.html" style="color:gray;">⬅ Retour</a>
@@ -23,9 +24,9 @@
 
     const div = document.getElementById("contenu");
 
-    /* 🕒 Départ chrono = 19h00 */
+    /* 🕒 Départ chrono = 19h30 */
     const depart = new Date();
-    depart.setHours(19, 0, 0, 0);
+    depart.setHours(19, 30, 0, 0);
 
     function formatTemps(ms) {
       if (!isFinite(ms)) return "--:--:--";
@@ -40,6 +41,14 @@
     let tours = {};
     let tousLesResultats = {};
 
+    /* 🧠 Mémoire locale de l’onglet actif */
+    let ongletActif = localStorage.getItem("ongletActif") || "general";
+
+    function setOngletActif(val) {
+      ongletActif = val;
+      localStorage.setItem("ongletActif", val);
+    }
+
     function construireOnglets() {
       let html = `<button onclick="afficherGeneral()" style="margin:5px;">Général</button>`;
       const toursOrdonnés = Object.keys(tours).map(Number).sort((a,b)=>a-b);
@@ -51,23 +60,27 @@
 
     /* 🟦 AFFICHAGE D’UN TOUR */
     window.afficherTour = function(tour) {
+      setOngletActif(tour);
+
       let liste = [...(tours[tour] || [])];
 
-      /* Ajouter les DNF (ceux qui ont validé le tour précédent mais pas ce tour) */
+      /* Ajouter les DNF */
       Object.keys(coureursMap).forEach(dossard => {
         const c = coureursMap[dossard];
 
-        if (c.statut === "ELIMINE") return; // éliminé = jamais affiché
+        if (c.statut === "ELIMINE") return;
 
         const aValideTour = tours[tour]?.some(r => r.dossard == dossard);
         const aValideTourPrecedent = tours[tour - 1]?.some(r => r.dossard == dossard && !r.horsDelai);
 
+        /* Cas général : DNF après un tour validé */
         if (!aValideTour && aValideTourPrecedent && c.statut === "DNF") {
-          liste.push({
-            dossard,
-            timestamp: null,
-            dnf: true
-          });
+          liste.push({ dossard, timestamp: null, dnf: true });
+        }
+
+        /* Cas spécial : Tour 1 → afficher les DNF même sans tour précédent */
+        if (tour === 1 && c.statut === "DNF" && !aValideTour) {
+          liste.push({ dossard, timestamp: null, dnf: true });
         }
       });
 
@@ -138,6 +151,8 @@
 
     /* 🟦 CLASSEMENT GÉNÉRAL */
     window.afficherGeneral = function() {
+      setOngletActif("general");
+
       let html = `<h2>Classement général</h2>`;
       html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Tour atteint</th><th>Temps</th></tr>";
 
@@ -217,7 +232,9 @@
         const c = doc.data();
         coureursMap[c.dossard] = c;
       });
-      afficherGeneral();
+
+      if (ongletActif === "general") afficherGeneral();
+      else afficherTour(Number(ongletActif));
     });
 
     onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap => {
@@ -236,7 +253,9 @@
       });
 
       construireOnglets();
-      afficherGeneral();
+
+      if (ongletActif === "general") afficherGeneral();
+      else afficherTour(Number(ongletActif));
     });
 
   </script>
