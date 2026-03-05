@@ -22,8 +22,9 @@
 
     const div = document.getElementById("contenu");
 
+    // Départ à 16h00 aujourd'hui
     const depart = new Date();
-    depart.setHours(12, 0, 0, 0);
+    depart.setHours(16, 0, 0, 0);
 
     function formatTemps(ms) {
       const totalSec = Math.floor(ms / 1000);
@@ -45,24 +46,31 @@
       const resSnap = await getDocs(qRes);
 
       const tours = {};
+      const tousLesResultats = [];
 
       resSnap.forEach(doc => {
         const r = doc.data();
+        if (!r.tour) return; // sécurité
         if (!tours[r.tour]) tours[r.tour] = [];
         tours[r.tour].push(r);
+        tousLesResultats.push(r);
       });
 
-      let ongletsHTML = "";
-      Object.keys(tours).forEach(t => {
+      // Création des onglets : Général + tours
+      let ongletsHTML = `<button onclick="afficherGeneral()" style="margin:5px;">Général</button>`;
+      const toursOrdonnés = Object.keys(tours).map(Number).sort((a,b)=>a-b);
+      toursOrdonnés.forEach(t => {
         ongletsHTML += `<button onclick="afficherTour(${t})" style="margin:5px;">Tour ${t}</button>`;
       });
       document.getElementById("onglets").innerHTML = ongletsHTML;
 
+      // Fonction : classement par tour
       window.afficherTour = function(tour) {
-        const liste = tours[tour];
+        const liste = tours[tour] || [];
         let html = `<h2>Tour ${tour}</h2>`;
         html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Temps</th></tr>";
 
+        // Classement : ordre d'arrivée (timestamp)
         liste.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
 
         let rank = 1;
@@ -86,7 +94,65 @@
         div.innerHTML = html;
       };
 
-      afficherTour(1);
+      // Fonction : classement général
+      window.afficherGeneral = function() {
+        let html = `<h2>Classement général</h2>`;
+        html += "<table border='1' style='margin:auto;color:white;'><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Prénom</th><th>Tour atteint</th><th>Temps</th></tr>";
+
+        // On prend le dernier tour de chaque coureur
+        const parCoureur = {};
+
+        tousLesResultats.forEach(r => {
+          const d = r.dossard;
+          if (!parCoureur[d]) parCoureur[d] = [];
+          parCoureur[d].push(r);
+        });
+
+        const classement = [];
+
+        Object.keys(parCoureur).forEach(dossard => {
+          const scans = parCoureur[dossard];
+          scans.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
+          const dernier = scans[scans.length - 1];
+          const date = dernier.timestamp.toDate();
+          const temps = formatTemps(date - depart);
+          const c = coureursMap[dossard] || {};
+          classement.push({
+            dossard,
+            nom: c.nom || "",
+            prenom: c.prenom || "",
+            tour: dernier.tour,
+            tempsMs: date - depart,
+            temps
+          });
+        });
+
+        // Classement général : d'abord tour le plus élevé, puis temps le plus court
+        classement.sort((a,b)=>{
+          if (b.tour !== a.tour) return b.tour - a.tour;
+          return a.tempsMs - b.tempsMs;
+        });
+
+        let rank = 1;
+        classement.forEach(r => {
+          html += `
+            <tr>
+              <td>${rank++}</td>
+              <td>${r.dossard}</td>
+              <td>${r.nom}</td>
+              <td>${r.prenom}</td>
+              <td>${r.tour}</td>
+              <td>${r.temps}</td>
+            </tr>
+          `;
+        });
+
+        html += "</table>";
+        div.innerHTML = html;
+      };
+
+      // Afficher le général par défaut
+      afficherGeneral();
     }
 
     chargerResultats();
