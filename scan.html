@@ -15,7 +15,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp } 
+    import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, limit } 
       from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -34,8 +34,12 @@
         fb.innerHTML = msg;
     }
 
-    async function handleScan(dossard){
-      // Chercher le coureur dans Firestore
+    async function handleScan(decodedText){
+
+      // Extraire le dossard après le tiret
+      const dossard = decodedText.split("-").pop().trim();
+
+      // Vérifier si le coureur existe
       const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
       const snap = await getDocs(q);
 
@@ -45,8 +49,7 @@
         return;
       }
 
-      const docCoureur = snap.docs[0];
-      const coureur = docCoureur.data();
+      const coureur = snap.docs[0].data();
 
       if (coureur.statut === "ELIMINE") {
         beepError.play();
@@ -54,15 +57,43 @@
         return;
       }
 
-      // Enregistrer un résultat
+      // Vérifier le dernier scan (anti double-scan 15 sec)
+      const qLast = query(
+        collection(db, "resultats"),
+        where("dossard", "==", dossard),
+        orderBy("timestamp", "desc"),
+        limit(1)
+      );
+
+      const lastSnap = await getDocs(qLast);
+
+      if (!lastSnap.empty) {
+        const last = lastSnap.docs[0].data();
+        const lastTime = last.timestamp.toDate().getTime();
+        const now = Date.now();
+
+        if (now - lastTime < 15000) {
+          beepError.play();
+          showMessage("⏳ Attendre 15 sec avant un nouveau scan", "orange");
+          return;
+        }
+      }
+
+      // Déterminer le numéro du tour
+      const qCount = query(collection(db, "resultats"), where("dossard", "==", dossard));
+      const countSnap = await getDocs(qCount);
+      const tour = countSnap.size + 1;
+
+      // Enregistrer le résultat
       await addDoc(collection(db, "resultats"), {
         dossard: dossard,
+        tour: tour,
         timestamp: serverTimestamp()
       });
 
       beepOk.play();
       showMessage(
-        "✅ Scan OK<br>Dossard : " + dossard + "<br>⏱ Temps enregistré",
+        "✅ Scan OK<br>Dossard : " + dossard + "<br>🏁 Tour : " + tour,
         "lime"
       );
     }
@@ -73,9 +104,7 @@
         isProcessing = true;
         scanner.pause(true);
 
-        const dossard = decodedText.trim().replace(/\D/g,'');
-
-        handleScan(dossard)
+        handleScan(decodedText)
           .catch(err => {
             console.error(err);
             beepError.play();
