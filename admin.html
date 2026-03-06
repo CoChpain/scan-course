@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Admin – Gestion course</title>
+
+<style>
+body{
+  background:#000;
+  color:white;
+  font-family:Arial;
+  text-align:center;
+}
+input,select{
+  padding:8px;
+  font-size:16px;
+  margin:5px;
+}
+button{
+  padding:8px 15px;
+  font-size:16px;
+  margin:5px;
+}
+table{
+  width:90%;
+  margin:auto;
+  border-collapse:collapse;
+  margin-top:20px;
+}
+th,td{
+  border:1px solid #444;
+  padding:5px;
+}
+th{
+  background:#111;
+}
+.red{color:red;font-weight:bold;}
+</style>
+</head>
+
+<body>
+
+<h1>🛠️ ADMIN – Gestion de la course</h1>
+<a href="index.html" style="color:gray">⬅ Retour</a>
+
+<hr>
+
+<h2>🔍 Rechercher un coureur</h2>
+
+<input id="search-dossard" type="text" placeholder="Dossard">
+<button onclick="searchRunner()">Rechercher</button>
+
+<div id="runner-info"></div>
+<div id="scan-list"></div>
+
+<hr>
+
+<h2>➕ Ajouter un scan manuellement</h2>
+
+<input id="add-dossard" type="text" placeholder="Dossard">
+<input id="add-tour" type="number" placeholder="Tour">
+<input id="add-time" type="time" step="1">
+<button onclick="addScan()">Ajouter</button>
+
+<hr>
+
+<h2>⚙️ Modifier statut coureur</h2>
+
+<input id="status-dossard" type="text" placeholder="Dossard">
+<select id="status-select">
+  <option value="OK">OK</option>
+  <option value="DNS">DNS</option>
+  <option value="DNF">DNF</option>
+  <option value="ELIMINE">Éliminé</option>
+</select>
+<button onclick="updateStatus()">Mettre à jour</button>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import {
+  getFirestore, collection, query, where, getDocs,
+  doc, updateDoc, deleteDoc, addDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* -------------------------------------------
+   🔍 RECHERCHE COUREUR
+--------------------------------------------*/
+window.searchRunner = async function(){
+
+  const dossard = document.getElementById("search-dossard").value.trim();
+  if(!dossard) return;
+
+  const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
+  const snap = await getDocs(q);
+
+  if(snap.empty){
+    document.getElementById("runner-info").innerHTML = "<p class='red'>Coureur introuvable</p>";
+    return;
+  }
+
+  const data = snap.docs[0].data();
+  const id = snap.docs[0].id;
+
+  document.getElementById("runner-info").innerHTML = `
+    <h3>${data.nom} ${data.prenom}</h3>
+    <p>Dossard : ${data.dossard}</p>
+    <p>Statut : ${data.statut}</p>
+  `;
+
+  loadScans(dossard);
+};
+
+/* -------------------------------------------
+   📄 LISTE DES SCANS
+--------------------------------------------*/
+async function loadScans(dossard){
+
+  const q = query(collection(db,"resultats"), where("dossard","==",dossard));
+  const snap = await getDocs(q);
+
+  let html = `
+    <h3>Scans</h3>
+    <table>
+      <tr>
+        <th>Tour</th>
+        <th>Heure</th>
+        <th>Hors délai</th>
+        <th>Actions</th>
+      </tr>
+  `;
+
+  snap.forEach(docu => {
+    const r = docu.data();
+    const id = docu.id;
+
+    const time = r.timestamp ? r.timestamp.toDate().toLocaleTimeString() : "--";
+
+    html += `
+      <tr>
+        <td>${r.tour}</td>
+        <td>${time}</td>
+        <td>${r.horsDelai ? "Oui" : "Non"}</td>
+        <td>
+          <button onclick="editScan('${id}', ${r.tour})">Modifier</button>
+          <button onclick="deleteScan('${id}')">Supprimer</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += "</table>";
+
+  document.getElementById("scan-list").innerHTML = html;
+}
+
+/* -------------------------------------------
+   ✏️ MODIFIER UN SCAN
+--------------------------------------------*/
+window.editScan = async function(id, tour){
+
+  const newTime = prompt("Nouvelle heure (HH:MM:SS) ?");
+  if(!newTime) return;
+
+  const today = new Date();
+  const [h,m,s] = newTime.split(":");
+  today.setHours(h, m, s, 0);
+
+  await updateDoc(doc(db,"resultats",id), {
+    timestamp: today
+  });
+
+  alert("Scan modifié !");
+};
+
+/* -------------------------------------------
+   ❌ SUPPRIMER UN SCAN
+--------------------------------------------*/
+window.deleteScan = async function(id){
+  await deleteDoc(doc(db,"resultats",id));
+  alert("Scan supprimé !");
+};
+
+/* -------------------------------------------
+   ➕ AJOUTER UN SCAN
+--------------------------------------------*/
+window.addScan = async function(){
+
+  const dossard = document.getElementById("add-dossard").value.trim();
+  const tour = Number(document.getElementById("add-tour").value);
+  const time = document.getElementById("add-time").value;
+
+  if(!dossard || !tour || !time) return alert("Champs incomplets");
+
+  const today = new Date();
+  const [h,m,s] = time.split(":");
+  today.setHours(h, m, s, 0);
+
+  await addDoc(collection(db,"resultats"), {
+    dossard,
+    tour,
+    timestamp: today,
+    horsDelai: false
+  });
+
+  alert("Scan ajouté !");
+};
+
+/* -------------------------------------------
+   🔄 MODIFIER STATUT
+--------------------------------------------*/
+window.updateStatus = async function(){
+
+  const dossard = document.getElementById("status-dossard").value.trim();
+  const statut = document.getElementById("status-select").value;
+
+  const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
+  const snap = await getDocs(q);
+
+  if(snap.empty) return alert("Coureur introuvable");
+
+  const id = snap.docs[0].id;
+
+  await updateDoc(doc(db,"coureurs",id), {
+    statut
+  });
+
+  alert("Statut mis à jour !");
+};
+
+</script>
+
+</body>
+</html>
