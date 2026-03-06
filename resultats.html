@@ -8,17 +8,17 @@
 <style>
 
 body{
-background:#000;
-color:white;
-font-family:Arial;
-text-align:center;
+  background:#000;
+  color:white;
+  font-family:Arial;
+  text-align:center;
 }
 
 .columns{
-display:grid;
-gap:10px;
-width:98%;
-margin:auto;
+  display:grid;
+  gap:10px;
+  width:98%;
+  margin:auto;
 }
 
 .cols-1{grid-template-columns:repeat(1,1fr);}
@@ -27,43 +27,43 @@ margin:auto;
 .cols-4{grid-template-columns:repeat(4,1fr);}
 
 table{
-width:100%;
-border-collapse:collapse;
-font-size:13px;
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
 }
 
 th,td{
-border:1px solid #333;
-padding:3px;
+  border:1px solid #333;
+  padding:3px;
 }
 
 th{
-background:#111;
+  background:#111;
 }
 
 .red{
-color:red;
-font-weight:bold;
+  color:red;
+  font-weight:bold;
 }
 
 .femme{
-color:#ff66cc;
-font-weight:bold;
+  color:#ff66cc;
+  font-weight:bold;
 }
 
 .fade{
-animation:fade 0.4s;
+  animation:fade 0.4s;
 }
 
 @keyframes fade{
-from{opacity:0}
-to{opacity:1}
+  from{opacity:0}
+  to{opacity:1}
 }
 
 button{
-margin:4px;
-padding:8px 12px;
-font-size:14px;
+  margin:4px;
+  padding:8px 12px;
+  font-size:14px;
 }
 
 </style>
@@ -83,14 +83,13 @@ font-size:14px;
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-
 import {
-getFirestore,
-collection,
-query,
-orderBy,
-onSnapshot,
-doc
+  getFirestore,
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -135,7 +134,8 @@ function recalculerDepartTours() {
   departTours = {};
   let cumul = 0;
 
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 200; i++) {
+    if (!limites["t" + i]) break;
     departTours[i] = depart + cumul * 60000;
     cumul += limites["t" + i] || 0;
   }
@@ -153,6 +153,13 @@ function formatTemps(ms){
   return `${h}:${m}:${sec}`;
 }
 
+/* Format limite */
+function formatLimite(min){
+  const h = String(Math.floor(min / 60)).padStart(2,"0");
+  const m = String(min % 60).padStart(2,"0");
+  return `${h}:${m}:00`;
+}
+
 /* Temps par tour */
 function calculTempsTour(dossard,tour){
 
@@ -162,7 +169,7 @@ function calculTempsTour(dossard,tour){
   if(!scans) return null;
 
   const actuel=scans.find(r=>r.tour===tour);
-  if(!actuel) return null;
+  if(!actuel || !actuel.timestamp) return null;
 
   return actuel.timestamp - departTours[tour];
 }
@@ -217,8 +224,11 @@ window.afficherTour = function(tour) {
     .filter(r => !r.horsDelai && !r.dnf && !r.dns)
     .length;
 
+  const limite = limites["t" + tour] || 0;
+
   let html = `
     <h2>Tour ${tour}</h2>
+    <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatLimite(limite)}</h3>
     <h3 style="color:yellow">Arrivés : ${arrives} / ${total}</h3>
   `;
 
@@ -382,10 +392,12 @@ window.afficherGeneral=function(){
 
     col.forEach(r => {
 
+      const c = coureursMap[r.dossard] || {};
+
       const classe =
         ["DNF","DNS","ELIMINE"].includes(r.statut)
           ? "red fade"
-          : (r.categorie==="F" ? "femme fade" : "fade");
+          : (c.categorie==="F" ? "femme fade" : "fade");
 
       html += `
         <tr class="${classe}">
