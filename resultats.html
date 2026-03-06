@@ -13,7 +13,6 @@
       text-align:center;
     }
 
-    /* Colonnes adaptatives */
     .columns {
       display: grid;
       gap: 10px;
@@ -22,7 +21,6 @@
       justify-content: center;
     }
 
-    /* Colonnes dynamiques selon le nombre de coureurs */
     .cols-1 { grid-template-columns: repeat(1, 1fr); }
     .cols-2 { grid-template-columns: repeat(2, 1fr); }
     .cols-3 { grid-template-columns: repeat(3, 1fr); }
@@ -55,7 +53,6 @@
       font-weight: bold;
     }
 
-    /* Animation fade + slide */
     .fade-slide {
       opacity: 0;
       transform: translateY(-8px);
@@ -86,7 +83,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import { 
-      getFirestore, collection, query, orderBy, onSnapshot 
+      getFirestore, collection, query, orderBy, onSnapshot, doc
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -95,12 +92,21 @@
 
     const div = document.getElementById("contenu");
 
-    /* 🕒 Départ chrono = 19h30 */
-    const depart = new Date();
-    depart.setHours(19, 30, 0, 0);
+    /* 🔥 Départ récupéré depuis Firestore */
+    let depart = null;
 
+    onSnapshot(doc(db, "course", "depart"), snap => {
+      if (snap.exists()) {
+        depart = snap.data().timestamp.toDate();
+        console.log("Départ Firestore chargé :", depart);
+      } else {
+        console.warn("⚠ Aucun départ trouvé dans Firestore !");
+      }
+    });
+
+    /* ⏱ Formatage sécurisé */
     function formatTemps(ms) {
-      if (!isFinite(ms)) return "--:--:--";
+      if (!isFinite(ms) || ms < 0) return "--:--:--";
       const totalSec = Math.floor(ms / 1000);
       const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
       const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
@@ -112,7 +118,6 @@
     let tours = {};
     let tousLesResultats = {};
 
-    /* 🧠 Mémoire locale de l’onglet actif */
     let ongletActif = localStorage.getItem("ongletActif") || "general";
 
     function setOngletActif(val) {
@@ -135,7 +140,6 @@
 
       let liste = [...(tours[tour] || [])];
 
-      /* Ajouter les DNF */
       Object.keys(coureursMap).forEach(dossard => {
         const c = coureursMap[dossard];
 
@@ -153,7 +157,6 @@
         }
       });
 
-      /* 🟨 CALCUL DU RATIO */
       let total = 0;
       const validesPrecedent = new Set();
       const validesActuel = new Set();
@@ -179,7 +182,6 @@
       let html = `<h2>Tour ${tour}</h2>`;
       html += `<h3 style="color:yellow;">Arrivés : ${arrives} / ${total}</h3>`;
 
-      /* 🟦 Colonnes adaptatives */
       const nb = liste.length;
       let cols = 4;
       if (nb < 20) cols = 1;
@@ -188,7 +190,6 @@
 
       html += `<div class="columns cols-${cols}">`;
 
-      /* Diviser en colonnes */
       const chunkSize = Math.ceil(nb / cols);
       const colonnes = [];
       for (let i = 0; i < cols; i++) {
@@ -206,7 +207,7 @@
           let temps = "--:--:--";
           let rouge = false;
 
-          if (r.timestamp) {
+          if (r.timestamp && depart) {
             const date = r.timestamp.toDate();
             temps = formatTemps(date - depart);
             rouge = r.horsDelai ? true : false;
@@ -249,7 +250,7 @@
         scans.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
         const dernier = scans[scans.length - 1];
         const date = dernier.timestamp.toDate();
-        const tempsMs = date - depart;
+        const tempsMs = depart ? date - depart : Infinity;
         const c = coureursMap[dossard] || {};
 
         classement.push({
@@ -285,7 +286,6 @@
         return a.tempsMs - b.tempsMs;
       });
 
-      /* Colonnes adaptatives */
       const nb = classement.length;
       let cols = 4;
       if (nb < 20) cols = 1;
