@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+<title>Speaker</title>
+
+<style>
+
+body{
+background:black;
+color:white;
+font-family:Arial;
+font-size:40px;
+text-align:center;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>🏁 Derniers passages</h1>
+
+<div id="live"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+
+import {
+getFirestore,collection,query,
+orderBy,onSnapshot,limit
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+onSnapshot(
+query(collection(db,"resultats"),orderBy("timestamp","desc"),limit(10)),
+snap=>{
+
+let html="";
+
+snap.forEach(doc=>{
+
+const r=doc.data();
+
+html+=`
+<div>
+Dossard ${r.dossard} — Tour ${r.tour}
+</div>
+`;
+
+});
+
+document.getElementById("live").innerHTML=html;
+
+});
+
+</script>
+
+</body>
+</html>
