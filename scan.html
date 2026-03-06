@@ -44,7 +44,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import { 
       getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp,
-      orderBy, limit, doc, updateDoc 
+      orderBy, limit, doc, updateDoc, onSnapshot
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -57,15 +57,21 @@
     const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
     const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-    /* 🕒 Départ chrono = 19h00 */
-    const depart = new Date();
-    depart.setHours(19, 30, 0, 0);
-    const departMs = depart.getTime();
+    /* 🔥 Départ Firestore (même que resultats.html) */
+    let departMs = null;
 
-    /* ⏱️ Durées des 10 tours */
+    onSnapshot(doc(db, "course", "depart"), snap => {
+      if (snap.exists()) {
+        const d = snap.data().timestamp.toDate();
+        departMs = d.getTime();
+        console.log("Départ Firestore (scan) :", d);
+      }
+    });
+
+    /* ⏱️ Durées des 10 tours (en minutes) */
     const dureesTours = [45, 43, 41, 39, 37, 35, 33, 31, 29, 27];
 
-    /* ⏱️ Limites cumulées */
+    /* ⏱️ Limites cumulées (en minutes depuis le départ) */
     const limitesTours = {};
     let cumul = 0;
     dureesTours.forEach((duree, index) => {
@@ -81,6 +87,12 @@
 
     /* 🔍 Fonction principale de scan */
     async function handleScan(decodedText){
+
+      if (!departMs) {
+        beepError.play();
+        showMessage("⏳ Départ non chargé, réessaie dans 1 seconde", "orange");
+        return;
+      }
 
       const dossard = decodedText.split("-").pop().trim();
 
@@ -131,7 +143,7 @@
       const countSnap = await getDocs(qCount);
       const tour = countSnap.size + 1;
 
-      /* Vérifier limite du tour */
+      /* Vérifier limite du tour (par rapport au départ Firestore) */
       const nowMs = Date.now();
       const minutesDepuisDepart = (nowMs - departMs) / 60000;
       const limite = limitesTours[tour];
@@ -159,15 +171,14 @@
       let totalEnCourse = 0;
       let dejaArrives = 0;
 
-      /* Coureurs ayant validé le tour précédent dans les délais */
       const coureursSnap = await getDocs(collection(db, "coureurs"));
       const resultatsSnap = await getDocs(collection(db, "resultats"));
 
       const validesPrecedent = new Set();
       const validesTourActuel = new Set();
 
-      resultatsSnap.forEach(doc => {
-        const r = doc.data();
+      resultatsSnap.forEach(docR => {
+        const r = docR.data();
         if (r.tour === tour - 1 && !r.horsDelai) validesPrecedent.add(r.dossard);
         if (r.tour === tour) validesTourActuel.add(r.dossard);
       });
@@ -241,4 +252,3 @@
 
 </body>
 </html>
-
