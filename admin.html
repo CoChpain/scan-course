@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Admin – Gestion course</title>
+<title>ADMIN – APOLLO RUN</title>
 
 <style>
 body{
@@ -35,10 +35,42 @@ th{
   background:#111;
 }
 .red{color:red;font-weight:bold;}
+
+#lock{
+  position:fixed;
+  top:0;left:0;
+  width:100%;height:100%;
+  background:black;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
 </style>
 </head>
 
 <body>
+
+<!-- 🔐 VERROUILLAGE -->
+<div id="lock">
+  <h2>🔒 Accès administrateur</h2>
+  <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
+  <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px;">Entrer</button>
+  <div id="err" style="color:red;margin-top:10px;"></div>
+</div>
+
+<script>
+function checkPwd(){
+  const good = "3sRunTravel2026";
+  const val = document.getElementById("pwd").value;
+  if(val === good){
+    document.getElementById("lock").style.display = "none";
+  } else {
+    document.getElementById("err").innerHTML = "Mot de passe incorrect";
+  }
+}
+</script>
 
 <h1>🛠️ ADMIN – Gestion de la course</h1>
 <a href="index.html" style="color:gray">⬅ Retour</a>
@@ -80,7 +112,7 @@ th{
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
   getFirestore, collection, query, where, getDocs,
-  doc, updateDoc, deleteDoc, addDoc, serverTimestamp
+  doc, updateDoc, deleteDoc, addDoc
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -105,7 +137,6 @@ window.searchRunner = async function(){
   }
 
   const data = snap.docs[0].data();
-  const id = snap.docs[0].id;
 
   document.getElementById("runner-info").innerHTML = `
     <h3>${data.nom} ${data.prenom}</h3>
@@ -131,6 +162,7 @@ async function loadScans(dossard){
         <th>Tour</th>
         <th>Heure</th>
         <th>Hors délai</th>
+        <th>Dossard</th>
         <th>Actions</th>
       </tr>
   `;
@@ -146,8 +178,9 @@ async function loadScans(dossard){
         <td>${r.tour}</td>
         <td>${time}</td>
         <td>${r.horsDelai ? "Oui" : "Non"}</td>
+        <td>${r.dossard}</td>
         <td>
-          <button onclick="editScan('${id}', ${r.tour})">Modifier</button>
+          <button onclick="editScan('${id}', ${r.tour}, '${r.dossard}')">Modifier</button>
           <button onclick="deleteScan('${id}')">Supprimer</button>
         </td>
       </tr>
@@ -162,17 +195,38 @@ async function loadScans(dossard){
 /* -------------------------------------------
    ✏️ MODIFIER UN SCAN
 --------------------------------------------*/
-window.editScan = async function(id, tour){
+window.editScan = async function(id, tour, oldDossard){
 
   const newTime = prompt("Nouvelle heure (HH:MM:SS) ?");
   if(!newTime) return;
+
+  const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")");
+  const dossardFinal = newDossard.trim() !== "" ? newDossard.trim() : oldDossard;
 
   const today = new Date();
   const [h,m,s] = newTime.split(":");
   today.setHours(h, m, s, 0);
 
+  // Charger limites et départ
+  const departSnap = await getDocs(collection(db, "course"));
+  const depart = departSnap.docs.find(d => d.id === "depart").data().timestamp.toDate().getTime();
+
+  const limitesSnap = await getDocs(collection(db, "course"));
+  const limites = limitesSnap.docs.find(d => d.id === "limitesTours").data();
+
+  // Recalcul du départ théorique du tour
+  let cumul = 0;
+  for (let i = 1; i < tour; i++) cumul += limites["t" + i] || 0;
+  const departTour = depart + cumul * 60000;
+
+  // Recalcul hors délai
+  const diffMin = (today.getTime() - departTour) / 60000;
+  const horsDelai = diffMin > (limites["t" + tour] || 0);
+
   await updateDoc(doc(db,"resultats",id), {
-    timestamp: today
+    timestamp: today,
+    dossard: dossardFinal,
+    horsDelai: horsDelai
   });
 
   alert("Scan modifié !");
