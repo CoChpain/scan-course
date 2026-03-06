@@ -230,6 +230,7 @@ window.editScan = async function(id, tour, oldDossard){
   });
 
   alert("Scan modifié !");
+  searchRunner();
 };
 
 /* -------------------------------------------
@@ -238,6 +239,7 @@ window.editScan = async function(id, tour, oldDossard){
 window.deleteScan = async function(id){
   await deleteDoc(doc(db,"resultats",id));
   alert("Scan supprimé !");
+  searchRunner();
 };
 
 /* -------------------------------------------
@@ -263,6 +265,7 @@ window.addScan = async function(){
   });
 
   alert("Scan ajouté !");
+  searchRunner();
 };
 
 /* -------------------------------------------
@@ -285,6 +288,7 @@ window.updateStatus = async function(){
   });
 
   alert("Statut mis à jour !");
+  searchRunner();
 };
 
 </script>
