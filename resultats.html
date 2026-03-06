@@ -80,287 +80,246 @@
   <div id="onglets" style="margin:20px;"></div>
   <div id="contenu"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { 
-      getFirestore, collection, query, orderBy, onSnapshot, doc
-    } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-    import { firebaseConfig } from "./firebase-config.js";
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { 
+  getFirestore, collection, query, orderBy, onSnapshot, doc
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-    const div = document.getElementById("contenu");
+const div = document.getElementById("contenu");
 
-    /* 🔥 Départ récupéré depuis Firestore */
-    let depart = null;
+/* 🔥 Départ Firestore */
+let depart = null;
 
-    onSnapshot(doc(db, "course", "depart"), snap => {
-      if (snap.exists()) {
-        depart = snap.data().timestamp.toDate();
-        console.log("Départ Firestore chargé :", depart);
-      } else {
-        console.warn("⚠ Aucun départ trouvé dans Firestore !");
-      }
+onSnapshot(doc(db, "course", "depart"), snap => {
+  if (snap.exists()) {
+    depart = snap.data().timestamp.toDate();
+    console.log("Départ Firestore :", depart);
+  }
+});
+
+/* ⏱ Formatage */
+function formatTemps(ms) {
+  if (!isFinite(ms) || ms < 0) return "--:--:--";
+  const totalSec = Math.floor(ms / 1000);
+  const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
+  const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
+  const s = String(totalSec % 60).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+
+let coureursMap = {};
+let tours = {};
+let tousLesResultats = {};
+
+let ongletActif = localStorage.getItem("ongletActif") || "general";
+
+function setOngletActif(val) {
+  ongletActif = val;
+  localStorage.setItem("ongletActif", val);
+}
+
+function construireOnglets() {
+  let html = `<button onclick="afficherGeneral()" style="margin:5px;">Général</button>`;
+  const toursOrdonnés = Object.keys(tours).map(Number).sort((a,b)=>a-b);
+  toursOrdonnés.forEach(t => {
+    html += `<button onclick="afficherTour(${t})" style="margin:5px;">Tour ${t}</button>`;
+  });
+  document.getElementById("onglets").innerHTML = html;
+}
+
+/* 🟦 TEMPS PAR TOUR */
+function calculTempsTour(dossard, tour) {
+  const scans = tousLesResultats[dossard];
+  if (!scans) return null;
+
+  const actuel = scans.find(r => r.tour === tour);
+  if (!actuel) return null;
+
+  const tActuel = actuel.timestamp.toDate();
+
+  if (tour === 1) {
+    return tActuel - depart;
+  }
+
+  const precedent = scans.find(r => r.tour === tour - 1);
+  if (!precedent) return null;
+
+  return tActuel - precedent.timestamp.toDate();
+}
+
+/* 🟦 AFFICHAGE D’UN TOUR */
+window.afficherTour = function(tour) {
+  setOngletActif(tour);
+
+  let liste = [...(tours[tour] || [])];
+
+  let html = `<h2>Tour ${tour}</h2>`;
+
+  const nb = liste.length;
+  let cols = 4;
+  if (nb < 20) cols = 1;
+  else if (nb < 50) cols = 2;
+  else if (nb < 90) cols = 3;
+
+  html += `<div class="columns cols-${cols}">`;
+
+  const chunkSize = Math.ceil(nb / cols);
+  const colonnes = [];
+  for (let i = 0; i < cols; i++) {
+    colonnes.push(liste.slice(i * chunkSize, (i + 1) * chunkSize));
+  }
+
+  let rank = 1;
+
+  colonnes.forEach(col => {
+    html += `<table><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps tour</th></tr>`;
+
+    col.forEach(r => {
+      const c = coureursMap[r.dossard] || {};
+
+      let tempsTour = calculTempsTour(r.dossard, tour);
+      let tempsAffiche = formatTemps(tempsTour);
+
+      const classe =
+        r.horsDelai ? "red fade-slide" :
+        (c.categorie === "F" ? "femme fade-slide" : "fade-slide");
+
+      html += `
+        <tr class="${classe}">
+          <td>${rank++}</td>
+          <td>${r.dossard}</td>
+          <td>${c.nom || ""} ${c.prenom || ""}</td>
+          <td>${tempsAffiche}</td>
+        </tr>
+      `;
     });
 
-    /* ⏱ Formatage sécurisé */
-    function formatTemps(ms) {
-      if (!isFinite(ms) || ms < 0) return "--:--:--";
-      const totalSec = Math.floor(ms / 1000);
-      const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
-      const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
-      const s = String(totalSec % 60).padStart(2, "0");
-      return `${h}:${m}:${s}`;
-    }
+    html += `</table>`;
+  });
 
-    let coureursMap = {};
-    let tours = {};
-    let tousLesResultats = {};
+  html += `</div>`;
+  div.innerHTML = html;
+};
 
-    let ongletActif = localStorage.getItem("ongletActif") || "general";
+/* 🟦 CLASSEMENT GÉNÉRAL */
+window.afficherGeneral = function() {
+  setOngletActif("general");
 
-    function setOngletActif(val) {
-      ongletActif = val;
-      localStorage.setItem("ongletActif", val);
-    }
+  let html = `<h2>Classement général</h2>`;
 
-    function construireOnglets() {
-      let html = `<button onclick="afficherGeneral()" style="margin:5px;">Général</button>`;
-      const toursOrdonnés = Object.keys(tours).map(Number).sort((a,b)=>a-b);
-      toursOrdonnés.forEach(t => {
-        html += `<button onclick="afficherTour(${t})" style="margin:5px;">Tour ${t}</button>`;
-      });
-      document.getElementById("onglets").innerHTML = html;
-    }
+  const classement = [];
 
-    /* 🟦 AFFICHAGE D’UN TOUR */
-    window.afficherTour = function(tour) {
-      setOngletActif(tour);
+  Object.keys(tousLesResultats).forEach(dossard => {
+    const scans = tousLesResultats[dossard];
+    scans.sort((a,b)=>a.tour - b.tour);
 
-      let liste = [...(tours[tour] || [])];
+    let total = 0;
 
-      Object.keys(coureursMap).forEach(dossard => {
-        const c = coureursMap[dossard];
-
-        if (c.statut === "ELIMINE") return;
-
-        const aValideTour = tours[tour]?.some(r => r.dossard == dossard);
-        const aValideTourPrecedent = tours[tour - 1]?.some(r => r.dossard == dossard && !r.horsDelai);
-
-        if (!aValideTour && aValideTourPrecedent && c.statut === "DNF") {
-          liste.push({ dossard, timestamp: null, dnf: true });
-        }
-
-        if (tour === 1 && c.statut === "DNF" && !aValideTour) {
-          liste.push({ dossard, timestamp: null, dnf: true });
-        }
-      });
-
-      let total = 0;
-      const validesPrecedent = new Set();
-      const validesActuel = new Set();
-
-      if (tour > 1) {
-        (tours[tour - 1] || []).forEach(r => {
-          if (!r.horsDelai) validesPrecedent.add(r.dossard);
-        });
-        total = validesPrecedent.size;
-      } else {
-        Object.keys(coureursMap).forEach(dossard => {
-          const c = coureursMap[dossard];
-          if (c.statut !== "ELIMINE") total++;
-        });
-      }
-
-      (tours[tour] || []).forEach(r => {
-        if (!r.horsDelai) validesActuel.add(r.dossard);
-      });
-
-      const arrives = validesActuel.size;
-
-      let html = `<h2>Tour ${tour}</h2>`;
-      html += `<h3 style="color:yellow;">Arrivés : ${arrives} / ${total}</h3>`;
-
-      const nb = liste.length;
-      let cols = 4;
-      if (nb < 20) cols = 1;
-      else if (nb < 50) cols = 2;
-      else if (nb < 90) cols = 3;
-
-      html += `<div class="columns cols-${cols}">`;
-
-      const chunkSize = Math.ceil(nb / cols);
-      const colonnes = [];
-      for (let i = 0; i < cols; i++) {
-        colonnes.push(liste.slice(i * chunkSize, (i + 1) * chunkSize));
-      }
-
-      let rank = 1;
-
-      colonnes.forEach(col => {
-        html += `<table><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th></tr>`;
-
-        col.forEach(r => {
-          const c = coureursMap[r.dossard] || {};
-
-          let temps = "--:--:--";
-          let rouge = false;
-
-          if (r.timestamp && depart) {
-            const date = r.timestamp.toDate();
-            temps = formatTemps(date - depart);
-            rouge = r.horsDelai ? true : false;
-          } else if (r.dnf) {
-            rouge = true;
-            temps = "DNF";
-          }
-
-          const classe =
-            rouge ? "red fade-slide" :
-            (c.categorie === "F" ? "femme fade-slide" : "fade-slide");
-
-          html += `
-            <tr class="${classe}">
-              <td>${rank++}</td>
-              <td>${r.dossard}</td>
-              <td>${c.nom || ""} ${c.prenom || ""}</td>
-              <td>${temps}</td>
-            </tr>
-          `;
-        });
-
-        html += `</table>`;
-      });
-
-      html += `</div>`;
-      div.innerHTML = html;
-    };
-
-    /* 🟦 CLASSEMENT GÉNÉRAL */
-    window.afficherGeneral = function() {
-      setOngletActif("general");
-
-      let html = `<h2>Classement général</h2>`;
-
-      const classement = [];
-
-      Object.keys(tousLesResultats).forEach(dossard => {
-        const scans = tousLesResultats[dossard];
-        scans.sort((a,b)=>a.timestamp.toDate()-b.timestamp.toDate());
-        const dernier = scans[scans.length - 1];
-        const date = dernier.timestamp.toDate();
-        const tempsMs = depart ? date - depart : Infinity;
-        const c = coureursMap[dossard] || {};
-
-        classement.push({
-          dossard,
-          nom: c.nom || "",
-          prenom: c.prenom || "",
-          tour: dernier.tour,
-          tempsMs,
-          temps: formatTemps(tempsMs),
-          rouge: (dernier.horsDelai || c.statut === "DNF" || c.statut === "ELIMINE"),
-          categorie: c.categorie
-        });
-      });
-
-      Object.keys(coureursMap).forEach(dossard => {
-        if (!tousLesResultats[dossard]) {
-          const c = coureursMap[dossard];
-          classement.push({
-            dossard,
-            nom: c.nom || "",
-            prenom: c.prenom || "",
-            tour: 0,
-            tempsMs: Infinity,
-            temps: "--:--:--",
-            rouge: (c.statut === "DNF" || c.statut === "ELIMINE"),
-            categorie: c.categorie
-          });
-        }
-      });
-
-      classement.sort((a,b)=>{
-        if (b.tour !== a.tour) return b.tour - a.tour;
-        return a.tempsMs - b.tempsMs;
-      });
-
-      const nb = classement.length;
-      let cols = 4;
-      if (nb < 20) cols = 1;
-      else if (nb < 50) cols = 2;
-      else if (nb < 90) cols = 3;
-
-      html += `<div class="columns cols-${cols}">`;
-
-      const chunkSize = Math.ceil(nb / cols);
-      const colonnes = [];
-      for (let i = 0; i < cols; i++) {
-        colonnes.push(classement.slice(i * chunkSize, (i + 1) * chunkSize));
-      }
-
-      let rank = 1;
-
-      colonnes.forEach(col => {
-        html += `<table><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Tour</th><th>Temps</th></tr>`;
-
-        col.forEach(r => {
-          const classe =
-            r.rouge ? "red fade-slide" :
-            (r.categorie === "F" ? "femme fade-slide" : "fade-slide");
-
-          html += `
-            <tr class="${classe}">
-              <td>${rank++}</td>
-              <td>${r.dossard}</td>
-              <td>${r.nom} ${r.prenom}</td>
-              <td>${r.tour}</td>
-              <td>${r.temps}</td>
-            </tr>
-          `;
-        });
-
-        html += `</table>`;
-      });
-
-      html += `</div>`;
-      div.innerHTML = html;
-    };
-
-    /* 🔥 LISTENERS TEMPS RÉEL */
-    onSnapshot(collection(db, "coureurs"), snap => {
-      coureursMap = {};
-      snap.forEach(doc => {
-        const c = doc.data();
-        coureursMap[c.dossard] = c;
-      });
-
-      if (ongletActif === "general") afficherGeneral();
-      else afficherTour(Number(ongletActif));
+    scans.forEach(r => {
+      const t = calculTempsTour(dossard, r.tour);
+      if (t) total += t;
     });
 
-    onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap => {
-      tours = {};
-      tousLesResultats = {};
+    const c = coureursMap[dossard] || {};
 
-      snap.forEach(doc => {
-        const r = doc.data();
-        if (!r.tour) return;
+    classement.push({
+      dossard,
+      nom: c.nom || "",
+      prenom: c.prenom || "",
+      tour: scans.length,
+      tempsTotal: total,
+      tempsAffiche: formatTemps(total),
+      rouge: c.statut === "DNF" || c.statut === "ELIMINE",
+      categorie: c.categorie
+    });
+  });
 
-        if (!tours[r.tour]) tours[r.tour] = [];
-        tours[r.tour].push(r);
+  classement.sort((a,b)=>{
+    if (b.tour !== a.tour) return b.tour - a.tour;
+    return a.tempsTotal - b.tempsTotal;
+  });
 
-        if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-        tousLesResultats[r.dossard].push(r);
-      });
+  const nb = classement.length;
+  let cols = 4;
+  if (nb < 20) cols = 1;
+  else if (nb < 50) cols = 2;
+  else if (nb < 90) cols = 3;
 
-      construireOnglets();
+  html += `<div class="columns cols-${cols}">`;
 
-      if (ongletActif === "general") afficherGeneral();
-      else afficherTour(Number(ongletActif));
+  const chunkSize = Math.ceil(nb / cols);
+  const colonnes = [];
+  for (let i = 0; i < cols; i++) {
+    colonnes.push(classement.slice(i * chunkSize, (i + 1) * chunkSize));
+  }
+
+  let rank = 1;
+
+  colonnes.forEach(col => {
+    html += `<table><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Tour</th><th>Total</th></tr>`;
+
+    col.forEach(r => {
+      const classe =
+        r.rouge ? "red fade-slide" :
+        (r.categorie === "F" ? "femme fade-slide" : "fade-slide");
+
+      html += `
+        <tr class="${classe}">
+          <td>${rank++}</td>
+          <td>${r.dossard}</td>
+          <td>${r.nom} ${r.prenom}</td>
+          <td>${r.tour}</td>
+          <td>${r.tempsAffiche}</td>
+        </tr>
+      `;
     });
 
-  </script>
+    html += `</table>`;
+  });
+
+  html += `</div>`;
+  div.innerHTML = html;
+};
+
+/* 🔥 LISTENERS */
+onSnapshot(collection(db, "coureurs"), snap => {
+  coureursMap = {};
+  snap.forEach(doc => {
+    const c = doc.data();
+    coureursMap[c.dossard] = c;
+  });
+
+  if (ongletActif === "general") afficherGeneral();
+  else afficherTour(Number(ongletActif));
+});
+
+onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap => {
+  tours = {};
+  tousLesResultats = {};
+
+  snap.forEach(doc => {
+    const r = doc.data();
+    if (!r.tour) return;
+
+    if (!tours[r.tour]) tours[r.tour] = [];
+    tours[r.tour].push(r);
+
+    if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
+    tousLesResultats[r.dossard].push(r);
+  });
+
+  construireOnglets();
+
+  if (ongletActif === "general") afficherGeneral();
+  else afficherTour(Number(ongletActif));
+});
+</script>
+
 </body>
 </html>
+
