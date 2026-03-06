@@ -14,18 +14,57 @@ font-family:Arial;
 text-align:center;
 }
 
-table{
-border-collapse:collapse;
+.columns{
+display:grid;
+gap:10px;
+width:98%;
 margin:auto;
 }
 
-th,td{
-border:1px solid #444;
-padding:6px 10px;
+.cols-1{grid-template-columns:repeat(1,1fr);}
+.cols-2{grid-template-columns:repeat(2,1fr);}
+.cols-3{grid-template-columns:repeat(3,1fr);}
+.cols-4{grid-template-columns:repeat(4,1fr);}
+
+table{
+width:100%;
+border-collapse:collapse;
+font-size:13px;
 }
 
-.red{color:red}
-.femme{color:#ff66cc}
+th,td{
+border:1px solid #333;
+padding:3px;
+}
+
+th{
+background:#111;
+}
+
+.red{
+color:red;
+font-weight:bold;
+}
+
+.femme{
+color:#ff66cc;
+font-weight:bold;
+}
+
+.fade{
+animation:fade 0.4s;
+}
+
+@keyframes fade{
+from{opacity:0}
+to{opacity:1}
+}
+
+button{
+margin:4px;
+padding:8px 12px;
+font-size:14px;
+}
 
 </style>
 
@@ -33,17 +72,24 @@ padding:6px 10px;
 
 <body>
 
-<h1>📊 Classement</h1>
+<h1>📊 Résultats</h1>
 
-<div id="classement"></div>
+<a href="index.html" style="color:gray">⬅ Retour</a>
+
+<div id="onglets" style="margin:20px"></div>
+
+<div id="contenu"></div>
 
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 
 import {
-getFirestore,collection,query,
-orderBy,onSnapshot
+getFirestore,
+collection,
+query,
+orderBy,
+onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -51,44 +97,195 @@ import { firebaseConfig } from "./firebase-config.js";
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const div = document.getElementById("contenu");
+
 let coureursMap = {};
-let resultats = {};
+let tours = {};
+let tousLesResultats = {};
+
+let ongletActif = "general";
 
 function formatTemps(ms){
 
-if(!ms) return "--";
+if(!ms || ms<0) return "--:--:--";
 
-const total = Math.floor(ms/1000);
+const s=Math.floor(ms/1000);
 
-const h = String(Math.floor(total/3600)).padStart(2,"0");
-const m = String(Math.floor((total%3600)/60)).padStart(2,"0");
-const s = String(total%60).padStart(2,"0");
+const h=String(Math.floor(s/3600)).padStart(2,"0");
+const m=String(Math.floor((s%3600)/60)).padStart(2,"0");
+const sec=String(s%60).padStart(2,"0");
 
-return `${h}:${m}:${s}`;
+return `${h}:${m}:${sec}`;
 
 }
 
-function afficher(){
+function calculTempsTour(dossard,tour){
+
+const scans=tousLesResultats[dossard];
+
+if(!scans) return null;
+
+const actuel=scans.find(r=>r.tour===tour);
+
+if(!actuel) return null;
+
+const tActuel=actuel.timestamp;
+
+if(tour===1) return tActuel;
+
+const precedent=scans.find(r=>r.tour===tour-1);
+
+if(!precedent) return null;
+
+return tActuel-precedent.timestamp;
+
+}
+
+function construireOnglets(){
+
+let html=`<button onclick="afficherGeneral()">Général</button>`;
+
+Object.keys(tours)
+.map(Number)
+.sort((a,b)=>a-b)
+.forEach(t=>{
+
+html+=`<button onclick="afficherTour(${t})">Tour ${t}</button>`;
+
+});
+
+document.getElementById("onglets").innerHTML=html;
+
+}
+
+window.afficherTour=function(tour){
+
+ongletActif=tour;
+
+let liste=[...(tours[tour]||[])];
+
+/* RATIO ARRIVÉS */
+
+let total=0;
+let arrives=0;
+
+if(tour===1){
+
+total=Object.values(coureursMap)
+.filter(c=>Number(c.dossard)>0)
+.length;
+
+}
+
+else{
+
+total=(tours[tour-1]||[])
+.filter(r=>!r.horsDelai)
+.length;
+
+}
+
+arrives=(tours[tour]||[])
+.filter(r=>!r.horsDelai)
+.length;
+
+let elimines=total-arrives;
+
+let html=`
+<h2>Tour ${tour}</h2>
+<h3 style="color:yellow">Arrivés : ${arrives} / ${total}</h3>
+<h4 style="color:#ff4444">Éliminés : ${elimines}</h4>
+`;
+
+const nb=liste.length;
+
+let cols=4;
+
+if(nb<20) cols=1;
+else if(nb<50) cols=2;
+else if(nb<90) cols=3;
+
+html+=`<div class="columns cols-${cols}">`;
+
+const chunk=Math.ceil(nb/cols);
+
+let colonnes=[];
+
+for(let i=0;i<cols;i++){
+
+colonnes.push(liste.slice(i*chunk,(i+1)*chunk));
+
+}
+
+let rank=1;
+
+colonnes.forEach(col=>{
+
+html+=`
+<table>
+<tr>
+<th>#</th>
+<th>Dossard</th>
+<th>Nom</th>
+<th>Temps</th>
+</tr>`;
+
+col.forEach(r=>{
+
+const c=coureursMap[r.dossard]||{};
+
+let tempsTour=calculTempsTour(r.dossard,tour);
+
+const classe=
+r.horsDelai ? "red fade":
+(c.categorie==="F"?"femme fade":"fade");
+
+html+=`
+<tr class="${classe}">
+<td>${rank++}</td>
+<td>${r.dossard}</td>
+<td>${c.nom||""} ${c.prenom||""}</td>
+<td>${formatTemps(tempsTour)}</td>
+</tr>
+`;
+
+});
+
+html+="</table>";
+
+});
+
+html+="</div>";
+
+div.innerHTML=html;
+
+};
+
+window.afficherGeneral=function(){
+
+ongletActif="general";
 
 let classement=[];
 
-Object.keys(resultats).forEach(dossard=>{
+Object.keys(tousLesResultats).forEach(dossard=>{
 
-const scans=resultats[dossard];
-
-scans.sort((a,b)=>a.timestamp - b.timestamp);
+const scans=tousLesResultats[dossard];
 
 let total=0;
 
 for(let i=1;i<scans.length;i++){
 
-total += scans[i].timestamp - scans[i-1].timestamp;
+total+=scans[i].timestamp-scans[i-1].timestamp;
 
 }
+
+const c=coureursMap[dossard]||{};
 
 classement.push({
 
 dossard:dossard,
+nom:c.nom||"",
+prenom:c.prenom||"",
 tour:scans.length,
 temps:total
 
@@ -98,30 +295,35 @@ temps:total
 
 classement.sort((a,b)=>{
 
-if(b.tour !== a.tour) return b.tour-a.tour;
+if(b.tour!==a.tour) return b.tour-a.tour;
 
 return a.temps-b.temps;
 
 });
 
-let html=`<table>
+let html=`<h2>Classement général</h2>`;
+
+html+=`
+<table style="margin:auto">
 <tr>
 <th>#</th>
 <th>Dossard</th>
+<th>Nom</th>
 <th>Tour</th>
-<th>Temps</th>
+<th>Total</th>
 </tr>`;
 
 let rank=1;
 
-classement.forEach(c=>{
+classement.forEach(r=>{
 
 html+=`
 <tr>
 <td>${rank++}</td>
-<td>${c.dossard}</td>
-<td>${c.tour}</td>
-<td>${formatTemps(c.temps)}</td>
+<td>${r.dossard}</td>
+<td>${r.nom} ${r.prenom}</td>
+<td>${r.tour}</td>
+<td>${formatTemps(r.temps)}</td>
 </tr>
 `;
 
@@ -129,38 +331,59 @@ html+=`
 
 html+="</table>";
 
-document.getElementById("classement").innerHTML=html;
+div.innerHTML=html;
 
-}
-
-/* listeners */
+};
 
 onSnapshot(collection(db,"coureurs"),snap=>{
 
+coureursMap={};
+
 snap.forEach(doc=>{
+
 const c=doc.data();
+
 coureursMap[c.dossard]=c;
+
 });
 
 });
 
 onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")),snap=>{
 
-resultats={};
+tours={};
+tousLesResultats={};
 
 snap.forEach(doc=>{
 
 const r=doc.data();
 
-if(!resultats[r.dossard]) resultats[r.dossard]=[];
+if(!r.tour) return;
 
-resultats[r.dossard].push({
-timestamp:r.timestamp?.toDate()?.getTime?.() ?? 0
+const ts=r.timestamp?.toDate()?.getTime?.() ?? 0;
+
+if(!tours[r.tour]) tours[r.tour]=[];
+
+tours[r.tour].push({
+...r,
+timestamp:ts
+});
+
+if(!tousLesResultats[r.dossard]) tousLesResultats[r.dossard]=[];
+
+tousLesResultats[r.dossard].push({
+...r,
+timestamp:ts
 });
 
 });
 
-afficher();
+construireOnglets();
+
+if(ongletActif==="general")
+afficherGeneral();
+else
+afficherTour(Number(ongletActif));
 
 });
 
