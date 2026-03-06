@@ -83,6 +83,7 @@ button{
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+
 import {
   getFirestore,
   collection,
@@ -449,7 +450,20 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")),snap=>{
     tousLesResultats[r.dossard].push({...r, timestamp:ts});
   });
 
-  /* 🔥 Nettoyage + ajout DNS/DNF */
+  /* 🔥 Recalcul automatique du hors délai */
+  Object.keys(tours).forEach(t => {
+    const tour = Number(t);
+    const limite = limites["t" + tour] || 0;
+    const departTheorique = departTours[tour];
+
+    tours[tour] = tours[tour].map(r => {
+      if (!r.timestamp) return r;
+      const diffMin = (r.timestamp - departTheorique) / 60000;
+      return { ...r, horsDelai: diffMin > limite };
+    });
+  });
+
+  /* 🔥 DNS / DNF artificiels */
   Object.values(coureursMap).forEach(c => {
 
     if (c.statut === "DNF" || c.statut === "DNS") {
