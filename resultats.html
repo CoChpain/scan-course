@@ -98,6 +98,10 @@ onSnapshot(doc(db, "course", "depart"), snap => {
   if (snap.exists()) {
     depart = snap.data().timestamp.toDate();
     console.log("Départ Firestore :", depart);
+
+    // Rafraîchir l'affichage quand le départ arrive
+    if (ongletActif === "general") afficherGeneral();
+    else afficherTour(Number(ongletActif));
   }
 });
 
@@ -159,7 +163,20 @@ window.afficherTour = function(tour) {
 
   let liste = [...(tours[tour] || [])];
 
+  /* 🟨 RATIO ARRIVÉS */
+  let total = 0;
+  let arrives = 0;
+
+  if (tour === 1) {
+    total = Object.keys(coureursMap).length;
+  } else {
+    total = (tours[tour - 1] || []).filter(r => !r.horsDelai).length;
+  }
+
+  arrives = (tours[tour] || []).filter(r => !r.horsDelai).length;
+
   let html = `<h2>Tour ${tour}</h2>`;
+  html += `<h3 style="color:yellow;">Arrivés : ${arrives} / ${total}</h3>`;
 
   const nb = liste.length;
   let cols = 4;
