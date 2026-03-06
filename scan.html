@@ -150,10 +150,11 @@
         const lastTime = last.timestamp?.toDate()?.getTime?.() ?? 0;
         const now = Date.now();
 
-        if (now - lastTime < 15000) {
-          beepError.play();
-          showMessage("⏳ Attendre 15 sec avant un nouveau scan", "orange");
-          return;
+      if (now - lastTime < 600000) {
+  beepError.play();
+  showMessage("⏳ Attendre 10 minutes avant un nouveau scan", "orange");
+  return;
+
         }
       }
 
@@ -271,3 +272,4 @@
 
 </body>
 </html>
+
