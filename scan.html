@@ -80,7 +80,8 @@
       departTours = {};
       let cumul = 0;
 
-      for (let i = 1; i <= 10; i++) {
+      for (let i = 1; i <= 200; i++) {
+        if (!limites["t" + i]) break;
         departTours[i] = departMs + cumul * 60000;
         cumul += limites["t" + i] || 0;
       }
@@ -119,7 +120,8 @@
         return;
       }
 
-      const dossard = decodedText.split("-").pop().trim();
+      /* Nettoyage du dossard */
+      const dossard = decodedText.split("-").pop().trim().replace(/\D/g, "");
 
       /* Vérifier si le coureur existe */
       const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
