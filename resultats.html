@@ -262,6 +262,7 @@ window.afficherTour = function(tour) {
       let tempsTour = calculTempsTour(r.dossard, tour);
 
       const classe =
+        r.dnf ? "red fade" :
         r.horsDelai ? "red fade" :
         (c.categorie === "F" ? "femme fade" : "fade");
 
@@ -270,7 +271,7 @@ window.afficherTour = function(tour) {
           <td>${rank++}</td>
           <td>${r.dossard}</td>
           <td>${c.nom || ""} ${c.prenom || ""}</td>
-          <td>${formatTemps(tempsTour)}</td>
+          <td>${r.dnf ? "DNF" : formatTemps(tempsTour)}</td>
         </tr>
       `;
     });
@@ -383,6 +384,27 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")),snap=>{
 
     if(!tousLesResultats[r.dossard]) tousLesResultats[r.dossard]=[];
     tousLesResultats[r.dossard].push({...r, timestamp:ts});
+  });
+
+  /* 🔥 Ajouter les DNF dans le bon tour */
+  Object.values(coureursMap).forEach(c => {
+
+    if (c.statut === "DNF") {
+
+      const scans = tousLesResultats[c.dossard] || [];
+
+      const lastTour = scans.length > 0 ? scans[scans.length - 1].tour : 1;
+
+      if (!tours[lastTour]) tours[lastTour] = [];
+
+      tours[lastTour].push({
+        dossard: c.dossard,
+        tour: lastTour,
+        horsDelai: false,
+        dnf: true,
+        timestamp: null
+      });
+    }
   });
 
   construireOnglets();
