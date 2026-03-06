@@ -199,7 +199,7 @@ window.afficherTour = function(tour) {
 
     total = Object.values(coureursMap)
       .filter(c => c.dossard && Number(c.dossard) > 0)
-      .filter(c => c.statut !== "DNF" && c.statut !== "ELIMINE")
+      .filter(c => c.statut !== "DNF" && c.statut !== "DNS" && c.statut !== "ELIMINE")
       .length;
 
   } else {
@@ -208,13 +208,13 @@ window.afficherTour = function(tour) {
       .filter(r => !r.horsDelai)
       .filter(r => {
         const c = coureursMap[r.dossard];
-        return c && c.statut !== "DNF" && c.statut !== "ELIMINE";
+        return c && !["DNF","DNS","ELIMINE"].includes(c.statut);
       })
       .length;
   }
 
   arrives = (tours[tour] || [])
-    .filter(r => !r.horsDelai)
+    .filter(r => !r.horsDelai && !r.dnf && !r.dns)
     .length;
 
   let html = `
@@ -262,16 +262,21 @@ window.afficherTour = function(tour) {
       let tempsTour = calculTempsTour(r.dossard, tour);
 
       const classe =
-        r.dnf ? "red fade" :
+        r.dnf || r.dns ? "red fade" :
         r.horsDelai ? "red fade" :
         (c.categorie === "F" ? "femme fade" : "fade");
+
+      const labelTemps =
+        r.dnf ? "DNF" :
+        r.dns ? "DNS" :
+        formatTemps(tempsTour);
 
       html += `
         <tr class="${classe}">
           <td>${rank++}</td>
           <td>${r.dossard}</td>
           <td>${c.nom || ""} ${c.prenom || ""}</td>
-          <td>${r.dnf ? "DNF" : formatTemps(tempsTour)}</td>
+          <td>${labelTemps}</td>
         </tr>
       `;
     });
@@ -291,7 +296,7 @@ window.afficherGeneral=function(){
 
   let classement=[];
 
-  /* 🔥 Ajouter TOUS les coureurs, même DNF */
+  /* 🔥 Ajouter TOUS les coureurs, même DNF/DNS */
   Object.values(coureursMap).forEach(c => {
 
     const scans = tousLesResultats[c.dossard] || [];
@@ -309,7 +314,7 @@ window.afficherGeneral=function(){
       prenom: c.prenom || "",
       tour: scans.length,
       temps: total,
-      rouge: c.statut === "DNF" || c.statut === "ELIMINE",
+      rouge: ["DNF","DNS","ELIMINE"].includes(c.statut),
       categorie: c.categorie
     });
 
@@ -386,22 +391,23 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")),snap=>{
     tousLesResultats[r.dossard].push({...r, timestamp:ts});
   });
 
-  /* 🔥 Ajouter les DNF dans le bon tour */
+  /* 🔥 Ajouter les DNF / DNS dans le bon tour */
   Object.values(coureursMap).forEach(c => {
 
-    if (c.statut === "DNF") {
+    if (c.statut === "DNF" || c.statut === "DNS") {
 
       const scans = tousLesResultats[c.dossard] || [];
 
-      const lastTour = scans.length > 0 ? scans[scans.length - 1].tour : 1;
+      const abandonTour = scans.length > 0 ? scans[scans.length - 1].tour + 1 : 1;
 
-      if (!tours[lastTour]) tours[lastTour] = [];
+      if (!tours[abandonTour]) tours[abandonTour] = [];
 
-      tours[lastTour].push({
+      tours[abandonTour].push({
         dossard: c.dossard,
-        tour: lastTour,
+        tour: abandonTour,
         horsDelai: false,
-        dnf: true,
+        dnf: c.statut === "DNF",
+        dns: c.statut === "DNS",
         timestamp: null
       });
     }
