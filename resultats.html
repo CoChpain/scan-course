@@ -26,10 +26,12 @@ body{
 .cols-3{grid-template-columns:repeat(3,1fr);}
 .cols-4{grid-template-columns:repeat(4,1fr);}
 
-/* 📱 Mobile : forcer 2 colonnes max */
+/* 📱 Mobile : forcer 1 colonne */
 @media (max-width: 768px) {
   .cols-4 { grid-template-columns:repeat(1,1fr); }
   .cols-3 { grid-template-columns:repeat(1,1fr); }
+  .cols-2 { grid-template-columns:repeat(1,1fr); }
+  .cols-1 { grid-template-columns:repeat(1,1fr); }
 }
 
 table{
@@ -358,7 +360,6 @@ onSnapshot(collection(db,"coureurs"), snap=>{
     coureursMap[c.dossard]=c;
   });
 
-  // On force un rafraîchissement visuel
   rafraichir();
 });
 
@@ -426,4 +427,3 @@ function rafraichir(){
 
 </body>
 </html>
-
