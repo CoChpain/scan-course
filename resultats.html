@@ -93,23 +93,17 @@ const div = document.getElementById("contenu");
 
 /* 🔥 Départ Firestore */
 let depart = null;
-let departCharge = false;
 
 onSnapshot(doc(db, "course", "depart"), snap => {
   if (snap.exists()) {
     depart = snap.data().timestamp.toDate();
-    departCharge = true;
     console.log("Départ Firestore :", depart);
-
-    // Recharge l'affichage une fois le départ chargé
-    if (ongletActif === "general") afficherGeneral();
-    else afficherTour(Number(ongletActif));
   }
 });
 
 /* ⏱ Formatage */
 function formatTemps(ms) {
-  if (!isFinite(ms) || ms < 0) return "--:--:--";
+  if (!isFinite(ms) || ms === null || ms === undefined || ms < 0) return "--:--:--";
   const totalSec = Math.floor(ms / 1000);
   const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
   const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
@@ -139,6 +133,8 @@ function construireOnglets() {
 
 /* 🟦 TEMPS PAR TOUR */
 function calculTempsTour(dossard, tour) {
+  if (!depart) return null;
+
   const scans = tousLesResultats[dossard];
   if (!scans) return null;
 
@@ -159,11 +155,6 @@ function calculTempsTour(dossard, tour) {
 
 /* 🟦 AFFICHAGE D’UN TOUR */
 window.afficherTour = function(tour) {
-  if (!departCharge) {
-    div.innerHTML = "<h2>Chargement du départ...</h2>";
-    return;
-  }
-
   setOngletActif(tour);
 
   let liste = [...(tours[tour] || [])];
@@ -218,11 +209,6 @@ window.afficherTour = function(tour) {
 
 /* 🟦 CLASSEMENT GÉNÉRAL */
 window.afficherGeneral = function() {
-  if (!departCharge) {
-    div.innerHTML = "<h2>Chargement du départ...</h2>";
-    return;
-  }
-
   setOngletActif("general");
 
   let html = `<h2>Classement général</h2>`;
@@ -237,7 +223,7 @@ window.afficherGeneral = function() {
 
     scans.forEach(r => {
       const t = calculTempsTour(dossard, r.tour);
-      if (t) total += t;
+      if (t !== null && t !== undefined) total += t;
     });
 
     const c = coureursMap[dossard] || {};
@@ -309,10 +295,8 @@ onSnapshot(collection(db, "coureurs"), snap => {
     coureursMap[c.dossard] = c;
   });
 
-  if (departCharge) {
-    if (ongletActif === "general") afficherGeneral();
-    else afficherTour(Number(ongletActif));
-  }
+  if (ongletActif === "general") afficherGeneral();
+  else afficherTour(Number(ongletActif));
 });
 
 onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap => {
@@ -332,10 +316,8 @@ onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap
 
   construireOnglets();
 
-  if (departCharge) {
-    if (ongletActif === "general") afficherGeneral();
-    else afficherTour(Number(ongletActif));
-  }
+  if (ongletActif === "general") afficherGeneral();
+  else afficherTour(Number(ongletActif));
 });
 </script>
 
