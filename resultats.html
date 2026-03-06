@@ -217,12 +217,9 @@ window.afficherTour = function(tour) {
     .filter(r => !r.horsDelai)
     .length;
 
-  let elimines = total - arrives;
-
   let html = `
     <h2>Tour ${tour}</h2>
     <h3 style="color:yellow">Arrivés : ${arrives} / ${total}</h3>
-    <h4 style="color:#ff4444">Éliminés : ${elimines}</h4>
   `;
 
   /* ---------------------------
@@ -293,28 +290,26 @@ window.afficherGeneral=function(){
 
   let classement=[];
 
-  Object.keys(tousLesResultats).forEach(dossard=>{
+  /* 🔥 Ajouter TOUS les coureurs, même DNF */
+  Object.values(coureursMap).forEach(c => {
 
-    const scans=tousLesResultats[dossard];
-    scans.sort((a,b)=>a.tour - b.tour);
+    const scans = tousLesResultats[c.dossard] || [];
 
-    let total=0;
+    let total = 0;
 
     scans.forEach(r=>{
-      const t = calculTempsTour(dossard, r.tour);
+      const t = calculTempsTour(c.dossard, r.tour);
       if (t !== null) total += t;
     });
 
-    const c=coureursMap[dossard]||{};
-
     classement.push({
-      dossard,
-      nom:c.nom||"",
-      prenom:c.prenom||"",
-      tour:scans.length,
-      temps:total,
-      rouge:c.statut==="DNF" || c.statut==="ELIMINE",
-      categorie:c.categorie
+      dossard: c.dossard,
+      nom: c.nom || "",
+      prenom: c.prenom || "",
+      tour: scans.length,
+      temps: total,
+      rouge: c.statut === "DNF" || c.statut === "ELIMINE",
+      categorie: c.categorie
     });
 
   });
