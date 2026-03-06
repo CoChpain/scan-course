@@ -105,8 +105,8 @@ let tours = {};
 let tousLesResultats = {};
 
 let depart = null;
-let limites = {}; // limites Firestore
-let departTours = {}; // départ théorique de chaque tour
+let limites = {}; 
+let departTours = {}; 
 
 let ongletActif = "general";
 
@@ -181,95 +181,112 @@ function construireOnglets(){
   document.getElementById("onglets").innerHTML=html;
 }
 
-/* Affichage d’un tour */
-window.afficherTour=function(tour){
+/* 🔥 AFFICHAGE D’UN TOUR */
+window.afficherTour = function(tour) {
 
-  ongletActif=tour;
+  ongletActif = tour;
 
-  let liste=[...(tours[tour]||[])];
+  let liste = [...(tours[tour] || [])];
 
-  /* RATIO ARRIVÉS */
-  let total=0;
-  let arrives=0;
+  /* ---------------------------
+     RATIO ARRIVÉS
+     --------------------------- */
 
-  if(tour===1){
-    total=Object.values(coureursMap)
-      .filter(c=>c.dossard && Number(c.dossard)>0)
+  let total = 0;
+  let arrives = 0;
+
+  if (tour === 1) {
+
+    total = Object.values(coureursMap)
+      .filter(c => c.dossard && Number(c.dossard) > 0)
+      .filter(c => c.statut !== "DNF" && c.statut !== "ELIMINE")
       .length;
+
   } else {
-    total=(tours[tour-1]||[])
-      .filter(r=>!r.horsDelai)
+
+    total = (tours[tour - 1] || [])
+      .filter(r => !r.horsDelai)
+      .filter(r => {
+        const c = coureursMap[r.dossard];
+        return c && c.statut !== "DNF" && c.statut !== "ELIMINE";
+      })
       .length;
   }
 
-  arrives=(tours[tour]||[])
-    .filter(r=>!r.horsDelai)
+  arrives = (tours[tour] || [])
+    .filter(r => !r.horsDelai)
     .length;
 
-  let elimines=total-arrives;
+  let elimines = total - arrives;
 
-  let html=`
-  <h2>Tour ${tour}</h2>
-  <h3 style="color:yellow">Arrivés : ${arrives} / ${total}</h3>
-  <h4 style="color:#ff4444">Éliminés : ${elimines}</h4>
+  let html = `
+    <h2>Tour ${tour}</h2>
+    <h3 style="color:yellow">Arrivés : ${arrives} / ${total}</h3>
+    <h4 style="color:#ff4444">Éliminés : ${elimines}</h4>
   `;
 
-  const nb=liste.length;
+  /* ---------------------------
+     AFFICHAGE DES TABLEAUX
+     --------------------------- */
 
-  let cols=4;
-  if(nb<20) cols=1;
-  else if(nb<50) cols=2;
-  else if(nb<90) cols=3;
+  const nb = liste.length;
 
-  html+=`<div class="columns cols-${cols}">`;
+  let cols = 4;
+  if (nb < 20) cols = 1;
+  else if (nb < 50) cols = 2;
+  else if (nb < 90) cols = 3;
 
-  const chunk=Math.ceil(nb/cols);
-  let colonnes=[];
+  html += `<div class="columns cols-${cols}">`;
 
-  for(let i=0;i<cols;i++){
-    colonnes.push(liste.slice(i*chunk,(i+1)*chunk));
+  const chunk = Math.ceil(nb / cols);
+  let colonnes = [];
+
+  for (let i = 0; i < cols; i++) {
+    colonnes.push(liste.slice(i * chunk, (i + 1) * chunk));
   }
 
-  let rank=1;
+  let rank = 1;
 
-  colonnes.forEach(col=>{
-    html+=`
-    <table>
-    <tr>
-    <th>#</th>
-    <th>Dossard</th>
-    <th>Nom</th>
-    <th>Temps</th>
-    </tr>`;
+  colonnes.forEach(col => {
 
-    col.forEach(r=>{
-      const c=coureursMap[r.dossard]||{};
-
-      let tempsTour=calculTempsTour(r.dossard,tour);
-
-      const classe=
-        r.horsDelai ? "red fade":
-        (c.categorie==="F"?"femme fade":"fade");
-
-      html+=`
-      <tr class="${classe}">
-      <td>${rank++}</td>
-      <td>${r.dossard}</td>
-      <td>${c.nom||""} ${c.prenom||""}</td>
-      <td>${formatTemps(tempsTour)}</td>
+    html += `
+      <table>
+      <tr>
+        <th>#</th>
+        <th>Dossard</th>
+        <th>Nom</th>
+        <th>Temps</th>
       </tr>
+    `;
+
+    col.forEach(r => {
+
+      const c = coureursMap[r.dossard] || {};
+      let tempsTour = calculTempsTour(r.dossard, tour);
+
+      const classe =
+        r.horsDelai ? "red fade" :
+        (c.categorie === "F" ? "femme fade" : "fade");
+
+      html += `
+        <tr class="${classe}">
+          <td>${rank++}</td>
+          <td>${r.dossard}</td>
+          <td>${c.nom || ""} ${c.prenom || ""}</td>
+          <td>${formatTemps(tempsTour)}</td>
+        </tr>
       `;
     });
 
-    html+="</table>";
+    html += "</table>";
   });
 
-  html+="</div>";
+  html += "</div>";
 
-  div.innerHTML=html;
+  div.innerHTML = html;
 };
 
-/* Classement général */
+/* 🔥 CLASSEMENT GÉNÉRAL */
 window.afficherGeneral=function(){
 
   ongletActif="general";
@@ -348,7 +365,7 @@ onSnapshot(collection(db,"coureurs"),snap=>{
 
   snap.forEach(doc=>{
     const c=doc.data();
-    if (!c.dossard || Number(c.dossard)<=0) return; // ignore depart
+    if (!c.dossard || Number(c.dossard)<=0) return; 
     coureursMap[c.dossard]=c;
   });
 
@@ -373,6 +390,7 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")),snap=>{
     tousLesResultats[r.dossard].push({...r, timestamp:ts});
   });
 
+  construireOnglets();
   rafraichir();
 });
 
