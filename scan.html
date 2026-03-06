@@ -36,8 +36,14 @@
 
   <!-- DNF MANUEL -->
   <div style="margin-top:20px;">
-    <input id="dossard-manuel" type="text" placeholder="Dossard manuel" style="padding:10px;font-size:18px;">
+    <input id="dossard-manuel" type="text" placeholder="Dossard DNF" style="padding:10px;font-size:18px;">
     <button id="btn-dnf" style="padding:10px 20px;font-size:18px;">DNF</button>
+  </div>
+
+  <!-- DNS MANUEL -->
+  <div style="margin-top:10px;">
+    <input id="dossard-dns" type="text" placeholder="Dossard DNS" style="padding:10px;font-size:18px;">
+    <button id="btn-dns" style="padding:10px 20px;font-size:18px;">DNS</button>
   </div>
 
   <script type="module">
@@ -128,14 +134,14 @@
       const docCoureur = snap.docs[0];
       const coureur = docCoureur.data();
 
-      /* ❌ Coureur éliminé ou DNF → interdit */
-      if (coureur.statut === "ELIMINE" || coureur.statut === "DNF") {
+      /* ❌ Coureur éliminé ou DNF/DNS → interdit */
+      if (["ELIMINE","DNF","DNS"].includes(coueur.statut)) {
         beepError.play();
         showMessage("⛔ Coureur non autorisé (" + dossard + ")", "red");
         return;
       }
 
-      /* Anti double-scan 15 sec */
+      /* Anti double-scan 10 minutes */
       const qLast = query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -150,11 +156,10 @@
         const lastTime = last.timestamp?.toDate()?.getTime?.() ?? 0;
         const now = Date.now();
 
-      if (now - lastTime < 600000) {
-  beepError.play();
-  showMessage("⏳ Attendre 10 minutes avant un nouveau scan", "orange");
-  return;
-
+        if (now - lastTime < 600000) { // 10 minutes
+          beepError.play();
+          showMessage("⏳ Attendre 10 minutes avant un nouveau scan", "orange");
+          return;
         }
       }
 
@@ -188,38 +193,8 @@
         horsDelai: horsDelai
       });
 
-      /* Calcul du ratio */
-      let totalEnCourse = 0;
-      let dejaArrives = 0;
-
-      const resultatsSnap = await getDocs(collection(db, "resultats"));
-
-      const validesPrecedent = new Set();
-      const validesTourActuel = new Set();
-
-      resultatsSnap.forEach(docR => {
-        const r = docR.data();
-        if (r.tour === tour - 1 && !r.horsDelai) validesPrecedent.add(r.dossard);
-        if (r.tour === tour) validesTourActuel.add(r.dossard);
-      });
-
-      totalEnCourse = tour === 1 ? (await getDocs(collection(db,"coureurs"))).size - 1 : validesPrecedent.size;
-      dejaArrives = validesTourActuel.size;
-
-      /* Affichage */
-      if (horsDelai) {
-        beepError.play();
-        showMessage(
-          `⚠️ Hors délai<br>Dossard : ${dossard}<br>Tour : ${tour}<br><br>Arrivés : ${dejaArrives}/${totalEnCourse}`,
-          "orange"
-        );
-      } else {
-        beepOk.play();
-        showMessage(
-          `✅ Scan OK<br>Dossard : ${dossard}<br>Tour : ${tour}<br><br>Arrivés : ${dejaArrives}/${totalEnCourse}`,
-          "lime"
-        );
-      }
+      beepOk.play();
+      showMessage(`Scan OK<br>Dossard : ${dossard}<br>Tour : ${tour}`, "lime");
     }
 
     function onScanSuccess(decodedText){
@@ -268,8 +243,31 @@
       showMessage("🏳️ Coureur " + dossard + " marqué DNF", "orange");
     });
 
+    /* DNS manuel */
+    document.getElementById("btn-dns").addEventListener("click", async () => {
+      const dossard = document.getElementById("dossard-dns").value.trim();
+      if (!dossard) return;
+
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        beepError.play();
+        showMessage("❌ Dossard inconnu : " + dossard, "red");
+        return;
+      }
+
+      const docCoureur = snap.docs[0];
+
+      await updateDoc(doc(db, "coureurs", docCoureur.id), {
+        statut: "DNS"
+      });
+
+      beepError.play();
+      showMessage("🚫 Coureur " + dossard + " marqué DNS", "orange");
+    });
+
   </script>
 
 </body>
 </html>
-
