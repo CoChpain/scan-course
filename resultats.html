@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>Résultats</title>
 
-  <!-- 🟦 STYLE TABLEAU MULTI-COLONNES + ANIMATION -->
   <style>
     body {
       background:#000;
@@ -94,11 +93,17 @@ const div = document.getElementById("contenu");
 
 /* 🔥 Départ Firestore */
 let depart = null;
+let departCharge = false;
 
 onSnapshot(doc(db, "course", "depart"), snap => {
   if (snap.exists()) {
     depart = snap.data().timestamp.toDate();
+    departCharge = true;
     console.log("Départ Firestore :", depart);
+
+    // Recharge l'affichage une fois le départ chargé
+    if (ongletActif === "general") afficherGeneral();
+    else afficherTour(Number(ongletActif));
   }
 });
 
@@ -154,6 +159,11 @@ function calculTempsTour(dossard, tour) {
 
 /* 🟦 AFFICHAGE D’UN TOUR */
 window.afficherTour = function(tour) {
+  if (!departCharge) {
+    div.innerHTML = "<h2>Chargement du départ...</h2>";
+    return;
+  }
+
   setOngletActif(tour);
 
   let liste = [...(tours[tour] || [])];
@@ -208,6 +218,11 @@ window.afficherTour = function(tour) {
 
 /* 🟦 CLASSEMENT GÉNÉRAL */
 window.afficherGeneral = function() {
+  if (!departCharge) {
+    div.innerHTML = "<h2>Chargement du départ...</h2>";
+    return;
+  }
+
   setOngletActif("general");
 
   let html = `<h2>Classement général</h2>`;
@@ -294,8 +309,10 @@ onSnapshot(collection(db, "coureurs"), snap => {
     coureursMap[c.dossard] = c;
   });
 
-  if (ongletActif === "general") afficherGeneral();
-  else afficherTour(Number(ongletActif));
+  if (departCharge) {
+    if (ongletActif === "general") afficherGeneral();
+    else afficherTour(Number(ongletActif));
+  }
 });
 
 onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap => {
@@ -315,11 +332,12 @@ onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap
 
   construireOnglets();
 
-  if (ongletActif === "general") afficherGeneral();
-  else afficherTour(Number(ongletActif));
+  if (departCharge) {
+    if (ongletActif === "general") afficherGeneral();
+    else afficherTour(Number(ongletActif));
+  }
 });
 </script>
 
 </body>
 </html>
-
