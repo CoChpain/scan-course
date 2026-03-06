@@ -1,344 +1,170 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Résultats</title>
 
-  <style>
-    body {
-      background:#000;
-      color:white;
-      font-family:Arial;
-      text-align:center;
-    }
+<meta charset="UTF-8">
+<title>Résultats</title>
 
-    .columns {
-      display: grid;
-      gap: 10px;
-      width: 98%;
-      margin: auto;
-      justify-content: center;
-    }
+<style>
 
-    .cols-1 { grid-template-columns: repeat(1, 1fr); }
-    .cols-2 { grid-template-columns: repeat(2, 1fr); }
-    .cols-3 { grid-template-columns: repeat(3, 1fr); }
-    .cols-4 { grid-template-columns: repeat(4, 1fr); }
+body{
+background:#000;
+color:white;
+font-family:Arial;
+text-align:center;
+}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      line-height: 14px;
-    }
+table{
+border-collapse:collapse;
+margin:auto;
+}
 
-    th, td {
-      border: 1px solid #333;
-      padding: 2px 4px;
-    }
+th,td{
+border:1px solid #444;
+padding:6px 10px;
+}
 
-    th {
-      background: #111;
-      font-size: 13px;
-    }
+.red{color:red}
+.femme{color:#ff66cc}
 
-    .red {
-      color: red;
-      font-weight: bold;
-    }
-
-    .femme {
-      color: #ff66cc;
-      font-weight: bold;
-    }
-
-    .fade-slide {
-      opacity: 0;
-      transform: translateY(-8px);
-      animation: appear 0.45s ease-out forwards;
-    }
-
-    @keyframes appear {
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    h2, h3 {
-      margin: 5px 0;
-    }
-  </style>
+</style>
 
 </head>
 
 <body>
-  <h1>📊 Résultats</h1>
-  <a href="index.html" style="color:gray;">⬅ Retour</a>
 
-  <div id="onglets" style="margin:20px;"></div>
-  <div id="contenu"></div>
+<h1>📊 Classement</h1>
+
+<div id="classement"></div>
 
 <script type="module">
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { 
-  getFirestore, collection, query, orderBy, onSnapshot, doc
+
+import {
+getFirestore,collection,query,
+orderBy,onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const div = document.getElementById("contenu");
-
-/* 🔥 Départ Firestore */
-let depart = null;
-
-onSnapshot(doc(db, "course", "depart"), snap => {
-  if (snap.exists()) {
-    depart = snap.data().timestamp.toDate();
-    console.log("Départ Firestore :", depart);
-
-    // Rafraîchir l'affichage quand le départ arrive
-    if (ongletActif === "general") afficherGeneral();
-    else afficherTour(Number(ongletActif));
-  }
-});
-
-/* ⏱ Formatage */
-function formatTemps(ms) {
-  if (!isFinite(ms) || ms === null || ms === undefined || ms < 0) return "--:--:--";
-  const totalSec = Math.floor(ms / 1000);
-  const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
-  const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
-  const s = String(totalSec % 60).padStart(2, "0");
-  return `${h}:${m}:${s}`;
-}
-
 let coureursMap = {};
-let tours = {};
-let tousLesResultats = {};
+let resultats = {};
 
-let ongletActif = localStorage.getItem("ongletActif") || "general";
+function formatTemps(ms){
 
-function setOngletActif(val) {
-  ongletActif = val;
-  localStorage.setItem("ongletActif", val);
+if(!ms) return "--";
+
+const total = Math.floor(ms/1000);
+
+const h = String(Math.floor(total/3600)).padStart(2,"0");
+const m = String(Math.floor((total%3600)/60)).padStart(2,"0");
+const s = String(total%60).padStart(2,"0");
+
+return `${h}:${m}:${s}`;
+
 }
 
-function construireOnglets() {
-  let html = `<button onclick="afficherGeneral()" style="margin:5px;">Général</button>`;
-  const toursOrdonnés = Object.keys(tours).map(Number).sort((a,b)=>a-b);
-  toursOrdonnés.forEach(t => {
-    html += `<button onclick="afficherTour(${t})" style="margin:5px;">Tour ${t}</button>`;
-  });
-  document.getElementById("onglets").innerHTML = html;
+function afficher(){
+
+let classement=[];
+
+Object.keys(resultats).forEach(dossard=>{
+
+const scans=resultats[dossard];
+
+scans.sort((a,b)=>a.timestamp - b.timestamp);
+
+let total=0;
+
+for(let i=1;i<scans.length;i++){
+
+total += scans[i].timestamp - scans[i-1].timestamp;
+
 }
 
-/* 🟦 TEMPS PAR TOUR */
-function calculTempsTour(dossard, tour) {
-  if (!depart) return null;
+classement.push({
 
-  const scans = tousLesResultats[dossard];
-  if (!scans) return null;
+dossard:dossard,
+tour:scans.length,
+temps:total
 
-  const actuel = scans.find(r => r.tour === tour);
-  if (!actuel) return null;
-
-  const tActuel = actuel.timestamp.toDate();
-
-  if (tour === 1) {
-    return tActuel - depart;
-  }
-
-  const precedent = scans.find(r => r.tour === tour - 1);
-  if (!precedent) return null;
-
-  return tActuel - precedent.timestamp.toDate();
-}
-
-/* 🟦 AFFICHAGE D’UN TOUR */
-window.afficherTour = function(tour) {
-  setOngletActif(tour);
-
-  let liste = [...(tours[tour] || [])];
-
- /* 🟨 RATIO ARRIVÉS */
-let total = 0;
-let arrives = 0;
-
-if (tour === 1) {
-  // Compter uniquement les vrais coureurs (dossard numérique)
-  total = Object.values(coureursMap).filter(c => Number(c.dossard) > 0).length;
-} else {
-  total = (tours[tour - 1] || []).filter(r => !r.horsDelai).length;
-}
-
-arrives = (tours[tour] || []).filter(r => !r.horsDelai).length;
-
-  let html = `<h2>Tour ${tour}</h2>`;
-  html += `<h3 style="color:yellow;">Arrivés : ${arrives} / ${total}</h3>`;
-
-  const nb = liste.length;
-  let cols = 4;
-  if (nb < 20) cols = 1;
-  else if (nb < 50) cols = 2;
-  else if (nb < 90) cols = 3;
-
-  html += `<div class="columns cols-${cols}">`;
-
-  const chunkSize = Math.ceil(nb / cols);
-  const colonnes = [];
-  for (let i = 0; i < cols; i++) {
-    colonnes.push(liste.slice(i * chunkSize, (i + 1) * chunkSize));
-  }
-
-  let rank = 1;
-
-  colonnes.forEach(col => {
-    html += `<table><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps tour</th></tr>`;
-
-    col.forEach(r => {
-      const c = coureursMap[r.dossard] || {};
-
-      let tempsTour = calculTempsTour(r.dossard, tour);
-      let tempsAffiche = formatTemps(tempsTour);
-
-      const classe =
-        r.horsDelai ? "red fade-slide" :
-        (c.categorie === "F" ? "femme fade-slide" : "fade-slide");
-
-      html += `
-        <tr class="${classe}">
-          <td>${rank++}</td>
-          <td>${r.dossard}</td>
-          <td>${c.nom || ""} ${c.prenom || ""}</td>
-          <td>${tempsAffiche}</td>
-        </tr>
-      `;
-    });
-
-    html += `</table>`;
-  });
-
-  html += `</div>`;
-  div.innerHTML = html;
-};
-
-/* 🟦 CLASSEMENT GÉNÉRAL */
-window.afficherGeneral = function() {
-  setOngletActif("general");
-
-  let html = `<h2>Classement général</h2>`;
-
-  const classement = [];
-
-  Object.keys(tousLesResultats).forEach(dossard => {
-    const scans = tousLesResultats[dossard];
-    scans.sort((a,b)=>a.tour - b.tour);
-
-    let total = 0;
-
-    scans.forEach(r => {
-      const t = calculTempsTour(dossard, r.tour);
-      if (t !== null && t !== undefined) total += t;
-    });
-
-    const c = coureursMap[dossard] || {};
-
-    classement.push({
-      dossard,
-      nom: c.nom || "",
-      prenom: c.prenom || "",
-      tour: scans.length,
-      tempsTotal: total,
-      tempsAffiche: formatTemps(total),
-      rouge: c.statut === "DNF" || c.statut === "ELIMINE",
-      categorie: c.categorie
-    });
-  });
-
-  classement.sort((a,b)=>{
-    if (b.tour !== a.tour) return b.tour - a.tour;
-    return a.tempsTotal - b.tempsTotal;
-  });
-
-  const nb = classement.length;
-  let cols = 4;
-  if (nb < 20) cols = 1;
-  else if (nb < 50) cols = 2;
-  else if (nb < 90) cols = 3;
-
-  html += `<div class="columns cols-${cols}">`;
-
-  const chunkSize = Math.ceil(nb / cols);
-  const colonnes = [];
-  for (let i = 0; i < cols; i++) {
-    colonnes.push(classement.slice(i * chunkSize, (i + 1) * chunkSize));
-  }
-
-  let rank = 1;
-
-  colonnes.forEach(col => {
-    html += `<table><tr><th>#</th><th>Dossard</th><th>Nom</th><th>Tour</th><th>Total</th></tr>`;
-
-    col.forEach(r => {
-      const classe =
-        r.rouge ? "red fade-slide" :
-        (r.categorie === "F" ? "femme fade-slide" : "fade-slide");
-
-      html += `
-        <tr class="${classe}">
-          <td>${rank++}</td>
-          <td>${r.dossard}</td>
-          <td>${r.nom} ${r.prenom}</td>
-          <td>${r.tour}</td>
-          <td>${r.tempsAffiche}</td>
-        </tr>
-      `;
-    });
-
-    html += `</table>`;
-  });
-
-  html += `</div>`;
-  div.innerHTML = html;
-};
-
-/* 🔥 LISTENERS */
-onSnapshot(collection(db, "coureurs"), snap => {
-  coureursMap = {};
-  snap.forEach(doc => {
-    const c = doc.data();
-    coureursMap[c.dossard] = c;
-  });
-
-  if (ongletActif === "general") afficherGeneral();
-  else afficherTour(Number(ongletActif));
 });
 
-onSnapshot(query(collection(db, "resultats"), orderBy("timestamp", "asc")), snap => {
-  tours = {};
-  tousLesResultats = {};
-
-  snap.forEach(doc => {
-    const r = doc.data();
-    if (!r.tour) return;
-
-    if (!tours[r.tour]) tours[r.tour] = [];
-    tours[r.tour].push(r);
-
-    if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-    tousLesResultats[r.dossard].push(r);
-  });
-
-  construireOnglets();
-
-  if (ongletActif === "general") afficherGeneral();
-  else afficherTour(Number(ongletActif));
 });
+
+classement.sort((a,b)=>{
+
+if(b.tour !== a.tour) return b.tour-a.tour;
+
+return a.temps-b.temps;
+
+});
+
+let html=`<table>
+<tr>
+<th>#</th>
+<th>Dossard</th>
+<th>Tour</th>
+<th>Temps</th>
+</tr>`;
+
+let rank=1;
+
+classement.forEach(c=>{
+
+html+=`
+<tr>
+<td>${rank++}</td>
+<td>${c.dossard}</td>
+<td>${c.tour}</td>
+<td>${formatTemps(c.temps)}</td>
+</tr>
+`;
+
+});
+
+html+="</table>";
+
+document.getElementById("classement").innerHTML=html;
+
+}
+
+/* listeners */
+
+onSnapshot(collection(db,"coureurs"),snap=>{
+
+snap.forEach(doc=>{
+const c=doc.data();
+coureursMap[c.dossard]=c;
+});
+
+});
+
+onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")),snap=>{
+
+resultats={};
+
+snap.forEach(doc=>{
+
+const r=doc.data();
+
+if(!resultats[r.dossard]) resultats[r.dossard]=[];
+
+resultats[r.dossard].push({
+timestamp:r.timestamp?.toDate()?.getTime?.() ?? 0
+});
+
+});
+
+afficher();
+
+});
+
 </script>
 
 </body>
 </html>
-
