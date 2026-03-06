@@ -199,13 +199,13 @@ window.afficherTour = function(tour) {
 
     total = Object.values(coureursMap)
       .filter(c => c.dossard && Number(c.dossard) > 0)
-      .filter(c => c.statut !== "DNF" && c.statut !== "DNS" && c.statut !== "ELIMINE")
+      .filter(c => !["DNF","DNS","ELIMINE"].includes(c.statut))
       .length;
 
   } else {
 
     total = (tours[tour - 1] || [])
-      .filter(r => !r.horsDelai)
+      .filter(r => !r.horsDelai && !r.dnf && !r.dns)
       .filter(r => {
         const c = coureursMap[r.dossard];
         return c && !["DNF","DNS","ELIMINE"].includes(c.statut);
@@ -325,37 +325,63 @@ window.afficherGeneral=function(){
     return a.temps-b.temps;
   });
 
-  let html=`<h2>Classement général</h2>`;
+  /* ---------------------------
+     TABLEAU MULTI‑COLONNES
+     --------------------------- */
 
-  html+=`
-  <table style="margin:auto">
-  <tr>
-  <th>#</th>
-  <th>Dossard</th>
-  <th>Nom</th>
-  <th>Tour</th>
-  <th>Total</th>
-  </tr>`;
+  const nb = classement.length;
+
+  let cols = 4;
+  if (nb < 20) cols = 1;
+  else if (nb < 50) cols = 2;
+  else if (nb < 90) cols = 3;
+
+  let html=`<h2>Classement général</h2>`;
+  html += `<div class="columns cols-${cols}">`;
+
+  const chunk = Math.ceil(nb / cols);
+  let colonnes = [];
+
+  for (let i = 0; i < cols; i++) {
+    colonnes.push(classement.slice(i * chunk, (i + 1) * chunk));
+  }
 
   let rank=1;
 
-  classement.forEach(r=>{
-    const classe=
-      r.rouge ? "red fade":
-      (r.categorie==="F"?"femme fade":"fade");
+  colonnes.forEach(col => {
 
-    html+=`
-    <tr class="${classe}">
-    <td>${rank++}</td>
-    <td>${r.dossard}</td>
-    <td>${r.nom} ${r.prenom}</td>
-    <td>${r.tour}</td>
-    <td>${formatTemps(r.temps)}</td>
-    </tr>
+    html += `
+      <table>
+      <tr>
+        <th>#</th>
+        <th>Dossard</th>
+        <th>Nom</th>
+        <th>Tour</th>
+        <th>Total</th>
+      </tr>
     `;
+
+    col.forEach(r => {
+
+      const classe =
+        r.rouge ? "red fade" :
+        (r.categorie==="F" ? "femme fade" : "fade");
+
+      html += `
+        <tr class="${classe}">
+          <td>${rank++}</td>
+          <td>${r.dossard}</td>
+          <td>${r.nom} ${r.prenom}</td>
+          <td>${r.tour}</td>
+          <td>${formatTemps(r.temps)}</td>
+        </tr>
+      `;
+    });
+
+    html += "</table>";
   });
 
-  html+="</table>";
+  html += "</div>";
 
   div.innerHTML=html;
 };
