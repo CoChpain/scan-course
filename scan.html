@@ -66,8 +66,10 @@
     /* 🔥 Départs théoriques */
     let departTours = {};
 
+    let firestoreReady = false;
+
     function recalculerDepartTours() {
-      if (!departMs || !limites) return;
+      if (!departMs || Object.keys(limites).length === 0) return;
 
       departTours = {};
       let cumul = 0;
@@ -76,6 +78,9 @@
         departTours[i] = departMs + cumul * 60000;
         cumul += limites["t" + i] || 0;
       }
+
+      firestoreReady = true;
+      showMessage("🔥 Système prêt", "lime");
     }
 
     /* Charger départ */
@@ -83,7 +88,6 @@
       if (snap.exists()) {
         departMs = snap.data().timestamp.toDate().getTime();
         recalculerDepartTours();
-        showMessage("Départ chargé ✔", "lime");
       }
     });
 
@@ -104,8 +108,8 @@
     /* 🔍 Fonction principale de scan */
     async function handleScan(decodedText){
 
-      if (!departMs || Object.keys(limites).length === 0) {
-        showMessage("⏳ Initialisation…", "orange");
+      if (!firestoreReady) {
+        showMessage("⏳ Initialisation du système…", "orange");
         return;
       }
 
