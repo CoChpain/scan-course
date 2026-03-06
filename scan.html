@@ -137,7 +137,7 @@
       const coureur = docCoureur.data();
 
       /* ❌ Coureur éliminé ou DNF/DNS → interdit */
-      if (["ELIMINE","DNF","DNS"].includes(coueur.statut)) {
+      if (["ELIMINE","DNF","DNS"].includes(coureur.statut)) {
         beepError.play();
         showMessage("⛔ Coureur non autorisé (" + dossard + ")", "red");
         return;
@@ -273,3 +273,4 @@
 
 </body>
 </html>
+
