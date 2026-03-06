@@ -22,7 +22,7 @@ margin:auto;
 }
 
 .cols-1{grid-template-columns:repeat(1,1fr);}
-.cols-2{grid-template-columns:repeat(2,11fr);}
+.cols-2{grid-template-columns:repeat(2,1fr);}
 .cols-3{grid-template-columns:repeat(3,1fr);}
 .cols-4{grid-template-columns:repeat(4,1fr);}
 
@@ -437,9 +437,14 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")),snap=>{
     tousLesResultats[r.dossard].push({...r, timestamp:ts});
   });
 
+  /* 🔥 Nettoyage + ajout DNS/DNF */
   Object.values(coureursMap).forEach(c => {
 
     if (c.statut === "DNF" || c.statut === "DNS") {
+
+      Object.keys(tours).forEach(t => {
+        tours[t] = tours[t].filter(r => !(r.dossard == c.dossard && (r.dnf || r.dns)));
+      });
 
       const scans = tousLesResultats[c.dossard] || [];
 
