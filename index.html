@@ -1,104 +1,194 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>APOLLO RUN</title>
+<meta charset="UTF-8">
+<title>APOLLO RUN</title>
 
-  <style>
-    body {
-      background: #000;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 0;
-    }
+<style>
 
-    h1 {
-      font-size: 60px;
-      margin-top: 40px;
-      letter-spacing: 4px;
-      color: #ffcc00;
-      text-shadow: 0 0 10px #ffcc00;
-    }
+body{
+background:#000;
+color:#fff;
+font-family:Arial,sans-serif;
+text-align:center;
+margin:0;
+padding:0;
+}
 
-    .menu {
-      margin-top: 50px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      width: 60%;
-      margin-left: auto;
-      margin-right: auto;
-    }
+/* TITRE */
 
-    .btn {
-      display: block;
-      padding: 20px;
-      font-size: 26px;
-      font-weight: bold;
-      text-decoration: none;
-      color: white;
-      border-radius: 10px;
-      background: linear-gradient(90deg, #444, #222);
-      border: 2px solid #666;
-      transition: 0.2s;
-    }
+h1{
+font-size:60px;
+margin-top:40px;
+letter-spacing:4px;
+color:#ffcc00;
+text-shadow:0 0 15px #ffcc00;
+}
 
-    .btn:hover {
-      background: linear-gradient(90deg, #666, #333);
-      transform: scale(1.03);
-      border-color: #ffcc00;
-    }
+/* MENU */
 
-    .scan-block {
-      margin-top: 80px;
-      padding: 40px 0;
-      background: #111;
-      border-top: 2px solid #333;
-    }
+.menu{
+margin-top:50px;
+display:flex;
+flex-direction:column;
+gap:20px;
+width:60%;
+margin-left:auto;
+margin-right:auto;
+}
 
-    .scan-title {
-      font-size: 40px;
-      margin-bottom: 30px;
-      color: #00ff99;
-      text-shadow: 0 0 10px #00ff99;
-    }
+.btn{
+display:block;
+padding:20px;
+font-size:26px;
+font-weight:bold;
+text-decoration:none;
+color:white;
+border-radius:10px;
+background:linear-gradient(90deg,#444,#222);
+border:2px solid #666;
+transition:0.2s;
+}
 
-    .scan-btn {
-      display: inline-block;
-      padding: 20px 40px;
-      font-size: 28px;
-      font-weight: bold;
-      text-decoration: none;
-      color: black;
-      background: #00ff99;
-      border-radius: 10px;
-      transition: 0.2s;
-    }
+.btn:hover{
+background:linear-gradient(90deg,#666,#333);
+transform:scale(1.03);
+border-color:#ffcc00;
+}
 
-    .scan-btn:hover {
-      background: #00cc77;
-      transform: scale(1.05);
-    }
-  </style>
+/* SPEAKER / LIVE */
+
+.live-block{
+margin-top:60px;
+padding:40px 0;
+background:#080808;
+border-top:2px solid #222;
+border-bottom:2px solid #222;
+}
+
+.live-title{
+font-size:38px;
+margin-bottom:25px;
+color:#00ccff;
+text-shadow:0 0 10px #00ccff;
+}
+
+.live-btn{
+display:inline-block;
+padding:18px 35px;
+font-size:24px;
+font-weight:bold;
+text-decoration:none;
+color:white;
+background:#0077aa;
+border-radius:10px;
+transition:0.2s;
+}
+
+.live-btn:hover{
+background:#0099dd;
+transform:scale(1.05);
+}
+
+/* SCAN */
+
+.scan-block{
+margin-top:80px;
+padding:50px 0;
+background:#111;
+border-top:2px solid #333;
+}
+
+.scan-title{
+font-size:40px;
+margin-bottom:30px;
+color:#00ff99;
+text-shadow:0 0 10px #00ff99;
+}
+
+.scan-btn{
+display:inline-block;
+padding:22px 45px;
+font-size:30px;
+font-weight:bold;
+text-decoration:none;
+color:black;
+background:#00ff99;
+border-radius:10px;
+transition:0.2s;
+}
+
+.scan-btn:hover{
+background:#00cc77;
+transform:scale(1.07);
+}
+
+footer{
+margin-top:60px;
+color:#666;
+font-size:14px;
+}
+
+</style>
 </head>
 
 <body>
 
-  <h1>APOLLO RUN</h1>
+<h1>APOLLO RUN</h1>
 
-  <div class="menu">
-    <a class="btn" href="coureurs.html">🏃 LISTE DES PARTICIPANTS</a>
-    <a class="btn" href="resultats.html">📊 RÉSULTATS</a>
-    <a class="btn" href="partenaires.html">🤝 NOS PARTENAIRES</a>
-    <a class="btn" href="team.html">🔥 LA TEAM RUNTRAVEL</a>
-  </div>
+<div class="menu">
 
-  <div class="scan-block">
-    <div class="scan-title">SCAN COURSE 2026</div>
-    <a class="scan-btn" href="scan.html">📷 Accéder au SCAN</a>
-  </div>
+<a class="btn" href="coureurs.html">
+🏃 LISTE DES PARTICIPANTS
+</a>
+
+<a class="btn" href="resultats.html">
+📊 CLASSEMENT LIVE
+</a>
+
+<a class="btn" href="partenaires.html">
+🤝 NOS PARTENAIRES
+</a>
+
+<a class="btn" href="team.html">
+🔥 LA TEAM RUNTRAVEL
+</a>
+
+</div>
+
+
+<!-- SPEAKER / LIVE -->
+
+<div class="live-block">
+
+<div class="live-title">
+🎤 ÉCRAN SPEAKER / LIVE
+</div>
+
+<a class="live-btn" href="speaker.html">
+🏁 Derniers passages
+</a>
+
+</div>
+
+
+<!-- SCAN -->
+
+<div class="scan-block">
+
+<div class="scan-title">
+SCAN COURSE 2026
+</div>
+
+<a class="scan-btn" href="scan.html">
+📷 Accéder au SCAN
+</a>
+
+</div>
+
+<footer>
+APOLLO RUN • Système de chronométrage
+</footer>
 
 </body>
 </html>
