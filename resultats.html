@@ -26,10 +26,17 @@ body{
 .cols-3{grid-template-columns:repeat(3,1fr);}
 .cols-4{grid-template-columns:repeat(4,1fr);}
 
+/* 📱 Mobile : forcer 2 colonnes max */
+@media (max-width: 768px) {
+  .cols-4 { grid-template-columns:repeat(2,1fr); }
+  .cols-3 { grid-template-columns:repeat(2,1fr); }
+}
+
 table{
   width:100%;
   border-collapse:collapse;
   font-size:13px;
+  border:2px solid #555; /* Bordure renforcée */
 }
 
 th,td{
@@ -39,6 +46,11 @@ th,td{
 
 th{
   background:#111;
+}
+
+/* 🌈 Alternance douce */
+tr:nth-child(even){
+  background:rgba(255,255,255,0.05);
 }
 
 .red{
@@ -65,6 +77,7 @@ button{
   padding:8px 12px;
   font-size:14px;
 }
+
 
 </style>
 
@@ -518,3 +531,4 @@ function rafraichir(){
 
 </body>
 </html>
+
