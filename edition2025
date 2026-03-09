@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>EDITION 2025</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 40px;
+        }
+
+        .main-image {
+            width: 60%;
+            max-width: 600px;
+        }
+
+        .small-images {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .small-images img {
+            width: 250px;
+            height: auto;
+        }
+
+        .btn {
+            display: inline-block;
+            margin-top: 30px;
+            padding: 12px 25px;
+            background-color: #0078ff;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 18px;
+        }
+
+        table {
+            margin: 40px auto;
+            border-collapse: collapse;
+            width: 80%;
+        }
+
+        table, th, td {
+            border: 1px solid #333;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>EDITION 2025</h1>
+
+    <!-- Image principale -->
+    <img src="IMG_6745.jpg" alt="Image principale" class="main-image">
+
+    <!-- Deux petites images côte à côte -->
+    <div class="small-images">
+        <img src="IMG_6603.jpg" alt="Petite image 1">
+        <img src="IMG_6735.jpg" alt="Petite image 2">
+    </div>
+
+    <!-- Bouton vers Google Photos -->
+    <a href="https://photos.google.com/share/AF1QipNiKV_LluaYgFabAKPty2uk0ircW6NpG8iVWJsiPgxa0i02wafR2QxMa5yuIXzoag?key=am03X0swVEpHQjZCRDhzN2hyOGlMdzR6U1FEU2pB" class="btn" target="_blank">Voir l’album</a>
+
+    <!-- Tableau à compléter plus tard -->
+    <table>
+        <tr>
+            <th>Colonne 1</th>
+            <th>Colonne 2</th>
+            <th>Colonne 3</th>
+        </tr>
+        <tr>
+            <td>...</td>
+            <td>...</td>
+            <td>...</td>
+        </tr>
+    </table>
+
+</body>
+</html>
