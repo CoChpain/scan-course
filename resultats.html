@@ -26,19 +26,17 @@ body{
 .cols-3{grid-template-columns:repeat(3,1fr);}
 .cols-4{grid-template-columns:repeat(4,1fr);}
 
-/* 📱 Mobile : forcer 1 colonne */
 @media (max-width: 768px) {
-  .cols-4 { grid-template-columns:repeat(1,1fr); }
-  .cols-3 { grid-template-columns:repeat(1,1fr); }
-  .cols-2 { grid-template-columns:repeat(1,1fr); }
-  .cols-1 { grid-template-columns:repeat(1,1fr); }
+  .cols-4, .cols-3, .cols-2, .cols-1 {
+    grid-template-columns:repeat(1,1fr);
+  }
 }
 
 table{
   width:100%;
   border-collapse:collapse;
   font-size:13px;
-  border:2px solid #555; /* Bordure renforcée */
+  border:2px solid #555;
 }
 
 th,td{
@@ -50,7 +48,6 @@ th{
   background:#111;
 }
 
-/* 🌈 Alternance douce */
 tr:nth-child(even){
   background:rgba(255,255,255,0.05);
 }
@@ -151,14 +148,12 @@ function formatTemps(ms){
   return `${h}:${m}:${sec}`;
 }
 
-/* Format limite */
 function formatLimite(min){
   const h=String(Math.floor(min/60)).padStart(2,"0");
   const m=String(min%60).padStart(2,"0");
   return `${h}:${m}:00`;
 }
 
-/* Temps par tour */
 function calculTempsTour(dossard,tour){
   if(!departTours[tour]) return null;
   const scans=tousLesResultats[dossard];
@@ -182,7 +177,6 @@ window.afficherTour=function(tour){
   ongletActif=tour;
   let liste=[...(tours[tour]||[])];
 
-  /* Ratio */
   let total=0, arrives=0;
   if(tour===1){
     total=Object.values(coureursMap)
@@ -198,7 +192,6 @@ window.afficherTour=function(tour){
   }
   arrives=(tours[tour]||[]).filter(r=>!r.horsDelai && !r.dnf && !r.dns).length;
 
-  /* DNS après DNF */
   liste.sort((a,b)=>{
     const A = a.dns ? 4 : a.dnf ? 3 : a.horsDelai ? 2 : 1;
     const B = b.dns ? 4 : b.dnf ? 3 : b.horsDelai ? 2 : 1;
@@ -363,6 +356,7 @@ onSnapshot(collection(db,"coureurs"), snap=>{
   rafraichir();
 });
 
+/* 🔥 LISTENER RESULTATS — version corrigée */
 onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
   tours={};
   tousLesResultats={};
@@ -392,13 +386,9 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     });
   });
 
-  /* 🔥 DNS / DNF artificiels */
+  /* 🔥 DNS / DNF artificiels — déplacé ici */
   Object.values(coureursMap).forEach(c=>{
     if(c.statut==="DNF" || c.statut==="DNS"){
-      Object.keys(tours).forEach(t=>{
-        tours[t]=tours[t].filter(r=>!(r.dossard==c.dossard && (r.dnf||r.dns)));
-      });
-
       const scans=tousLesResultats[c.dossard]||[];
       const abandonTour=scans.length>0 ? scans[scans.length-1].tour+1 : 1;
 
