@@ -15,7 +15,6 @@
             max-width: 600px;
         }
 
-
         .small-images {
             display: flex;
             justify-content: center;
