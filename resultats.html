@@ -76,6 +76,38 @@ button{
   padding:8px 12px;
   font-size:14px;
 }
+
+/* 🔽 panneau rétractable */
+.toggle-box{
+  margin-top:20px;
+}
+
+.toggle-btn{
+  background:#00ffcc;
+  color:#000;
+  padding:8px 14px;
+  border:none;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
+  box-shadow:0 0 10px #00ffcc;
+  transition:0.2s;
+}
+
+.toggle-btn:hover{
+  background:#00ffaa;
+  box-shadow:0 0 15px #00ffaa;
+}
+
+.toggle-content{
+  margin-top:10px;
+  padding:10px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid #333;
+  border-radius:6px;
+  display:none;
+}
+
 </style>
 
 </head>
@@ -163,6 +195,22 @@ function calculTempsTour(dossard,tour){
   return actuel.timestamp - departTours[tour];
 }
 
+/* 🔽 Liste des dossards encore en course */
+function getDossardsEnCourse(tour){
+  let liste = tours[tour] || [];
+  return liste
+    .filter(r => !r.horsDelai && !r.dnf && !r.dns)
+    .map(r => r.dossard)
+    .sort((a,b)=>a-b);
+}
+
+window.toggleDossards = function(){
+  const box = document.getElementById("listeDossards");
+  box.style.display = (box.style.display === "none" || box.style.display === "") 
+    ? "block" 
+    : "none";
+};
+
 /* Onglets */
 function construireOnglets(){
   let html=`<button onclick="afficherGeneral()">Général</button>`;
@@ -246,6 +294,18 @@ window.afficherTour=function(tour){
   });
 
   html+="</div>";
+
+  /* 🔽 Ajout du panneau rétractable */
+  const dossards = getDossardsEnCourse(tour);
+  html += `
+    <div class="toggle-box">
+      <button class="toggle-btn" onclick="toggleDossards()">Afficher les dossards encore en course</button>
+      <div id="listeDossards" class="toggle-content">
+        <strong>Dossards :</strong> ${dossards.join(", ")}
+      </div>
+    </div>
+  `;
+
   div.innerHTML=html;
 };
 
@@ -356,7 +416,6 @@ onSnapshot(collection(db,"coureurs"), snap=>{
   rafraichir();
 });
 
-/* 🔥 LISTENER RESULTATS — version corrigée */
 onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
   tours={};
   tousLesResultats={};
@@ -386,7 +445,7 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     });
   });
 
-  /* 🔥 DNS / DNF artificiels — déplacé ici */
+  /* 🔥 DNS / DNF artificiels */
   Object.values(coureursMap).forEach(c=>{
     if(c.statut==="DNF" || c.statut==="DNS"){
       const scans=tousLesResultats[c.dossard]||[];
