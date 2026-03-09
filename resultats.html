@@ -211,13 +211,36 @@ window.toggleDossards = function(){
     : "none";
 };
 
-/* Onglets */
+/* 🔥 Onglets dynamiques */
 function construireOnglets(){
-  let html=`<button onclick="afficherGeneral()">Général</button>`;
-  Object.keys(tours).map(Number).sort((a,b)=>a-b).forEach(t=>{
-    html+=`<button onclick="afficherTour(${t})">Tour ${t}</button>`;
+
+  let html = `<button onclick="afficherGeneral()">Général</button>`;
+
+  // 🔥 Déterminer le tour maximum débloqué
+  let tourMax = 1;
+
+  Object.keys(limites).forEach(key=>{
+    const t = Number(key.replace("t",""));
+    if(!departTours[t]) return;
+
+    const finTheorique = departTours[t] + limites[key] * 60000;
+
+    if(Date.now() >= finTheorique){
+      tourMax = Math.max(tourMax, t+1);
+    }
   });
-  document.getElementById("onglets").innerHTML=html;
+
+  // 🔥 Afficher uniquement les onglets débloqués
+  Object.keys(tours)
+    .map(Number)
+    .sort((a,b)=>a-b)
+    .forEach(t=>{
+      if(t <= tourMax){
+        html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
+      }
+    });
+
+  document.getElementById("onglets").innerHTML = html;
 }
 
 /* 🔥 AFFICHAGE TOUR */
@@ -327,19 +350,19 @@ window.afficherGeneral=function(){
     let statutTxt="", statutOrdre=0;
 
     if(c.statut==="DNF"){
-      statutTxt=`DNF au tour ${lastTour+1}`;
+      statutTxt=`DNF T${lastTour+1}`;
       statutOrdre=3;
     }
     else if(c.statut==="DNS"){
-      statutTxt=`DNS au tour ${lastTour+1}`;
+      statutTxt=`DNS T${lastTour+1}`;
       statutOrdre=4;
     }
     else if(c.statut==="ELIMINE"){
-      statutTxt=`Hors délais au tour ${lastTour}`;
+      statutTxt=`Hors délais T${lastTour}`;
       statutOrdre=2;
     }
     else{
-      statutTxt=`En course pour le tour ${lastTour+1}`;
+      statutTxt=`En course T${lastTour+1}`;
       statutOrdre=1;
     }
 
