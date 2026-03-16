@@ -77,7 +77,6 @@ button{
   font-size:14px;
 }
 
-/* 🔽 panneau rétractable */
 .toggle-box{
   margin-top:20px;
 }
@@ -135,21 +134,25 @@ const div = document.getElementById("contenu");
 let coureursMap = {};
 let tours = {};
 let tousLesResultats = {};
-let depart = null;
+let startMs = null;
 let limites = {};
 let departTours = {};
 let ongletActif = "general";
 
-/* 🔥 Charger départ */
+/* -------------------------------------------
+   🔥 Charger le chrono (startMs)
+--------------------------------------------*/
 onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
-    depart = snap.data().timestamp.toDate().getTime();
+    startMs = snap.data().startMs;
     recalculerDepartTours();
     rafraichir();
   }
 });
 
-/* 🔥 Charger limites */
+/* -------------------------------------------
+   🔥 Charger limites
+--------------------------------------------*/
 onSnapshot(doc(db,"course","limitesTours"), snap=>{
   if(snap.exists()){
     limites = snap.data();
@@ -158,14 +161,16 @@ onSnapshot(doc(db,"course","limitesTours"), snap=>{
   }
 });
 
-/* 🔥 Calcul départs théoriques */
+/* -------------------------------------------
+   🔥 Calcul départs théoriques
+--------------------------------------------*/
 function recalculerDepartTours(){
-  if(!depart || !limites) return;
+  if(!startMs || !limites) return;
   departTours={};
   let cumul=0;
   for(let i=1;i<=200;i++){
     if(!limites["t"+i]) break;
-    departTours[i]=depart + cumul*60000;
+    departTours[i]=startMs + cumul*60000;
     cumul+=limites["t"+i];
   }
 }
@@ -211,12 +216,13 @@ window.toggleDossards = function(){
     : "none";
 };
 
-/* 🔥 Onglets dynamiques */
+/* -------------------------------------------
+   🔥 Onglets dynamiques
+--------------------------------------------*/
 function construireOnglets(){
 
   let html = `<button onclick="afficherGeneral()">Général</button>`;
 
-  // 🔥 Déterminer le tour maximum débloqué
   let tourMax = 1;
 
   Object.keys(limites).forEach(key=>{
@@ -230,7 +236,6 @@ function construireOnglets(){
     }
   });
 
-  // 🔥 Afficher uniquement les onglets débloqués
   Object.keys(tours)
     .map(Number)
     .sort((a,b)=>a-b)
@@ -243,7 +248,9 @@ function construireOnglets(){
   document.getElementById("onglets").innerHTML = html;
 }
 
-/* 🔥 AFFICHAGE TOUR */
+/* -------------------------------------------
+   🔥 AFFICHAGE TOUR
+--------------------------------------------*/
 window.afficherTour=function(tour){
   ongletActif=tour;
   let liste=[...(tours[tour]||[])];
@@ -318,7 +325,6 @@ window.afficherTour=function(tour){
 
   html+="</div>";
 
-  /* 🔽 Ajout du panneau rétractable */
   const dossards = getDossardsEnCourse(tour);
   html += `
     <div class="toggle-box">
@@ -332,7 +338,9 @@ window.afficherTour=function(tour){
   div.innerHTML=html;
 };
 
-/* 🔥 CLASSEMENT GÉNÉRAL */
+/* -------------------------------------------
+   🔥 CLASSEMENT GÉNÉRAL
+--------------------------------------------*/
 window.afficherGeneral=function(){
   ongletActif="general";
   let classement=[];
@@ -427,7 +435,9 @@ window.afficherGeneral=function(){
   div.innerHTML=html;
 };
 
-/* 🔥 LISTENERS FIRESTORE */
+/* -------------------------------------------
+   🔥 LISTENERS FIRESTORE
+--------------------------------------------*/
 onSnapshot(collection(db,"coureurs"), snap=>{
   coureursMap={};
   snap.forEach(doc=>{
@@ -455,7 +465,6 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     tousLesResultats[r.dossard].push({...r, timestamp:ts});
   });
 
-  /* 🔥 Recalcul hors délai */
   Object.keys(tours).forEach(t=>{
     const tour=Number(t);
     const limite=limites["t"+tour]||0;
@@ -468,7 +477,6 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     });
   });
 
-  /* 🔥 DNS / DNF artificiels */
   Object.values(coureursMap).forEach(c=>{
     if(c.statut==="DNF" || c.statut==="DNS"){
       const scans=tousLesResultats[c.dossard]||[];
