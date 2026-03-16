@@ -77,6 +77,15 @@ function checkPwd(){
 
 <hr>
 
+<!-- 🚀 LANCER LE CHRONO -->
+<h2>⏱️ Départ de la course</h2>
+<button onclick="startChrono()" style="padding:10px 20px;font-size:20px;background:#00ff99;color:black;">
+  🚀 Lancer le chrono
+</button>
+<div id="chrono-status" style="margin-top:10px;color:yellow;"></div>
+
+<hr>
+
 <h2>🔍 Rechercher un coureur</h2>
 
 <input id="search-dossard" type="text" placeholder="Dossard">
@@ -91,7 +100,7 @@ function checkPwd(){
 
 <input id="add-dossard" type="text" placeholder="Dossard">
 <input id="add-tour" type="number" placeholder="Tour">
-<input id="add-time" type="time" step="1">
+<input id="add-time" type="text" placeholder="Temps (HH:MM:SS)">
 <button onclick="addScan()">Ajouter</button>
 
 <hr>
@@ -119,6 +128,38 @@ import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+let startMs = null;
+
+/* -------------------------------------------
+   🔥 Charger le chrono Firestore
+--------------------------------------------*/
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+onSnapshot(doc(db,"course","depart"), snap=>{
+  if(snap.exists()){
+    startMs = snap.data().startMs;
+    if(startMs){
+      document.getElementById("chrono-status").innerHTML =
+        "Chrono actif (départ à 00:00:00)";
+    }
+  }
+});
+
+/* -------------------------------------------
+   🚀 LANCER LE CHRONO
+--------------------------------------------*/
+window.startChrono = async function(){
+  const now = Date.now();
+
+  await updateDoc(doc(db,"course","depart"), {
+    startMs: now
+  });
+
+  startMs = now;
+  document.getElementById("chrono-status").innerHTML =
+    "Chrono lancé à 00:00:00";
+};
 
 /* -------------------------------------------
    🔍 RECHERCHE COUREUR
@@ -160,7 +201,7 @@ async function loadScans(dossard){
     <table>
       <tr>
         <th>Tour</th>
-        <th>Heure</th>
+        <th>Temps</th>
         <th>Hors délai</th>
         <th>Dossard</th>
         <th>Actions</th>
@@ -171,12 +212,16 @@ async function loadScans(dossard){
     const r = docu.data();
     const id = docu.id;
 
-    const time = r.timestamp ? r.timestamp.toDate().toLocaleTimeString() : "--";
+    let temps = "--:--:--";
+    if(r.timestamp && startMs){
+      const diff = r.timestamp.toDate().getTime() - startMs;
+      temps = format(diff);
+    }
 
     html += `
       <tr>
         <td>${r.tour}</td>
-        <td>${time}</td>
+        <td>${temps}</td>
         <td>${r.horsDelai ? "Oui" : "Non"}</td>
         <td>${r.dossard}</td>
         <td>
@@ -192,41 +237,34 @@ async function loadScans(dossard){
   document.getElementById("scan-list").innerHTML = html;
 }
 
+/* Format HH:MM:SS */
+function format(ms){
+  const s = Math.floor(ms/1000);
+  const h = String(Math.floor(s/3600)).padStart(2,"0");
+  const m = String(Math.floor((s%3600)/60)).padStart(2,"0");
+  const sec = String(s%60).padStart(2,"0");
+  return `${h}:${m}:${sec}`;
+}
+
 /* -------------------------------------------
    ✏️ MODIFIER UN SCAN
 --------------------------------------------*/
 window.editScan = async function(id, tour, oldDossard){
 
-  const newTime = prompt("Nouvelle heure (HH:MM:SS) ?");
+  const newTime = prompt("Temps écoulé (HH:MM:SS) ?");
   if(!newTime) return;
+
+  const [h,m,s] = newTime.split(":").map(Number);
+  const ms = (h*3600 + m*60 + s) * 1000;
+
+  const timestamp = new Date(startMs + ms);
 
   const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")");
   const dossardFinal = newDossard.trim() !== "" ? newDossard.trim() : oldDossard;
 
-  const today = new Date();
-  const [h,m,s] = newTime.split(":");
-  today.setHours(h, m, s, 0);
-
-  // Charger limites et départ
-  const departSnap = await getDocs(collection(db, "course"));
-  const depart = departSnap.docs.find(d => d.id === "depart").data().timestamp.toDate().getTime();
-
-  const limitesSnap = await getDocs(collection(db, "course"));
-  const limites = limitesSnap.docs.find(d => d.id === "limitesTours").data();
-
-  // Recalcul du départ théorique du tour
-  let cumul = 0;
-  for (let i = 1; i < tour; i++) cumul += limites["t" + i] || 0;
-  const departTour = depart + cumul * 60000;
-
-  // Recalcul hors délai
-  const diffMin = (today.getTime() - departTour) / 60000;
-  const horsDelai = diffMin > (limites["t" + tour] || 0);
-
   await updateDoc(doc(db,"resultats",id), {
-    timestamp: today,
-    dossard: dossardFinal,
-    horsDelai: horsDelai
+    timestamp: timestamp,
+    dossard: dossardFinal
   });
 
   alert("Scan modifié !");
@@ -253,14 +291,15 @@ window.addScan = async function(){
 
   if(!dossard || !tour || !time) return alert("Champs incomplets");
 
-  const today = new Date();
-  const [h,m,s] = time.split(":");
-  today.setHours(h, m, s, 0);
+  const [h,m,s] = time.split(":").map(Number);
+  const ms = (h*3600 + m*60 + s) * 1000;
+
+  const timestamp = new Date(startMs + ms);
 
   await addDoc(collection(db,"resultats"), {
     dossard,
     tour,
-    timestamp: today,
+    timestamp,
     horsDelai: false
   });
 
