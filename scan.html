@@ -63,8 +63,8 @@
     const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
     const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-    /* 🔥 Départ Firestore */
-    let departMs = null;
+    /* 🔥 Chrono Firestore */
+    let startMs = null;
 
     /* 🔥 Limites Firestore */
     let limites = {};
@@ -75,14 +75,14 @@
     let firestoreReady = false;
 
     function recalculerDepartTours() {
-      if (!departMs || Object.keys(limites).length === 0) return;
+      if (!startMs || Object.keys(limites).length === 0) return;
 
       departTours = {};
       let cumul = 0;
 
       for (let i = 1; i <= 200; i++) {
         if (!limites["t" + i]) break;
-        departTours[i] = departMs + cumul * 60000;
+        departTours[i] = startMs + cumul * 60000;
         cumul += limites["t" + i] || 0;
       }
 
@@ -90,10 +90,10 @@
       showMessage("🔥 Système prêt", "lime");
     }
 
-    /* Charger départ */
+    /* Charger startMs */
     onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
-        departMs = snap.data().timestamp.toDate().getTime();
+        startMs = snap.data().startMs;
         recalculerDepartTours();
       }
     });
@@ -112,7 +112,9 @@
       fb.innerHTML = msg;
     }
 
-    /* 🔍 Fonction principale de scan */
+    /* -------------------------------------------
+       🔍 Fonction principale de scan
+    --------------------------------------------*/
     async function handleScan(decodedText){
 
       if (!firestoreReady) {
@@ -221,7 +223,9 @@
     scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
     scanner.render(onScanSuccess);
 
-    /* DNF manuel */
+    /* -------------------------------------------
+       🏳️ DNF manuel
+    --------------------------------------------*/
     document.getElementById("btn-dnf").addEventListener("click", async () => {
       const dossard = document.getElementById("dossard-manuel").value.trim();
       if (!dossard) return;
@@ -245,7 +249,9 @@
       showMessage("🏳️ Coureur " + dossard + " marqué DNF", "orange");
     });
 
-    /* DNS manuel */
+    /* -------------------------------------------
+       🚫 DNS manuel
+    --------------------------------------------*/
     document.getElementById("btn-dns").addEventListener("click", async () => {
       const dossard = document.getElementById("dossard-dns").value.trim();
       if (!dossard) return;
@@ -273,5 +279,3 @@
 
 </body>
 </html>
-
-
