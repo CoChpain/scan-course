@@ -130,8 +130,16 @@ function checkPwd(){
 
 <!-- 📋 TABLEAU DES COUREURS -->
 <hr>
-<h2>📋 Liste complète des coureurs</h2>
-<div id="table-coureurs"></div>
+<h2>
+  📋 Liste complète des coureurs
+  <button onclick="toggleCoureurs()" 
+          style="margin-left:15px;padding:5px 12px;font-size:14px;">
+    👁️ Afficher / Masquer
+  </button>
+</h2>
+
+<div id="table-coureurs" style="display:none;"></div>
+
 
 <!-- 📝 SCANS DU COUREUR EN ÉDITION -->
 <div id="edit-runner-scans"></div>
@@ -195,6 +203,15 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let startMs = null;
+
+  /* ---------------------------------------------------------
+   👁️ AFFICHER / MASQUER LA LISTE DES COUREURS
+--------------------------------------------------------- */
+window.toggleCoureurs = function() {
+  const div = document.getElementById("table-coureurs");
+  div.style.display = (div.style.display === "none") ? "block" : "none";
+};
+
 
 /* ---------------------------------------------------------
    🔥 CHARGER LE CHRONO
