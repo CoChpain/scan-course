@@ -151,6 +151,7 @@ onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
     startMs = snap.data().startMs;
     recalculerDepartTours();
+    rafraichir();
   }
 });
 
@@ -161,6 +162,7 @@ onSnapshot(doc(db,"course","limitesTours"), snap=>{
   if(snap.exists()){
     limites = snap.data();
     recalculerDepartTours();
+    rafraichir();
   }
 });
 
@@ -211,6 +213,34 @@ function updateChronos(){
 }
 
 setInterval(updateChronos, 1000);
+
+/* -------------------------------------------
+   🔥 Calcul temps d’un tour pour un dossard
+--------------------------------------------*/
+function calculTempsTour(dossard,tour){
+  if(!departTours[tour]) return null;
+  const scans=tousLesResultats[dossard];
+  if(!scans) return null;
+  const actuel=scans.find(r=>r.tour===tour);
+  if(!actuel||!actuel.timestamp) return null;
+  return actuel.timestamp - departTours[tour];
+}
+
+/* 🔽 Liste des dossards encore en course */
+function getDossardsEnCourse(tour){
+  let liste = tours[tour] || [];
+  return liste
+    .filter(r => !r.horsDelai && !r.dnf && !r.dns)
+    .map(r => r.dossard)
+    .sort((a,b)=>a-b);
+}
+
+window.toggleDossards = function(){
+  const box = document.getElementById("listeDossards");
+  box.style.display = (box.style.display === "none" || box.style.display === "") 
+    ? "block" 
+    : "none";
+};
 
 /* -------------------------------------------
    🔥 Onglets dynamiques
@@ -500,6 +530,7 @@ function rafraichir(){
   else afficherTour(Number(ongletActif));
 }
 </script>
+
 
 </body>
 </html>
