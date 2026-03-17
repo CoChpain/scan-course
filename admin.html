@@ -109,12 +109,17 @@ function checkPwd(){
 
 <hr>
 
-<!-- 🚀 BOUTON LANCER LE CHRONO (EN BAS) -->
+<!-- 🚀 BOUTON LANCER / RESET CHRONO -->
 <h2>⏱️ Départ de la course</h2>
 
 <button id="btn-start" onclick="startChrono()" 
         style="padding:12px 25px;font-size:22px;background:#00ff99;color:black;border-radius:8px;">
   🚀 Lancer le chrono
+</button>
+
+<button id="btn-reset" onclick="resetChrono()" 
+        style="padding:12px 25px;font-size:22px;background:#ff4444;color:white;border-radius:8px;margin-left:10px;">
+  🔁 Réinitialiser le chrono
 </button>
 
 <div id="chrono-status" style="margin-top:10px;color:yellow;font-size:18px;"></div>
@@ -141,26 +146,34 @@ onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
     startMs = snap.data().startMs;
 
+    const btnStart = document.getElementById("btn-start");
+
     if (startMs) {
-      const btn = document.getElementById("btn-start");
-      btn.disabled = true;
-      btn.style.opacity = "0.5";
-      btn.style.cursor = "not-allowed";
+      btnStart.disabled = true;
+      btnStart.style.opacity = "0.5";
+      btnStart.style.cursor = "not-allowed";
 
       document.getElementById("chrono-status").innerHTML =
         "Chrono déjà lancé";
+    } else {
+      btnStart.disabled = false;
+      btnStart.style.opacity = "1";
+      btnStart.style.cursor = "pointer";
+
+      document.getElementById("chrono-status").innerHTML =
+        "Chrono en attente de lancement";
     }
   }
 });
 
 /* -------------------------------------------
-   🚀 LANCER LE CHRONO AVEC SÉCURITÉ
+   🚀 LANCER LE CHRONO
 --------------------------------------------*/
 window.startChrono = async function(){
 
   if (startMs) {
     document.getElementById("chrono-status").innerHTML =
-      "⚠️ Le chrono est déjà lancé. Impossible de recommencer.";
+      "⚠️ Le chrono est déjà lancé.";
     return;
   }
 
@@ -186,6 +199,41 @@ window.startChrono = async function(){
   btn.disabled = true;
   btn.style.opacity = "0.5";
   btn.style.cursor = "not-allowed";
+};
+
+/* -------------------------------------------
+   🔁 RÉINITIALISER LE CHRONO
+--------------------------------------------*/
+window.resetChrono = async function(){
+
+  if (!startMs) {
+    document.getElementById("chrono-status").innerHTML =
+      "ℹ️ Aucun chrono n'est lancé.";
+    return;
+  }
+
+  const c1 = confirm("⚠️ Réinitialiser le chrono ?");
+  if (!c1) return;
+
+  const c2 = confirm("⚠️ Tous les chronos repartiront de zéro.");
+  if (!c2) return;
+
+  const c3 = confirm("⚠️ Dernière confirmation.");
+  if (!c3) return;
+
+  await updateDoc(doc(db,"course","depart"), {
+    startMs: null
+  });
+
+  startMs = null;
+
+  document.getElementById("chrono-status").innerHTML =
+    "Chrono réinitialisé. Prêt pour un nouveau départ.";
+
+  const btn = document.getElementById("btn-start");
+  btn.disabled = false;
+  btn.style.opacity = "1";
+  btn.style.cursor = "pointer";
 };
 
 /* -------------------------------------------
