@@ -531,40 +531,6 @@ window.saveRunner = async function(){
   else {
     const id = snap.docs[0].id;
 
- /* ---------------------------------------------------------
-   ➕ AJOUTER / MODIFIER UN COUREUR
---------------------------------------------------------- */
-window.saveRunner = async function(){
-
-  const dossard = document.getElementById("c-dossard").value.trim();
-  const nom = document.getElementById("c-nom").value.trim();
-  const prenom = document.getElementById("c-prenom").value.trim();
-  const sexe = document.getElementById("c-sexe").value;
-
-  if(!dossard || !nom || !prenom){
-    document.getElementById("runner-save-status").innerHTML =
-      "⚠️ Merci de remplir tous les champs.";
-    return;
-  }
-
-  const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
-  const snap = await getDocs(q);
-
-  if(snap.empty){
-    await addDoc(collection(db,"coureurs"), {
-      dossard,
-      nom,
-      prenom,
-      categorie: sexe,
-      statut: "OK"
-    });
-
-    document.getElementById("runner-save-status").innerHTML =
-      "✅ Coureur ajouté avec succès.";
-  } 
-  else {
-    const id = snap.docs[0].id;
-
     await updateDoc(doc(db,"coureurs",id), {
       nom,
       prenom,
