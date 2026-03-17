@@ -262,14 +262,18 @@ function construireOnglets(){
     }
   });
 
-  Object.keys(tours)
-    .map(Number)
-    .sort((a,b)=>a-b)
-    .forEach(t=>{
-      if(t <= tourMax){
-        html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
-      }
-    });
+ // 🔥 Nombre total de tours définis dans Firestore
+const totalTours = Object.keys(limites)
+  .map(k => Number(k.replace("t","")))
+  .sort((a,b)=>a-b);
+
+// 🔥 Afficher tous les tours débloqués
+totalTours.forEach(t => {
+  if (t <= tourMax) {
+    html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
+  }
+});
+
 
   document.getElementById("onglets").innerHTML = html;
 }
