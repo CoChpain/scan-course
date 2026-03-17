@@ -77,6 +77,7 @@ function checkPwd(){
 
 <hr>
 
+<!-- 🔍 RECHERCHE COUREUR -->
 <h2>🔍 Rechercher un coureur</h2>
 
 <input id="search-dossard" type="text" placeholder="Dossard">
@@ -87,6 +88,7 @@ function checkPwd(){
 
 <hr>
 
+<!-- ➕ AJOUT / MODIFICATION SCAN -->
 <h2>➕ Ajouter un scan manuellement</h2>
 
 <input id="add-dossard" type="text" placeholder="Dossard">
@@ -96,6 +98,7 @@ function checkPwd(){
 
 <hr>
 
+<!-- ⚙️ MODIFIER STATUT -->
 <h2>⚙️ Modifier statut coureur</h2>
 
 <input id="status-dossard" type="text" placeholder="Dossard">
@@ -106,8 +109,10 @@ function checkPwd(){
   <option value="ELIMINE">Éliminé</option>
 </select>
 <button onclick="updateStatus()">Mettre à jour</button>
+
 <hr>
 
+<!-- ➕ AJOUT / MODIFICATION COUREUR -->
 <h2>➕ Ajouter / Modifier un coureur</h2>
 
 <input id="c-dossard" type="text" placeholder="Dossard">
@@ -122,29 +127,16 @@ function checkPwd(){
 <button onclick="saveRunner()">Enregistrer</button>
 
 <div id="runner-save-status" style="margin-top:10px;color:yellow;"></div>
+
+<!-- 📋 TABLEAU DES COUREURS -->
 <hr>
-
 <h2>📋 Liste complète des coureurs</h2>
-
 <div id="table-coureurs"></div>
 
+<!-- 📝 SCANS DU COUREUR EN ÉDITION -->
+<div id="edit-runner-scans"></div>
+
 <hr>
-
-<!-- 🚀 BOUTON LANCER / RESET CHRONO -->
-<h2>⏱️ Départ de la course</h2>
-
-<button id="btn-start" onclick="startChrono()" 
-        style="padding:12px 25px;font-size:22px;background:#00ff99;color:black;border-radius:8px;">
-  🚀 Lancer le chrono
-</button>
-
-<button id="btn-reset" onclick="resetChrono()" 
-        style="padding:12px 25px;font-size:22px;background:#ff4444;color:white;border-radius:8px;margin-left:10px;">
-  🔁 Réinitialiser le chrono
-</button>
-
-<div id="chrono-status" style="margin-top:10px;color:yellow;font-size:18px;"></div>
-
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
@@ -161,7 +153,7 @@ const db = getFirestore(app);
 let startMs = null;
 
 /* -------------------------------------------
-   🔥 Charger le chrono Firestore
+   🔥 CHARGER LE CHRONO
 --------------------------------------------*/
 onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
@@ -368,6 +360,27 @@ window.editScan = async function(id, tour, oldDossard){
 };
 
 /* -------------------------------------------
+   ✏️ MODIFIER UN SCAN DEPUIS LA FICHE COUREUR
+--------------------------------------------*/
+window.editRunnerScan = async function(id, tour, dossard){
+
+  const newTime = prompt("Nouveau temps pour le tour " + tour + " (HH:MM:SS) :");
+  if(!newTime) return;
+
+  const [h,m,s] = newTime.split(":").map(Number);
+  const ms = (h*3600 + m*60 + s) * 1000;
+
+  const timestamp = new Date(startMs + ms);
+
+  await updateDoc(doc(db,"resultats",id), {
+    timestamp: timestamp
+  });
+
+  alert("Temps mis à jour !");
+  editRunner(dossard); // recharge les scans
+};
+
+/* -------------------------------------------
    ❌ SUPPRIMER UN SCAN
 --------------------------------------------*/
 window.deleteScan = async function(id){
@@ -425,7 +438,8 @@ window.updateStatus = async function(){
   alert("Statut mis à jour !");
   searchRunner();
 };
-  /* -------------------------------------------
+
+/* -------------------------------------------
    ➕ AJOUTER / MODIFIER UN COUREUR
 --------------------------------------------*/
 window.saveRunner = async function(){
@@ -441,12 +455,10 @@ window.saveRunner = async function(){
     return;
   }
 
-  // Vérifier si le coureur existe déjà
   const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
   const snap = await getDocs(q);
 
   if(snap.empty){
-    // ➕ Ajouter un nouveau coureur
     await addDoc(collection(db,"coureurs"), {
       dossard,
       nom,
@@ -459,7 +471,6 @@ window.saveRunner = async function(){
       "✅ Coureur ajouté avec succès.";
   } 
   else {
-    // ✏️ Modifier un coureur existant
     const id = snap.docs[0].id;
 
     await updateDoc(doc(db,"coureurs",id), {
@@ -472,7 +483,6 @@ window.saveRunner = async function(){
       "✏️ Coureur mis à jour.";
   }
 
-  // Nettoyage des champs
   document.getElementById("c-dossard").value = "";
   document.getElementById("c-nom").value = "";
   document.getElementById("c-prenom").value = "";
@@ -491,7 +501,6 @@ onSnapshot(collection(db, "coureurs"), snap => {
     liste.push(c);
   });
 
-  // Trier par numéro de dossard
   liste.sort((a, b) => Number(a.dossard) - Number(b.dossard));
 
   let html = `
@@ -527,10 +536,11 @@ onSnapshot(collection(db, "coureurs"), snap => {
 
   document.getElementById("table-coureurs").innerHTML = html;
 });
+
 /* -------------------------------------------
-   ✏️ REMPLIR LE FORMULAIRE POUR MODIFIER
+   ✏️ REMPLIR LE FORMULAIRE + AFFICHER SCANS
 --------------------------------------------*/
-window.editRunner = function(dossard, nom, prenom, sexe){
+window.editRunner = async function(dossard, nom, prenom, sexe){
 
   document.getElementById("c-dossard").value = dossard;
   document.getElementById("c-nom").value = nom;
@@ -539,6 +549,46 @@ window.editRunner = function(dossard, nom, prenom, sexe){
 
   document.getElementById("runner-save-status").innerHTML =
     "✏️ Modification du coureur " + dossard;
+
+  const q = query(collection(db,"resultats"), where("dossard","==",dossard));
+  const snap = await getDocs(q);
+
+  let html = `
+    <h3>⏱️ Scans du coureur</h3>
+    <table>
+      <tr>
+        <th>Tour</th>
+        <th>Temps</th>
+        <th>Action</th>
+      </tr>
+  `;
+
+  snap.forEach(docu => {
+    const r = docu.data();
+    const id = docu.id;
+
+    let temps = "--:--:--";
+    if(r.timestamp && startMs){
+      const diff = r.timestamp.toDate().getTime() - startMs;
+      temps = format(diff);
+    }
+
+    html += `
+      <tr>
+        <td>${r.tour}</td>
+        <td>${temps}</td>
+        <td>
+          <button onclick="editRunnerScan('${id}', ${r.tour}, '${dossard}')">
+            Modifier
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += "</table>";
+
+  document.getElementById("edit-runner-scans").innerHTML = html;
 };
 
 </script>
