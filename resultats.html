@@ -116,6 +116,11 @@ button{
 <h1>📊 Résultats</h1>
 <a href="index.html" style="color:gray">⬅ Retour</a>
 
+<!-- 🔥 CHRONO GLOBAL -->
+<div id="chrono-global" style="font-size:28px;color:#00ff99;margin-top:20px;">
+⏱️ Chrono global : --:--:--
+</div>
+
 <div id="onglets" style="margin:20px"></div>
 <div id="contenu"></div>
 
@@ -140,13 +145,12 @@ let departTours = {};
 let ongletActif = "general";
 
 /* -------------------------------------------
-   🔥 Charger le chrono (startMs)
+   🔥 Charger startMs
 --------------------------------------------*/
 onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
     startMs = snap.data().startMs;
     recalculerDepartTours();
-    rafraichir();
   }
 });
 
@@ -157,7 +161,6 @@ onSnapshot(doc(db,"course","limitesTours"), snap=>{
   if(snap.exists()){
     limites = snap.data();
     recalculerDepartTours();
-    rafraichir();
   }
 });
 
@@ -185,36 +188,29 @@ function formatTemps(ms){
   return `${h}:${m}:${sec}`;
 }
 
-function formatLimite(min){
-  const h=String(Math.floor(min/60)).padStart(2,"0");
-  const m=String(min%60).padStart(2,"0");
-  return `${h}:${m}:00`;
+/* 🔥 CHRONOS LIVE */
+function updateChronos(){
+  if(!startMs) return;
+
+  const now = Date.now();
+
+  // Chrono global
+  const globalMs = now - startMs;
+  document.getElementById("chrono-global").innerHTML =
+    "⏱️ Chrono global : " + formatTemps(globalMs);
+
+  // Chrono du tour actif
+  if(ongletActif !== "general" && departTours[ongletActif]){
+    const tourMs = now - departTours[ongletActif];
+    const chronoTour = document.getElementById("chrono-tour");
+    if(chronoTour){
+      chronoTour.innerHTML =
+        "⏱️ Chrono Tour " + ongletActif + " : " + formatTemps(tourMs);
+    }
+  }
 }
 
-function calculTempsTour(dossard,tour){
-  if(!departTours[tour]) return null;
-  const scans=tousLesResultats[dossard];
-  if(!scans) return null;
-  const actuel=scans.find(r=>r.tour===tour);
-  if(!actuel||!actuel.timestamp) return null;
-  return actuel.timestamp - departTours[tour];
-}
-
-/* 🔽 Liste des dossards encore en course */
-function getDossardsEnCourse(tour){
-  let liste = tours[tour] || [];
-  return liste
-    .filter(r => !r.horsDelai && !r.dnf && !r.dns)
-    .map(r => r.dossard)
-    .sort((a,b)=>a-b);
-}
-
-window.toggleDossards = function(){
-  const box = document.getElementById("listeDossards");
-  box.style.display = (box.style.display === "none" || box.style.display === "") 
-    ? "block" 
-    : "none";
-};
+setInterval(updateChronos, 1000);
 
 /* -------------------------------------------
    🔥 Onglets dynamiques
@@ -270,17 +266,17 @@ window.afficherTour=function(tour){
   }
   arrives=(tours[tour]||[]).filter(r=>!r.horsDelai && !r.dnf && !r.dns).length;
 
-  liste.sort((a,b)=>{
-    const A = a.dns ? 4 : a.dnf ? 3 : a.horsDelai ? 2 : 1;
-    const B = b.dns ? 4 : b.dnf ? 3 : b.horsDelai ? 2 : 1;
-    return A-B;
-  });
-
   const limite=limites["t"+tour]||0;
 
   let html=`
     <h2>Tour ${tour}</h2>
-    <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatLimite(limite)}</h3>
+
+    <!-- 🔥 CHRONO DU TOUR -->
+    <div id="chrono-tour" style="font-size:22px;color:#00ffaa;margin-bottom:10px;">
+      ⏱️ Chrono Tour ${tour} : --:--:--
+    </div>
+
+    <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatTemps(limite*60000)}</h3>
     <h3 style="color:yellow">Arrivés : ${arrives} / ${total}</h3>
   `;
 
