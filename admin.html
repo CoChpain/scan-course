@@ -137,95 +137,39 @@ function checkPwd(){
 <div id="edit-runner-scans"></div>
 
 <hr>
+
+<!-- ⏱️ CHRONO -->
+<h2>⏱️ Départ de la course</h2>
+
+<button id="btn-start" onclick="startChrono()" 
+        style="padding:12px 25px;font-size:22px;background:#00ff99;color:black;border-radius:8px;">
+  🚀 Lancer le chrono
+</button>
+
+<button id="btn-reset" onclick="resetChrono()" 
+        style="padding:12px 25px;font-size:22px;background:#ff4444;color:white;border-radius:8px;margin-left:10px;">
+  🔁 Réinitialiser le chrono
+</button>
+
+<div id="chrono-status" style="margin-top:10px;color:yellow;font-size:18px;"></div>
+
+<hr>
+
+<!-- 🗑️ RESET COUREURS -->
+<h2>🗑️ Réinitialiser la base coureurs</h2>
+
+<button onclick="resetCoureurs()" 
+        style="padding:12px 25px;font-size:22px;background:#ff0000;color:white;border-radius:8px;">
+  ⚠️ Supprimer TOUS les coureurs
+</button>
+
+<div id="reset-coureurs-status" style="margin-top:10px;color:orange;"></div>
+
 <script type="module">
 
-  window.startChrono = async function(){
-
-  if (startMs) {
-    document.getElementById("chrono-status").innerHTML =
-      "⚠️ Le chrono est déjà lancé.";
-    return;
-  }
-
-  const confirmation = confirm(
-    "⚠️ Es-tu sûr de vouloir lancer le chrono ?\n" +
-    "Cette action ne peut être faite qu'une seule fois."
-  );
-
-  if (!confirmation) return;
-
-  const now = Date.now();
-
-  await updateDoc(doc(db,"course","depart"), {
-    startMs: now
-  });
-
-  startMs = now;
-
-  document.getElementById("chrono-status").innerHTML =
-    "Chrono lancé à 00:00:00";
-
-  const btn = document.getElementById("btn-start");
-  btn.disabled = true;
-  btn.style.opacity = "0.5";
-  btn.style.cursor = "not-allowed";
-};
-window.resetChrono = async function(){
-
-  if (!startMs) {
-    document.getElementById("chrono-status").innerHTML =
-      "ℹ️ Aucun chrono n'est lancé.";
-    return;
-  }
-
-  const c1 = confirm("⚠️ Réinitialiser le chrono ?");
-  if (!c1) return;
-
-  const c2 = confirm("⚠️ Tous les chronos repartiront de zéro.");
-  if (!c2) return;
-
-  const c3 = confirm("⚠️ Dernière confirmation.");
-  if (!c3) return;
-
-  await updateDoc(doc(db,"course","depart"), {
-    startMs: null
-  });
-
-  startMs = null;
-
-  document.getElementById("chrono-status").innerHTML =
-    "Chrono réinitialisé. Prêt pour un nouveau départ.";
-
-  const btn = document.getElementById("btn-start");
-  btn.disabled = false;
-  btn.style.opacity = "1";
-  btn.style.cursor = "pointer";
-};
-window.resetCoureurs = async function(){
-
-  const c1 = confirm("⚠️ Supprimer TOUS les coureurs ?");
-  if (!c1) return;
-
-  const c2 = confirm("⚠️ Cette action est irréversible.");
-  if (!c2) return;
-
-  const c3 = confirm("⚠️ Dernière confirmation avant suppression.");
-  if (!c3) return;
-
-  const snap = await getDocs(collection(db,"coureurs"));
-
-  let count = 0;
-
-  for (const docu of snap.docs) {
-    await deleteDoc(doc(db,"coureurs",docu.id));
-    count++;
-  }
-
-  document.getElementById("reset-coureurs-status").innerHTML =
-    "🗑️ " + count + " coureurs supprimés.";
-};
-
-
+/* ---------------------------------------------------------
+   🔥 IMPORTS FIREBASE
+--------------------------------------------------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
   getFirestore, collection, query, where, getDocs,
@@ -239,9 +183,9 @@ const db = getFirestore(app);
 
 let startMs = null;
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    🔥 CHARGER LE CHRONO
---------------------------------------------*/
+--------------------------------------------------------- */
 onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
     startMs = snap.data().startMs;
@@ -266,9 +210,9 @@ onSnapshot(doc(db,"course","depart"), snap=>{
   }
 });
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    🚀 LANCER LE CHRONO
---------------------------------------------*/
+--------------------------------------------------------- */
 window.startChrono = async function(){
 
   if (startMs) {
@@ -301,9 +245,9 @@ window.startChrono = async function(){
   btn.style.cursor = "not-allowed";
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    🔁 RÉINITIALISER LE CHRONO
---------------------------------------------*/
+--------------------------------------------------------- */
 window.resetChrono = async function(){
 
   if (!startMs) {
@@ -336,9 +280,36 @@ window.resetChrono = async function(){
   btn.style.cursor = "pointer";
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
+   🗑️ RESET COUREURS
+--------------------------------------------------------- */
+window.resetCoureurs = async function(){
+
+  const c1 = confirm("⚠️ Supprimer TOUS les coureurs ?");
+  if (!c1) return;
+
+  const c2 = confirm("⚠️ Cette action est irréversible.");
+  if (!c2) return;
+
+  const c3 = confirm("⚠️ Dernière confirmation avant suppression.");
+  if (!c3) return;
+
+  const snap = await getDocs(collection(db,"coureurs"));
+
+  let count = 0;
+
+  for (const docu of snap.docs) {
+    await deleteDoc(doc(db,"coureurs",docu.id));
+    count++;
+  }
+
+  document.getElementById("reset-coureurs-status").innerHTML =
+    "🗑️ " + count + " coureurs supprimés.";
+};
+
+/* ---------------------------------------------------------
    🔍 RECHERCHE COUREUR
---------------------------------------------*/
+--------------------------------------------------------- */
 window.searchRunner = async function(){
 
   const dossard = document.getElementById("search-dossard").value.trim();
@@ -363,9 +334,9 @@ window.searchRunner = async function(){
   loadScans(dossard);
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    📄 LISTE DES SCANS
---------------------------------------------*/
+--------------------------------------------------------- */
 async function loadScans(dossard){
 
   const q = query(collection(db,"resultats"), where("dossard","==",dossard));
@@ -421,9 +392,9 @@ function format(ms){
   return `${h}:${m}:${sec}`;
 }
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    ✏️ MODIFIER UN SCAN
---------------------------------------------*/
+--------------------------------------------------------- */
 window.editScan = async function(id, tour, oldDossard){
 
   const newTime = prompt("Temps écoulé (HH:MM:SS) ?");
@@ -446,9 +417,9 @@ window.editScan = async function(id, tour, oldDossard){
   searchRunner();
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    ✏️ MODIFIER UN SCAN DEPUIS LA FICHE COUREUR
---------------------------------------------*/
+--------------------------------------------------------- */
 window.editRunnerScan = async function(id, tour, dossard){
 
   const newTime = prompt("Nouveau temps pour le tour " + tour + " (HH:MM:SS) :");
@@ -464,21 +435,21 @@ window.editRunnerScan = async function(id, tour, dossard){
   });
 
   alert("Temps mis à jour !");
-  editRunner(dossard); // recharge les scans
+  editRunner(dossard);
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    ❌ SUPPRIMER UN SCAN
---------------------------------------------*/
+--------------------------------------------------------- */
 window.deleteScan = async function(id){
   await deleteDoc(doc(db,"resultats",id));
   alert("Scan supprimé !");
   searchRunner();
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    ➕ AJOUTER UN SCAN
---------------------------------------------*/
+--------------------------------------------------------- */
 window.addScan = async function(){
 
   const dossard = document.getElementById("add-dossard").value.trim();
@@ -503,9 +474,9 @@ window.addScan = async function(){
   searchRunner();
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    🔄 MODIFIER STATUT
---------------------------------------------*/
+--------------------------------------------------------- */
 window.updateStatus = async function(){
 
   const dossard = document.getElementById("status-dossard").value.trim();
@@ -526,9 +497,43 @@ window.updateStatus = async function(){
   searchRunner();
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    ➕ AJOUTER / MODIFIER UN COUREUR
---------------------------------------------*/
+--------------------------------------------------------- */
+window.saveRunner = async function(){
+
+  const dossard = document.getElementById("c-dossard").value.trim();
+  const nom = document.getElementById("c-nom").value.trim();
+  const prenom = document.getElementById("c-prenom").value.trim();
+  const sexe = document.getElementById("c-sexe").value;
+
+  if(!dossard || !nom || !prenom){
+    document.getElementById("runner-save-status").innerHTML =
+      "⚠️ Merci de remplir tous les champs.";
+    return;
+  }
+
+  const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
+  const snap = await getDocs(q);
+
+  if(snap.empty){
+    await addDoc(collection(db,"coureurs"), {
+      dossard,
+      nom,
+      prenom,
+      categorie: sexe,
+      statut: "OK"
+    });
+
+    document.getElementById("runner-save-status").innerHTML =
+      "✅ Coureur ajouté avec succès.";
+  } 
+  else {
+    const id = snap.docs[0].id;
+
+ /* ---------------------------------------------------------
+   ➕ AJOUTER / MODIFIER UN COUREUR
+--------------------------------------------------------- */
 window.saveRunner = async function(){
 
   const dossard = document.getElementById("c-dossard").value.trim();
@@ -575,9 +580,9 @@ window.saveRunner = async function(){
   document.getElementById("c-prenom").value = "";
 };
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    📋 TABLEAU COMPLET DES COUREURS
---------------------------------------------*/
+--------------------------------------------------------- */
 onSnapshot(collection(db, "coureurs"), snap => {
 
   let liste = [];
@@ -624,9 +629,9 @@ onSnapshot(collection(db, "coureurs"), snap => {
   document.getElementById("table-coureurs").innerHTML = html;
 });
 
-/* -------------------------------------------
+/* ---------------------------------------------------------
    ✏️ REMPLIR LE FORMULAIRE + AFFICHER SCANS
---------------------------------------------*/
+--------------------------------------------------------- */
 window.editRunner = async function(dossard, nom, prenom, sexe){
 
   document.getElementById("c-dossard").value = dossard;
@@ -677,32 +682,6 @@ window.editRunner = async function(dossard, nom, prenom, sexe){
 
   document.getElementById("edit-runner-scans").innerHTML = html;
 };
-<hr>
-
-<h2>⏱️ Départ de la course</h2>
-
-<button id="btn-start" onclick="startChrono()" 
-        style="padding:12px 25px;font-size:22px;background:#00ff99;color:black;border-radius:8px;">
-  🚀 Lancer le chrono
-</button>
-
-<button id="btn-reset" onclick="resetChrono()" 
-        style="padding:12px 25px;font-size:22px;background:#ff4444;color:white;border-radius:8px;margin-left:10px;">
-  🔁 Réinitialiser le chrono
-</button>
-
-<div id="chrono-status" style="margin-top:10px;color:yellow;font-size:18px;"></div>
-
-<hr>
-
-<h2>🗑️ Réinitialiser la base coureurs</h2>
-
-<button onclick="resetCoureurs()" 
-        style="padding:12px 25px;font-size:22px;background:#ff0000;color:white;border-radius:8px;">
-  ⚠️ Supprimer TOUS les coureurs
-</button>
-
-<div id="reset-coureurs-status" style="margin-top:10px;color:orange;"></div>
 
 </script>
 
