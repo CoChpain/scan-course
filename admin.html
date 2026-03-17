@@ -122,6 +122,11 @@ function checkPwd(){
 <button onclick="saveRunner()">Enregistrer</button>
 
 <div id="runner-save-status" style="margin-top:10px;color:yellow;"></div>
+<hr>
+
+<h2>📋 Liste complète des coureurs</h2>
+
+<div id="table-coureurs"></div>
 
 <hr>
 
@@ -473,6 +478,68 @@ window.saveRunner = async function(){
   document.getElementById("c-prenom").value = "";
 };
 
+/* -------------------------------------------
+   📋 TABLEAU COMPLET DES COUREURS
+--------------------------------------------*/
+onSnapshot(collection(db, "coureurs"), snap => {
+
+  let liste = [];
+
+  snap.forEach(docu => {
+    const c = docu.data();
+    if (!c.dossard) return;
+    liste.push(c);
+  });
+
+  // Trier par numéro de dossard
+  liste.sort((a, b) => Number(a.dossard) - Number(b.dossard));
+
+  let html = `
+    <table>
+      <tr>
+        <th>Dossard</th>
+        <th>Nom</th>
+        <th>Prénom</th>
+        <th>Sexe</th>
+        <th>Statut</th>
+        <th>Action</th>
+      </tr>
+  `;
+
+  liste.forEach(c => {
+    html += `
+      <tr>
+        <td>${c.dossard}</td>
+        <td>${c.nom}</td>
+        <td>${c.prenom}</td>
+        <td>${c.categorie}</td>
+        <td>${c.statut}</td>
+        <td>
+          <button onclick="editRunner('${c.dossard}', '${c.nom}', '${c.prenom}', '${c.categorie}')">
+            Modifier
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += "</table>";
+
+  document.getElementById("table-coureurs").innerHTML = html;
+});
+/* -------------------------------------------
+   ✏️ REMPLIR LE FORMULAIRE POUR MODIFIER
+--------------------------------------------*/
+window.editRunner = function(dossard, nom, prenom, sexe){
+
+  document.getElementById("c-dossard").value = dossard;
+  document.getElementById("c-nom").value = nom;
+  document.getElementById("c-prenom").value = prenom;
+  document.getElementById("c-sexe").value = sexe;
+
+  document.getElementById("runner-save-status").innerHTML =
+    "✏️ Modification du coureur " + dossard;
+};
 
 </script>
 
