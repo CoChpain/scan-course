@@ -165,8 +165,9 @@ function checkPwd(){
 
 <div id="reset-coureurs-status" style="margin-top:10px;color:orange;"></div>
 
-  <hr>
+<hr>
 
+<!-- ⏱️ DURÉE DES TOURS -->
 <h2>⏱️ Durée des tours</h2>
 
 <div id="tour-settings"></div>
@@ -178,16 +179,14 @@ function checkPwd(){
 
 <div id="tour-save-status" style="margin-top:10px;color:yellow;"></div>
 
-
 <script type="module">
-
 /* ---------------------------------------------------------
    🔥 IMPORTS FIREBASE
 --------------------------------------------------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
   getFirestore, collection, query, where, getDocs,
-  doc, updateDoc, deleteDoc, addDoc, onSnapshot
+  doc, updateDoc, deleteDoc, addDoc, onSnapshot, getDoc
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -210,16 +209,12 @@ onSnapshot(doc(db,"course","depart"), snap=>{
       btnStart.disabled = true;
       btnStart.style.opacity = "0.5";
       btnStart.style.cursor = "not-allowed";
-
-      document.getElementById("chrono-status").innerHTML =
-        "Chrono déjà lancé";
+      document.getElementById("chrono-status").innerHTML = "Chrono déjà lancé";
     } else {
       btnStart.disabled = false;
       btnStart.style.opacity = "1";
       btnStart.style.cursor = "pointer";
-
-      document.getElementById("chrono-status").innerHTML =
-        "Chrono en attente de lancement";
+      document.getElementById("chrono-status").innerHTML = "Chrono en attente de lancement";
     }
   }
 });
@@ -230,28 +225,19 @@ onSnapshot(doc(db,"course","depart"), snap=>{
 window.startChrono = async function(){
 
   if (startMs) {
-    document.getElementById("chrono-status").innerHTML =
-      "⚠️ Le chrono est déjà lancé.";
+    document.getElementById("chrono-status").innerHTML = "⚠️ Le chrono est déjà lancé.";
     return;
   }
 
-  const confirmation = confirm(
-    "⚠️ Es-tu sûr de vouloir lancer le chrono ?\n" +
-    "Cette action ne peut être faite qu'une seule fois."
-  );
-
-  if (!confirmation) return;
+  if (!confirm("⚠️ Lancer le chrono ?")) return;
 
   const now = Date.now();
 
-  await updateDoc(doc(db,"course","depart"), {
-    startMs: now
-  });
+  await updateDoc(doc(db,"course","depart"), { startMs: now });
 
   startMs = now;
 
-  document.getElementById("chrono-status").innerHTML =
-    "Chrono lancé à 00:00:00";
+  document.getElementById("chrono-status").innerHTML = "Chrono lancé à 00:00:00";
 
   const btn = document.getElementById("btn-start");
   btn.disabled = true;
@@ -265,28 +251,19 @@ window.startChrono = async function(){
 window.resetChrono = async function(){
 
   if (!startMs) {
-    document.getElementById("chrono-status").innerHTML =
-      "ℹ️ Aucun chrono n'est lancé.";
+    document.getElementById("chrono-status").innerHTML = "ℹ️ Aucun chrono n'est lancé.";
     return;
   }
 
-  const c1 = confirm("⚠️ Réinitialiser le chrono ?");
-  if (!c1) return;
+  if (!confirm("⚠️ Réinitialiser le chrono ?")) return;
+  if (!confirm("⚠️ Tous les chronos repartiront de zéro.")) return;
+  if (!confirm("⚠️ Dernière confirmation.")) return;
 
-  const c2 = confirm("⚠️ Tous les chronos repartiront de zéro.");
-  if (!c2) return;
-
-  const c3 = confirm("⚠️ Dernière confirmation.");
-  if (!c3) return;
-
-  await updateDoc(doc(db,"course","depart"), {
-    startMs: null
-  });
+  await updateDoc(doc(db,"course","depart"), { startMs: null });
 
   startMs = null;
 
-  document.getElementById("chrono-status").innerHTML =
-    "Chrono réinitialisé. Prêt pour un nouveau départ.";
+  document.getElementById("chrono-status").innerHTML = "Chrono réinitialisé.";
 
   const btn = document.getElementById("btn-start");
   btn.disabled = false;
@@ -299,14 +276,9 @@ window.resetChrono = async function(){
 --------------------------------------------------------- */
 window.resetCoureurs = async function(){
 
-  const c1 = confirm("⚠️ Supprimer TOUS les coureurs ?");
-  if (!c1) return;
-
-  const c2 = confirm("⚠️ Cette action est irréversible.");
-  if (!c2) return;
-
-  const c3 = confirm("⚠️ Dernière confirmation avant suppression.");
-  if (!c3) return;
+  if (!confirm("⚠️ Supprimer TOUS les coureurs ?")) return;
+  if (!confirm("⚠️ Cette action est irréversible.")) return;
+  if (!confirm("⚠️ Dernière confirmation.")) return;
 
   const snap = await getDocs(collection(db,"coureurs"));
 
@@ -503,9 +475,7 @@ window.updateStatus = async function(){
 
   const id = snap.docs[0].id;
 
-  await updateDoc(doc(db,"coureurs",id), {
-    statut
-  });
+  await updateDoc(doc(db,"coureurs",id), { statut });
 
   alert("Statut mis à jour !");
   searchRunner();
@@ -663,13 +633,17 @@ window.editRunner = async function(dossard, nom, prenom, sexe){
   document.getElementById("edit-runner-scans").innerHTML = html;
 };
 
-  /* ---------------------------------------------------------
-   🔧 CHARGER LES DURÉES DES TOURS
+/* ---------------------------------------------------------
+   ⏱️ CHARGER LES DURÉES DES TOURS (T1 → T10)
 --------------------------------------------------------- */
 onSnapshot(doc(db, "course", "limitesTours"), snap => {
   if (!snap.exists()) return;
 
   const data = snap.data();
+
+  // Trier les clés t1 → t10
+  const tours = Object.keys(data).sort((a,b) => Number(a.replace("t","")) - Number(b.replace("t","")));
+
   let html = `
     <table>
       <tr>
@@ -678,14 +652,11 @@ onSnapshot(doc(db, "course", "limitesTours"), snap => {
       </tr>
   `;
 
-  Object.keys(data).forEach(tour => {
+  tours.forEach(t => {
     html += `
       <tr>
-        <td>${tour}</td>
-        <td>
-          <input id="tour-${tour}" type="number" value="${data[tour]}" 
-                 style="width:80px;text-align:center;">
-        </td>
+        <td>${t.toUpperCase()}</td>
+        <td><input id="tour-${t}" type="number" value="${data[t]}" style="width:80px;text-align:center;"></td>
       </tr>
     `;
   });
@@ -700,39 +671,22 @@ onSnapshot(doc(db, "course", "limitesTours"), snap => {
 --------------------------------------------------------- */
 window.saveTourDurations = async function(){
 
-  const snap = await getDocs(collection(db, "course"));
   const docRef = doc(db, "course", "limitesTours");
 
-  const current = (await getDocs(query(collection(db,"course")))); // not used but ok
+  const inputs = document.querySelectorAll("#tour-settings input");
 
-  const q = await getDocs(collection(db,"course"));
-  
-  // Récupérer les valeurs actuelles
-  const docSnap = await getDocs(collection(db,"course"));
+  const newData = {};
 
-  const limitesDoc = await getDocs(collection(db,"course"));
-
-  const limites = {};
-
-  const limitesSnap = await getDocs(collection(db,"course"));
-
-  // On récupère le document limitesTours
-  const limitesToursSnap = await getDocs(collection(db,"course"));
-
-  // On lit les inputs générés
-  const table = document.querySelectorAll("#tour-settings input");
-
-  table.forEach(input => {
-    const tour = input.id.replace("tour-", "");
-    limites[tour] = Number(input.value);
+  inputs.forEach(input => {
+    const key = input.id.replace("tour-","");
+    newData[key] = Number(input.value);
   });
 
-  await updateDoc(docRef, limites);
+  await updateDoc(docRef, newData);
 
   document.getElementById("tour-save-status").innerHTML =
     "✅ Durées mises à jour !";
 };
-
 
 </script>
 
