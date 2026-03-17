@@ -165,6 +165,20 @@ function checkPwd(){
 
 <div id="reset-coureurs-status" style="margin-top:10px;color:orange;"></div>
 
+  <hr>
+
+<h2>⏱️ Durée des tours</h2>
+
+<div id="tour-settings"></div>
+
+<button onclick="saveTourDurations()" 
+        style="padding:12px 25px;font-size:22px;background:#0099ff;color:white;border-radius:8px;margin-top:10px;">
+  💾 Enregistrer les durées
+</button>
+
+<div id="tour-save-status" style="margin-top:10px;color:yellow;"></div>
+
+
 <script type="module">
 
 /* ---------------------------------------------------------
@@ -648,6 +662,77 @@ window.editRunner = async function(dossard, nom, prenom, sexe){
 
   document.getElementById("edit-runner-scans").innerHTML = html;
 };
+
+  /* ---------------------------------------------------------
+   🔧 CHARGER LES DURÉES DES TOURS
+--------------------------------------------------------- */
+onSnapshot(doc(db, "course", "limitesTours"), snap => {
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  let html = `
+    <table>
+      <tr>
+        <th>Tour</th>
+        <th>Durée (minutes)</th>
+      </tr>
+  `;
+
+  Object.keys(data).forEach(tour => {
+    html += `
+      <tr>
+        <td>${tour}</td>
+        <td>
+          <input id="tour-${tour}" type="number" value="${data[tour]}" 
+                 style="width:80px;text-align:center;">
+        </td>
+      </tr>
+    `;
+  });
+
+  html += "</table>";
+
+  document.getElementById("tour-settings").innerHTML = html;
+});
+
+/* ---------------------------------------------------------
+   💾 SAUVEGARDER LES DURÉES DES TOURS
+--------------------------------------------------------- */
+window.saveTourDurations = async function(){
+
+  const snap = await getDocs(collection(db, "course"));
+  const docRef = doc(db, "course", "limitesTours");
+
+  const current = (await getDocs(query(collection(db,"course")))); // not used but ok
+
+  const q = await getDocs(collection(db,"course"));
+  
+  // Récupérer les valeurs actuelles
+  const docSnap = await getDocs(collection(db,"course"));
+
+  const limitesDoc = await getDocs(collection(db,"course"));
+
+  const limites = {};
+
+  const limitesSnap = await getDocs(collection(db,"course"));
+
+  // On récupère le document limitesTours
+  const limitesToursSnap = await getDocs(collection(db,"course"));
+
+  // On lit les inputs générés
+  const table = document.querySelectorAll("#tour-settings input");
+
+  table.forEach(input => {
+    const tour = input.id.replace("tour-", "");
+    limites[tour] = Number(input.value);
+  });
+
+  await updateDoc(docRef, limites);
+
+  document.getElementById("tour-save-status").innerHTML =
+    "✅ Durées mises à jour !";
+};
+
 
 </script>
 
