@@ -139,6 +139,93 @@ function checkPwd(){
 <hr>
 <script type="module">
 
+  window.startChrono = async function(){
+
+  if (startMs) {
+    document.getElementById("chrono-status").innerHTML =
+      "⚠️ Le chrono est déjà lancé.";
+    return;
+  }
+
+  const confirmation = confirm(
+    "⚠️ Es-tu sûr de vouloir lancer le chrono ?\n" +
+    "Cette action ne peut être faite qu'une seule fois."
+  );
+
+  if (!confirmation) return;
+
+  const now = Date.now();
+
+  await updateDoc(doc(db,"course","depart"), {
+    startMs: now
+  });
+
+  startMs = now;
+
+  document.getElementById("chrono-status").innerHTML =
+    "Chrono lancé à 00:00:00";
+
+  const btn = document.getElementById("btn-start");
+  btn.disabled = true;
+  btn.style.opacity = "0.5";
+  btn.style.cursor = "not-allowed";
+};
+window.resetChrono = async function(){
+
+  if (!startMs) {
+    document.getElementById("chrono-status").innerHTML =
+      "ℹ️ Aucun chrono n'est lancé.";
+    return;
+  }
+
+  const c1 = confirm("⚠️ Réinitialiser le chrono ?");
+  if (!c1) return;
+
+  const c2 = confirm("⚠️ Tous les chronos repartiront de zéro.");
+  if (!c2) return;
+
+  const c3 = confirm("⚠️ Dernière confirmation.");
+  if (!c3) return;
+
+  await updateDoc(doc(db,"course","depart"), {
+    startMs: null
+  });
+
+  startMs = null;
+
+  document.getElementById("chrono-status").innerHTML =
+    "Chrono réinitialisé. Prêt pour un nouveau départ.";
+
+  const btn = document.getElementById("btn-start");
+  btn.disabled = false;
+  btn.style.opacity = "1";
+  btn.style.cursor = "pointer";
+};
+window.resetCoureurs = async function(){
+
+  const c1 = confirm("⚠️ Supprimer TOUS les coureurs ?");
+  if (!c1) return;
+
+  const c2 = confirm("⚠️ Cette action est irréversible.");
+  if (!c2) return;
+
+  const c3 = confirm("⚠️ Dernière confirmation avant suppression.");
+  if (!c3) return;
+
+  const snap = await getDocs(collection(db,"coureurs"));
+
+  let count = 0;
+
+  for (const docu of snap.docs) {
+    await deleteDoc(doc(db,"coureurs",docu.id));
+    count++;
+  }
+
+  document.getElementById("reset-coureurs-status").innerHTML =
+    "🗑️ " + count + " coureurs supprimés.";
+};
+
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
   getFirestore, collection, query, where, getDocs,
@@ -590,6 +677,32 @@ window.editRunner = async function(dossard, nom, prenom, sexe){
 
   document.getElementById("edit-runner-scans").innerHTML = html;
 };
+<hr>
+
+<h2>⏱️ Départ de la course</h2>
+
+<button id="btn-start" onclick="startChrono()" 
+        style="padding:12px 25px;font-size:22px;background:#00ff99;color:black;border-radius:8px;">
+  🚀 Lancer le chrono
+</button>
+
+<button id="btn-reset" onclick="resetChrono()" 
+        style="padding:12px 25px;font-size:22px;background:#ff4444;color:white;border-radius:8px;margin-left:10px;">
+  🔁 Réinitialiser le chrono
+</button>
+
+<div id="chrono-status" style="margin-top:10px;color:yellow;font-size:18px;"></div>
+
+<hr>
+
+<h2>🗑️ Réinitialiser la base coureurs</h2>
+
+<button onclick="resetCoureurs()" 
+        style="padding:12px 25px;font-size:22px;background:#ff0000;color:white;border-radius:8px;">
+  ⚠️ Supprimer TOUS les coureurs
+</button>
+
+<div id="reset-coureurs-status" style="margin-top:10px;color:orange;"></div>
 
 </script>
 
