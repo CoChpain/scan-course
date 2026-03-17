@@ -77,15 +77,6 @@ function checkPwd(){
 
 <hr>
 
-<!-- 🚀 LANCER LE CHRONO -->
-<h2>⏱️ Départ de la course</h2>
-<button onclick="startChrono()" style="padding:10px 20px;font-size:20px;background:#00ff99;color:black;">
-  🚀 Lancer le chrono
-</button>
-<div id="chrono-status" style="margin-top:10px;color:yellow;"></div>
-
-<hr>
-
 <h2>🔍 Rechercher un coureur</h2>
 
 <input id="search-dossard" type="text" placeholder="Dossard">
@@ -116,12 +107,24 @@ function checkPwd(){
 </select>
 <button onclick="updateStatus()">Mettre à jour</button>
 
+<hr>
+
+<!-- 🚀 BOUTON LANCER LE CHRONO (EN BAS) -->
+<h2>⏱️ Départ de la course</h2>
+
+<button id="btn-start" onclick="startChrono()" 
+        style="padding:12px 25px;font-size:22px;background:#00ff99;color:black;border-radius:8px;">
+  🚀 Lancer le chrono
+</button>
+
+<div id="chrono-status" style="margin-top:10px;color:yellow;font-size:18px;"></div>
+
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
   getFirestore, collection, query, where, getDocs,
-  doc, updateDoc, deleteDoc, addDoc
+  doc, updateDoc, deleteDoc, addDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -134,22 +137,40 @@ let startMs = null;
 /* -------------------------------------------
    🔥 Charger le chrono Firestore
 --------------------------------------------*/
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
 onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
     startMs = snap.data().startMs;
-    if(startMs){
+
+    if (startMs) {
+      const btn = document.getElementById("btn-start");
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      btn.style.cursor = "not-allowed";
+
       document.getElementById("chrono-status").innerHTML =
-        "Chrono actif (départ à 00:00:00)";
+        "Chrono déjà lancé";
     }
   }
 });
 
 /* -------------------------------------------
-   🚀 LANCER LE CHRONO
+   🚀 LANCER LE CHRONO AVEC SÉCURITÉ
 --------------------------------------------*/
 window.startChrono = async function(){
+
+  if (startMs) {
+    document.getElementById("chrono-status").innerHTML =
+      "⚠️ Le chrono est déjà lancé. Impossible de recommencer.";
+    return;
+  }
+
+  const confirmation = confirm(
+    "⚠️ Es-tu sûr de vouloir lancer le chrono ?\n" +
+    "Cette action ne peut être faite qu'une seule fois."
+  );
+
+  if (!confirmation) return;
+
   const now = Date.now();
 
   await updateDoc(doc(db,"course","depart"), {
@@ -157,8 +178,14 @@ window.startChrono = async function(){
   });
 
   startMs = now;
+
   document.getElementById("chrono-status").innerHTML =
     "Chrono lancé à 00:00:00";
+
+  const btn = document.getElementById("btn-start");
+  btn.disabled = true;
+  btn.style.opacity = "0.5";
+  btn.style.cursor = "not-allowed";
 };
 
 /* -------------------------------------------
