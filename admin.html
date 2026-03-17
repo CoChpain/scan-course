@@ -106,6 +106,22 @@ function checkPwd(){
   <option value="ELIMINE">Éliminé</option>
 </select>
 <button onclick="updateStatus()">Mettre à jour</button>
+<hr>
+
+<h2>➕ Ajouter / Modifier un coureur</h2>
+
+<input id="c-dossard" type="text" placeholder="Dossard">
+<input id="c-nom" type="text" placeholder="Nom">
+<input id="c-prenom" type="text" placeholder="Prénom">
+
+<select id="c-sexe">
+  <option value="H">Homme</option>
+  <option value="F">Femme</option>
+</select>
+
+<button onclick="saveRunner()">Enregistrer</button>
+
+<div id="runner-save-status" style="margin-top:10px;color:yellow;"></div>
 
 <hr>
 
@@ -404,6 +420,59 @@ window.updateStatus = async function(){
   alert("Statut mis à jour !");
   searchRunner();
 };
+  /* -------------------------------------------
+   ➕ AJOUTER / MODIFIER UN COUREUR
+--------------------------------------------*/
+window.saveRunner = async function(){
+
+  const dossard = document.getElementById("c-dossard").value.trim();
+  const nom = document.getElementById("c-nom").value.trim();
+  const prenom = document.getElementById("c-prenom").value.trim();
+  const sexe = document.getElementById("c-sexe").value;
+
+  if(!dossard || !nom || !prenom){
+    document.getElementById("runner-save-status").innerHTML =
+      "⚠️ Merci de remplir tous les champs.";
+    return;
+  }
+
+  // Vérifier si le coureur existe déjà
+  const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
+  const snap = await getDocs(q);
+
+  if(snap.empty){
+    // ➕ Ajouter un nouveau coureur
+    await addDoc(collection(db,"coureurs"), {
+      dossard,
+      nom,
+      prenom,
+      categorie: sexe,
+      statut: "OK"
+    });
+
+    document.getElementById("runner-save-status").innerHTML =
+      "✅ Coureur ajouté avec succès.";
+  } 
+  else {
+    // ✏️ Modifier un coureur existant
+    const id = snap.docs[0].id;
+
+    await updateDoc(doc(db,"coureurs",id), {
+      nom,
+      prenom,
+      categorie: sexe
+    });
+
+    document.getElementById("runner-save-status").innerHTML =
+      "✏️ Coureur mis à jour.";
+  }
+
+  // Nettoyage des champs
+  document.getElementById("c-dossard").value = "";
+  document.getElementById("c-nom").value = "";
+  document.getElementById("c-prenom").value = "";
+};
+
 
 </script>
 
