@@ -1,14 +1,584 @@
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<title></title>
-<style type="text/css">body{ background:#000; color:white; font-family:Arial; text-align:center; } /* PARTENAIRES défilants */ .partenaires-marquee { width: 120%; overflow: hidden; background: #111; border-top: 2px solid #444; margin-top: 25px; padding: 10px 0; } .partenaires-track { display: flex; gap: 40px; animation: defilement 40s linear infinite; } .partenaires-track img { height: 75px; width: auto; object-fit: contain; filter: drop-shadow(0 0 4px #000); } @keyframes defilement { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } } .columns{ display:grid; gap:10px; width:98%; margin:auto; } .cols-1{grid-template-columns:repeat(1,1fr);} .cols-2{grid-template-columns:repeat(2,1fr);} .cols-3{grid-template-columns:repeat(3,1fr);} .cols-4{grid-template-columns:repeat(4,1fr);} @media (max-width: 768px) { .cols-4, .cols-3, .cols-2, .cols-1 { grid-template-columns:repeat(1,1fr); } } table{ width:100%; border-collapse:collapse; font-size:13px; border:2px solid #555; } th,td{ border:1px solid #333; padding:3px; } th{ background:#111; } tr:nth-child(even){ background:rgba(255,255,255,0.05); } .red{ color:red; font-weight:bold; } .femme{ color:#ff66cc; font-weight:bold; } .fade{ animation:fade 0.4s; } @keyframes fade{ from{opacity:0} to{opacity:1} } button{ margin:4px; padding:8px 12px; font-size:14px; } .toggle-box{ margin-top:20px; } .toggle-btn{ background:#00ffcc; color:#000; padding:8px 14px; border:none; border-radius:6px; font-weight:bold; cursor:pointer; box-shadow:0 0 10px #00ffcc; transition:0.2s; } .toggle-btn:hover{ background:#00ffaa; box-shadow:0 0 15px #00ffaa; } .toggle-content{ margin-top:10px; padding:10px; background:rgba(255,255,255,0.05); border:1px solid #333; border-radius:6px; display:none; }
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Résultats</title>
+
+<style>
+body{
+  background:#000;
+  color:white;
+  font-family:Arial;
+  text-align:center;
+}
+
+.columns{
+  display:grid;
+  gap:10px;
+  width:98%;
+  margin:auto;
+}
+
+.cols-1{grid-template-columns:repeat(1,1fr);}
+.cols-2{grid-template-columns:repeat(2,1fr);}
+.cols-3{grid-template-columns:repeat(3,1fr);}
+.cols-4{grid-template-columns:repeat(4,1fr);}
+
+@media (max-width: 768px) {
+  .cols-4, .cols-3, .cols-2, .cols-1 {
+    grid-template-columns:repeat(1,1fr);
+  }
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+  border:2px solid #555;
+}
+
+th,td{
+  border:1px solid #333;
+  padding:3px;
+}
+
+th{
+  background:#111;
+}
+
+tr:nth-child(even){
+  background:rgba(255,255,255,0.05);
+}
+
+.red{
+  color:red;
+  font-weight:bold;
+}
+
+.femme{
+  color:#ff66cc;
+  font-weight:bold;
+}
+
+.fade{
+  animation:fade 0.4s;
+}
+
+@keyframes fade{
+  from{opacity:0}
+  to{opacity:1}
+}
+
+button{
+  margin:4px;
+  padding:8px 12px;
+  font-size:14px;
+}
+
+.toggle-box{
+  margin-top:20px;
+}
+
+.toggle-btn{
+  background:#00ffcc;
+  color:#000;
+  padding:8px 14px;
+  border:none;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
+  box-shadow:0 0 10px #00ffcc;
+  transition:0.2s;
+}
+
+.toggle-btn:hover{
+  background:#00ffaa;
+  box-shadow:0 0 15px #00ffaa;
+}
+
+.toggle-content{
+  margin-top:10px;
+  padding:10px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid #333;
+  border-radius:6px;
+  display:none;
+}
 </style>
-<h1>📊 R&eacute;sultats</h1>
 
-<p><a href="index.html" style="color:gray">⬅ Retour</a> <!-- 🔥 CHRONO GLOBAL --></p>
+</head>
 
-<div id="chrono-global" style="font-size:28px;color:#00ff99;margin-top:20px;">⏱️ Chrono global : --:--:--</div>
+<body>
 
-<div id="onglets" style="margin:20px">&nbsp;</div>
+<h1>📊 Résultats</h1>
+<a href="index.html" style="color:gray">⬅ Retour</a>
 
-<div id="contenu">&nbsp;</div>
-<script type="module"> import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js"; import { getFirestore, collection, query, orderBy, onSnapshot, doc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js"; import { firebaseConfig } from "./firebase-config.js"; const app = initializeApp(firebaseConfig); const db = getFirestore(app); const div = document.getElementById("contenu"); let coureursMap = {}; let tours = {}; let tousLesResultats = {}; let startMs = null; let limites = {}; let departTours = {}; let ongletActif = "general"; /* 🔥 Totaux figés par tour */ let totalParTour = {}; /* ------------------------------------------- 🔥 Charger startMs --------------------------------------------*/ onSnapshot(doc(db,"course","depart"), snap=>{ if(snap.exists()){ startMs = snap.data().startMs; recalculerDepartTours(); rafraichir(); } }); /* ------------------------------------------- 🔥 Charger limites --------------------------------------------*/ onSnapshot(doc(db,"course","limitesTours"), snap=>{ if(snap.exists()){ limites = snap.data(); recalculerDepartTours(); rafraichir(); } }); /* ------------------------------------------- 🔥 Calcul départs théoriques --------------------------------------------*/ function recalculerDepartTours(){ if(!startMs || !limites) return; departTours={}; let cumul=0; for(let i=1;i<=200;i++){ if(!limites["t"+i]) break; departTours[i]=startMs + cumul*60000; cumul+=limites["t"+i]; } } /* Format temps */ function formatTemps(ms){ if(!ms||ms<0) return "--:--:--"; const s=Math.floor(ms/1000); const h=String(Math.floor(s/3600)).padStart(2,"0"); const m=String(Math.floor((s%3600)/60)).padStart(2,"0"); const sec=String(s%60).padStart(2,"0"); return ${h}:${m}:${sec}; } /* 🔥 CHRONOS LIVE */ function updateChronos(){ if(!startMs) return; const now = Date.now(); // Chrono global const globalMs = now - startMs; document.getElementById("chrono-global").innerHTML = "⏱️ Chrono global : " + formatTemps(globalMs); // Chrono du tour actif if(ongletActif !== "general" && departTours[ongletActif]){ const tourMs = now - departTours[ongletActif]; const chronoTour = document.getElementById("chrono-tour"); if(chronoTour){ chronoTour.innerHTML = "⏱️ Chrono Tour " + ongletActif + " : " + formatTemps(tourMs); } } } setInterval(updateChronos, 1000); /* ------------------------------------------- 🔥 Calcul temps d’un tour pour un dossard --------------------------------------------*/ function calculTempsTour(dossard,tour){ if(!departTours[tour]) return null; const scans=tousLesResultats[dossard]; if(!scans) return null; const actuel=scans.find(r=>r.tour===tour); if(!actuel||!actuel.timestamp) return null; return actuel.timestamp - departTours[tour]; } /* 🔽 Liste des dossards encore en course */ function getDossardsEnCourse(tour){ let liste = tours[tour] || []; return liste .filter(r => !r.horsDelai && !r.dnf && !r.dns) .map(r => r.dossard) .sort((a,b)=>a-b); } window.toggleDossards = function(){ const box = document.getElementById("listeDossards"); box.style.display = (box.style.display === "none" || box.style.display === "") ? "block" : "none"; }; /* ------------------------------------------- 🔥 Onglets dynamiques --------------------------------------------*/ function construireOnglets() { let html = <button onclick="afficherGeneral()">Général</button>; let tourMax = 1; let tourActifAuto = 1; Object.keys(limites).forEach(key => { const t = Number(key.replace("t","")); if (!departTours[t]) return; const finTheorique = departTours[t] + limites[key] * 60000; const debutTheorique = departTours[t]; const now = Date.now(); // Le tour est "ouvert" dès son début if (now >= debutTheorique) { tourActifAuto = t; } // Le tour suivant devient visible quand celui-ci est terminé if (now >= finTheorique) { tourMax = Math.max(tourMax, t + 1); } }); const totalTours = Object.keys(limites) .map(k => Number(k.replace("t",""))) .sort((a,b)=>a-b); totalTours.forEach(t => { if (t <= tourMax) { html += <button onclick="afficherTour(${t})">Tour ${t}</button>; } }); document.getElementById("onglets").innerHTML = html; // 🔥 Si aucun onglet n'est actif ou si on est en général → activer automatiquement le tour en cours if (ongletActif === "general" || ongletActif > tourMax) { afficherTour(tourActifAuto); } } /* ------------------------------------------- 🔥 AFFICHAGE TOUR --------------------------------------------*/ window.afficherTour=function(tour){ ongletActif=tour; let liste=[...(tours[tour]||[])]; let total=0, arrives=0; if(tour===1){ total=Object.values(coureursMap) .filter(c=>c.dossard && Number(c.dossard)>0) .filter(c=>!["DNF","DNS","ELIMINE"].includes(c.statut)).length; } else { total=(tours[tour-1]||[]) .filter(r=>!r.horsDelai && !r.dnf && !r.dns) .filter(r=>{ const c=coureursMap[r.dossard]; return c && !["DNF","DNS","ELIMINE"].includes(c.statut); }).length; } arrives=(tours[tour]||[]).filter(r=>!r.horsDelai && !r.dnf && !r.dns).length; const limite=limites["t"+tour]||0; let html= <h2>Tour ${tour}</h2> <!-- 🔥 CHRONO DU TOUR --> <div id="chrono-tour" style="font-size:22px;color:#00ffaa;margin-bottom:10px;"> ⏱️ Chrono Tour ${tour} : --:--:-- </div> <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatTemps(limite*60000)}</h3> <h3 style="color:yellow">Arrivés : ${arrives} / ${totalParTour[tour] ?? total}</h3> ; const nb=liste.length; let cols=4; if(nb<20) cols=1; else if(nb<50) cols=2; else if(nb<90) cols=3; html+=<div class="columns cols-${cols}">; const chunk=Math.ceil(nb/cols); let colonnes=[]; for(let i=0;i<cols;i++){ colonnes.push(liste.slice(i*chunk,(i+1)*chunk)); } let rank=1; colonnes.forEach(col=>{ html+= <table> <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th></tr> ; col.forEach(r=>{ const c=coureursMap[r.dossard]||{}; const tempsTour=calculTempsTour(r.dossard,tour); const classe = r.dns||r.dnf ? "red fade" : r.horsDelai ? "red fade" : (c.categorie==="F"?"femme fade":"fade"); const labelTemps = r.dnf?"DNF":r.dns?"DNS":formatTemps(tempsTour); html+= <tr class="${classe}"> <td>${rank++}</td> <td>${r.dossard}</td> <td>${c.nom||""} ${c.prenom||""}</td> <td>${labelTemps}</td> </tr>; }); html+="</table>"; }); html+="</div>"; const dossards = getDossardsEnCourse(tour); html += <div class="toggle-box"> <button class="toggle-btn" onclick="toggleDossards()">Afficher les dossards encore en course</button> <div id="listeDossards" class="toggle-content"> <strong>Dossards :</strong> ${dossards.join(", ")} </div> </div> ; html += <div class="partenaires-marquee"> <div class="partenaires-track"> <img src="Z1.png"> <img src="Z2.png"> <img src="Z3.png"> <img src="Z4.png"> <img src="Z5.png"> <img src="Z6.png"> <img src="Z7.png"> <img src="Z8.png"> <!-- duplication pour boucle fluide --> <img src="Z1.png"> <img src="Z2.png"> <img src="Z3.png"> <img src="Z4.png"> <img src="Z5.png"> <img src="Z6.png"> <img src="Z7.png"> <img src="Z8.png"> <!-- duplication pour boucle fluide --> <img src="Z1.png"> <img src="Z2.png"> <img src="Z3.png"> <img src="Z4.png"> <img src="Z5.png"> <img src="Z6.png"> <img src="Z7.png"> <img src="Z8.png"> </div> </div> ; div.innerHTML=html; }; /* ------------------------------------------- 🔥 CLASSEMENT GÉNÉRAL (CORRIGÉ) --------------------------------------------*/ window.afficherGeneral=function(){ ongletActif="general"; let classement=[]; Object.values(coureursMap).forEach(c=>{ const scans=tousLesResultats[c.dossard]||[]; const lastTour=scans.length; let rang=9999; if(lastTour>0 && tours[lastTour]){ const idx=tours[lastTour].findIndex(r=>r.dossard==c.dossard); if(idx!==-1) rang=idx+1; } let tourAtteint = 0; if(c.statut === "ELIMINE"){ tourAtteint = lastTour; } else if(c.statut === "DNF"){ tourAtteint = lastTour + 1; } else if(c.statut === "DNS"){ tourAtteint = lastTour + 1; } else{ tourAtteint = lastTour + 1; } let statutTxt="", statutOrdre=0; if(c.statut==="DNF"){ statutTxt=DNF T${lastTour+1}; statutOrdre=3; } else if(c.statut==="DNS"){ statutTxt=DNS T${lastTour+1}; statutOrdre=4; } else if(c.statut==="ELIMINE"){ statutTxt=Hors délais T${lastTour}; statutOrdre=2; } else{ statutTxt=En course T${lastTour+1}; statutOrdre=1; } classement.push({ dossard:c.dossard, nom:c.nom||"", prenom:c.prenom||"", tours:lastTour, tourAtteint:tourAtteint, rang:rang, statut:c.statut, statutTxt:statutTxt, statutOrdre:statutOrdre }); }); classement.sort((a,b)=>{ if(b.tourAtteint !== a.tourAtteint) return b.tourAtteint - a.tourAtteint; if(a.statutOrdre !== b.statutOrdre) return a.statutOrdre - b.statutOrdre; return a.rang - b.rang; }); const nb=classement.length; let cols=4; if(nb<20) cols=1; else if(nb<50) cols=2; else if(nb<90) cols=3; let html=<h2>Classement général</h2><div class="columns cols-${cols}">; const chunk=Math.ceil(nb/cols); let colonnes=[]; for(let i=0;i<cols;i++){ colonnes.push(classement.slice(i*chunk,(i+1)*chunk)); } let rank=1; colonnes.forEach(col=>{ html+= <table> <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Tours</th><th>Statut</th></tr> ; col.forEach(r=>{ const c=coureursMap[r.dossard]||{}; const classe = ["DNF","DNS","ELIMINE"].includes(r.statut) ? "red fade" : (c.categorie==="F"?"femme fade":"fade"); html+= <tr class="${classe}"> <td>${rank++}</td> <td>${r.dossard}</td> <td>${r.nom} ${r.prenom}</td> <td>${r.tours}</td> <td>${r.statutTxt}</td> </tr>; }); html+="</table>"; }); html += <div class="partenaires-marquee"> <div class="partenaires-track"> <img src="Z1.png"> <img src="Z2.png"> <img src="Z3.png"> <img src="Z4.png"> <img src="Z5.png"> <img src="Z6.png"> <img src="Z7.png"> <img src="Z8.png"> <!-- duplication pour boucle fluide --> <img src="Z1.png"> <img src="Z2.png"> <img src="Z3.png"> <img src="Z4.png"> <img src="Z5.png"> <img src="Z6.png"> <img src="Z7.png"> <img src="Z8.png"> </div> </div> ; html+="</div>"; div.innerHTML=html; }; /* ------------------------------------------- 🔥 LISTENERS FIRESTORE --------------------------------------------*/ onSnapshot(collection(db,"coureurs"), snap=>{ coureursMap={}; snap.forEach(doc=>{ const c=doc.data(); if(!c.dossard || Number(c.dossard)<=0) return; coureursMap[c.dossard]=c; }); rafraichir(); }); onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{ tours={}; tousLesResultats={}; snap.forEach(doc=>{ const r=doc.data(); if(!r.tour) return; const ts=r.timestamp?.toDate().getTime() ?? null; if(!tours[r.tour]) tours[r.tour]=[]; tours[r.tour].push({...r, timestamp:ts}); if(!tousLesResultats[r.dossard]) tousLesResultats[r.dossard]=[]; tousLesResultats[r.dossard].push({...r, timestamp:ts}); }); Object.keys(tours).forEach(t=>{ const tour=Number(t); const limite=limites["t"+tour]||0; const departTheorique=departTours[tour]; tours[tour]=tours[tour].map(r=>{ if(!r.timestamp) return r; const diffMin=(r.timestamp - departTheorique)/60000; return {...r, horsDelai: diffMin>limite}; }); }); Object.values(coureursMap).forEach(c=>{ if(c.statut==="DNF" || c.statut==="DNS"){ const scans=tousLesResultats[c.dossard]||[]; const abandonTour=scans.length>0 ? scans[scans.length-1].tour+1 : 1; if(!tours[abandonTour]) tours[abandonTour]=[]; tours[abandonTour].push({ dossard:c.dossard, tour:abandonTour, horsDelai:false, dnf:c.statut==="DNF", dns:c.statut==="DNS", timestamp:null }); } }); /* 🔥 Calcul et figement des totaux par tour */ Object.keys(limites).forEach(key=>{ const t = Number(key.replace("t","")); if (!t) return; let total = 0; if (t === 1) { total = Object.values(coureursMap) .filter(c=>c.dossard && Number(c.dossard)>0) .filter(c=>!["DNF","DNS","ELIMINE"].includes(c.statut)) .length; } else { total = (tours[t-1] || []) .filter(r=>!r.horsDelai && !r.dnf && !r.dns) .filter(r=>{ const c=coureursMap[r.dossard]; return c && !["DNF","DNS","ELIMINE"].includes(c.statut); }).length; } totalParTour[t] = total; }); construireOnglets(); rafraichir(); }); function rafraichir(){ if(ongletActif==="general") afficherGeneral(); else afficherTour(Number(ongletActif)); } </script>
+<!-- 🔥 CHRONO GLOBAL -->
+<div id="chrono-global" style="font-size:28px;color:#00ff99;margin-top:20px;">
+⏱️ Chrono global : --:--:--
+</div>
+
+<div id="onglets" style="margin:20px"></div>
+<div id="contenu"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import {
+  getFirestore, collection, query, orderBy, onSnapshot, doc
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const div = document.getElementById("contenu");
+
+let coureursMap = {};
+let tours = {};
+let tousLesResultats = {};
+let startMs = null;
+let limites = {};
+let departTours = {};
+let ongletActif = "general";
+
+/* 🔥 Totaux figés par tour */
+let totalParTour = {};
+
+/* -------------------------------------------
+   🔥 Charger startMs
+--------------------------------------------*/
+onSnapshot(doc(db,"course","depart"), snap=>{
+  if(snap.exists()){
+    startMs = snap.data().startMs;
+    recalculerDepartTours();
+    rafraichir();
+  }
+});
+
+/* -------------------------------------------
+   🔥 Charger limites
+--------------------------------------------*/
+onSnapshot(doc(db,"course","limitesTours"), snap=>{
+  if(snap.exists()){
+    limites = snap.data();
+    recalculerDepartTours();
+    rafraichir();
+  }
+});
+
+/* -------------------------------------------
+   🔥 Calcul départs théoriques
+--------------------------------------------*/
+function recalculerDepartTours(){
+  if(!startMs || !limites) return;
+  departTours={};
+  let cumul=0;
+  for(let i=1;i<=200;i++){
+    if(!limites["t"+i]) break;
+    departTours[i]=startMs + cumul*60000;
+    cumul+=limites["t"+i];
+  }
+}
+
+/* Format temps */
+function formatTemps(ms){
+  if(!ms||ms<0) return "--:--:--";
+  const s=Math.floor(ms/1000);
+  const h=String(Math.floor(s/3600)).padStart(2,"0");
+  const m=String(Math.floor((s%3600)/60)).padStart(2,"0");
+  const sec=String(s%60).padStart(2,"0");
+  return `${h}:${m}:${sec}`;
+}
+
+/* 🔥 CHRONOS LIVE */
+function updateChronos(){
+  if(!startMs) return;
+
+  const now = Date.now();
+
+  // Chrono global
+  const globalMs = now - startMs;
+  document.getElementById("chrono-global").innerHTML =
+    "⏱️ Chrono global : " + formatTemps(globalMs);
+
+  // Chrono du tour actif
+  if(ongletActif !== "general" && departTours[ongletActif]){
+    const tourMs = now - departTours[ongletActif];
+    const chronoTour = document.getElementById("chrono-tour");
+    if(chronoTour){
+      chronoTour.innerHTML =
+        "⏱️ Chrono Tour " + ongletActif + " : " + formatTemps(tourMs);
+    }
+  }
+}
+
+setInterval(updateChronos, 1000);
+
+/* -------------------------------------------
+   🔥 Calcul temps d’un tour pour un dossard
+--------------------------------------------*/
+function calculTempsTour(dossard,tour){
+  if(!departTours[tour]) return null;
+  const scans=tousLesResultats[dossard];
+  if(!scans) return null;
+  const actuel=scans.find(r=>r.tour===tour);
+  if(!actuel||!actuel.timestamp) return null;
+  return actuel.timestamp - departTours[tour];
+}
+
+/* 🔽 Liste des dossards encore en course */
+function getDossardsEnCourse(tour){
+  let liste = tours[tour] || [];
+  return liste
+    .filter(r => !r.horsDelai && !r.dnf && !r.dns)
+    .map(r => r.dossard)
+    .sort((a,b)=>a-b);
+}
+
+window.toggleDossards = function(){
+  const box = document.getElementById("listeDossards");
+  box.style.display = (box.style.display === "none" || box.style.display === "") 
+    ? "block" 
+    : "none";
+};
+
+/* -------------------------------------------
+   🔥 Onglets dynamiques
+--------------------------------------------*/
+function construireOnglets(){
+
+  let html = `<button onclick="afficherGeneral()">Général</button>`;
+
+  let tourMax = 1;
+
+  Object.keys(limites).forEach(key=>{
+    const t = Number(key.replace("t",""));
+    if(!departTours[t]) return;
+
+    const finTheorique = departTours[t] + limites[key] * 60000;
+
+    if(Date.now() >= finTheorique){
+      tourMax = Math.max(tourMax, t+1);
+    }
+  });
+
+  const totalTours = Object.keys(limites)
+    .map(k => Number(k.replace("t","")))
+    .sort((a,b)=>a-b);
+
+  totalTours.forEach(t => {
+    if (t <= tourMax) {
+      html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
+    }
+  });
+
+  document.getElementById("onglets").innerHTML = html;
+}
+
+/* -------------------------------------------
+   🔥 AFFICHAGE TOUR
+--------------------------------------------*/
+window.afficherTour=function(tour){
+  ongletActif=tour;
+  let liste=[...(tours[tour]||[])];
+
+  let total=0, arrives=0;
+  if(tour===1){
+    total=Object.values(coureursMap)
+      .filter(c=>c.dossard && Number(c.dossard)>0)
+      .filter(c=>!["DNF","DNS","ELIMINE"].includes(c.statut)).length;
+  } else {
+    total=(tours[tour-1]||[])
+      .filter(r=>!r.horsDelai && !r.dnf && !r.dns)
+      .filter(r=>{
+        const c=coureursMap[r.dossard];
+        return c && !["DNF","DNS","ELIMINE"].includes(c.statut);
+      }).length;
+  }
+
+  arrives=(tours[tour]||[]).filter(r=>!r.horsDelai && !r.dnf && !r.dns).length;
+
+  const limite=limites["t"+tour]||0;
+
+  let html=`
+    <h2>Tour ${tour}</h2>
+
+    <!-- 🔥 CHRONO DU TOUR -->
+    <div id="chrono-tour" style="font-size:22px;color:#00ffaa;margin-bottom:10px;">
+      ⏱️ Chrono Tour ${tour} : --:--:--
+    </div>
+
+    <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatTemps(limite*60000)}</h3>
+    <h3 style="color:yellow">Arrivés : ${arrives} / ${totalParTour[tour] ?? total}</h3>
+  `;
+
+  const nb=liste.length;
+  let cols=4;
+  if(nb<20) cols=1;
+  else if(nb<50) cols=2;
+  else if(nb<90) cols=3;
+
+  html+=`<div class="columns cols-${cols}">`;
+
+  const chunk=Math.ceil(nb/cols);
+  let colonnes=[];
+  for(let i=0;i<cols;i++){
+    colonnes.push(liste.slice(i*chunk,(i+1)*chunk));
+  }
+
+  let rank=1;
+
+  colonnes.forEach(col=>{
+    html+=`
+      <table>
+      <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th></tr>
+    `;
+    col.forEach(r=>{
+      const c=coureursMap[r.dossard]||{};
+      const tempsTour=calculTempsTour(r.dossard,tour);
+      const classe = r.dns||r.dnf ? "red fade" :
+                     r.horsDelai ? "red fade" :
+                     (c.categorie==="F"?"femme fade":"fade");
+      const labelTemps = r.dnf?"DNF":r.dns?"DNS":formatTemps(tempsTour);
+      html+=`
+        <tr class="${classe}">
+          <td>${rank++}</td>
+          <td>${r.dossard}</td>
+          <td>${c.nom||""} ${c.prenom||""}</td>
+          <td>${labelTemps}</td>
+        </tr>`;
+    });
+    html+="</table>";
+  });
+
+  html+="</div>";
+
+  const dossards = getDossardsEnCourse(tour);
+  html += `
+    <div class="toggle-box">
+      <button class="toggle-btn" onclick="toggleDossards()">Afficher les dossards encore en course</button>
+      <div id="listeDossards" class="toggle-content">
+        <strong>Dossards :</strong> ${dossards.join(", ")}
+      </div>
+    </div>
+  `;
+
+  div.innerHTML=html;
+};
+
+/* -------------------------------------------
+   🔥 CLASSEMENT GÉNÉRAL (CORRIGÉ)
+--------------------------------------------*/
+window.afficherGeneral=function(){
+  ongletActif="general";
+  let classement=[];
+
+  Object.values(coureursMap).forEach(c=>{
+    const scans=tousLesResultats[c.dossard]||[];
+    const lastTour=scans.length;
+
+    let rang=9999;
+    if(lastTour>0 && tours[lastTour]){
+      const idx=tours[lastTour].findIndex(r=>r.dossard==c.dossard);
+      if(idx!==-1) rang=idx+1;
+    }
+
+    let tourAtteint = 0;
+
+    if(c.statut === "ELIMINE"){
+      tourAtteint = lastTour;
+    }
+    else if(c.statut === "DNF"){
+      tourAtteint = lastTour + 1;
+    }
+    else if(c.statut === "DNS"){
+      tourAtteint = lastTour + 1;
+    }
+    else{
+      tourAtteint = lastTour + 1;
+    }
+
+    let statutTxt="", statutOrdre=0;
+
+    if(c.statut==="DNF"){
+      statutTxt=`DNF T${lastTour+1}`;
+      statutOrdre=3;
+    }
+    else if(c.statut==="DNS"){
+      statutTxt=`DNS T${lastTour+1}`;
+      statutOrdre=4;
+    }
+    else if(c.statut==="ELIMINE"){
+      statutTxt=`Hors délais T${lastTour}`;
+      statutOrdre=2;
+    }
+    else{
+      statutTxt=`En course T${lastTour+1}`;
+      statutOrdre=1;
+    }
+
+    classement.push({
+      dossard:c.dossard,
+      nom:c.nom||"",
+      prenom:c.prenom||"",
+      tours:lastTour,
+      tourAtteint:tourAtteint,
+      rang:rang,
+      statut:c.statut,
+      statutTxt:statutTxt,
+      statutOrdre:statutOrdre
+    });
+  });
+
+  classement.sort((a,b)=>{
+
+    if(b.tourAtteint !== a.tourAtteint)
+        return b.tourAtteint - a.tourAtteint;
+
+    if(a.statutOrdre !== b.statutOrdre)
+        return a.statutOrdre - b.statutOrdre;
+
+    return a.rang - b.rang;
+  });
+
+  const nb=classement.length;
+  let cols=4;
+  if(nb<20) cols=1;
+  else if(nb<50) cols=2;
+  else if(nb<90) cols=3;
+
+  let html=`<h2>Classement général</h2><div class="columns cols-${cols}">`;
+
+  const chunk=Math.ceil(nb/cols);
+  let colonnes=[];
+  for(let i=0;i<cols;i++){
+    colonnes.push(classement.slice(i*chunk,(i+1)*chunk));
+  }
+
+  let rank=1;
+
+  colonnes.forEach(col=>{
+    html+=`
+      <table>
+      <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Tours</th><th>Statut</th></tr>
+    `;
+    col.forEach(r=>{
+      const c=coureursMap[r.dossard]||{};
+      const classe = ["DNF","DNS","ELIMINE"].includes(r.statut)
+        ? "red fade"
+        : (c.categorie==="F"?"femme fade":"fade");
+
+      html+=`
+        <tr class="${classe}">
+          <td>${rank++}</td>
+          <td>${r.dossard}</td>
+          <td>${r.nom} ${r.prenom}</td>
+          <td>${r.tours}</td>
+          <td>${r.statutTxt}</td>
+        </tr>`;
+    });
+    html+="</table>";
+  });
+
+  html+="</div>";
+  div.innerHTML=html;
+};
+
+/* -------------------------------------------
+   🔥 LISTENERS FIRESTORE
+--------------------------------------------*/
+onSnapshot(collection(db,"coureurs"), snap=>{
+  coureursMap={};
+  snap.forEach(doc=>{
+    const c=doc.data();
+    if(!c.dossard || Number(c.dossard)<=0) return;
+    coureursMap[c.dossard]=c;
+  });
+
+  rafraichir();
+});
+
+onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
+  tours={};
+  tousLesResultats={};
+
+  snap.forEach(doc=>{
+    const r=doc.data();
+    if(!r.tour) return;
+    const ts=r.timestamp?.toDate().getTime() ?? null;
+
+    if(!tours[r.tour]) tours[r.tour]=[];
+    tours[r.tour].push({...r, timestamp:ts});
+
+    if(!tousLesResultats[r.dossard]) tousLesResultats[r.dossard]=[];
+    tousLesResultats[r.dossard].push({...r, timestamp:ts});
+  });
+
+  Object.keys(tours).forEach(t=>{
+    const tour=Number(t);
+    const limite=limites["t"+tour]||0;
+    const departTheorique=departTours[tour];
+
+    tours[tour]=tours[tour].map(r=>{
+      if(!r.timestamp) return r;
+      const diffMin=(r.timestamp - departTheorique)/60000;
+      return {...r, horsDelai: diffMin>limite};
+    });
+  });
+
+  Object.values(coureursMap).forEach(c=>{
+    if(c.statut==="DNF" || c.statut==="DNS"){
+      const scans=tousLesResultats[c.dossard]||[];
+      const abandonTour=scans.length>0 ? scans[scans.length-1].tour+1 : 1;
+
+      if(!tours[abandonTour]) tours[abandonTour]=[];
+
+      tours[abandonTour].push({
+        dossard:c.dossard,
+        tour:abandonTour,
+        horsDelai:false,
+        dnf:c.statut==="DNF",
+        dns:c.statut==="DNS",
+        timestamp:null
+      });
+    }
+  });
+
+  /* 🔥 Calcul et figement des totaux par tour */
+  Object.keys(limites).forEach(key=>{
+    const t = Number(key.replace("t",""));
+    if (!t) return;
+
+    let total = 0;
+
+    if (t === 1) {
+      total = Object.values(coureursMap)
+        .filter(c=>c.dossard && Number(c.dossard)>0)
+        .filter(c=>!["DNF","DNS","ELIMINE"].includes(c.statut))
+        .length;
+    } else {
+      total = (tours[t-1] || [])
+        .filter(r=>!r.horsDelai && !r.dnf && !r.dns)
+        .filter(r=>{
+          const c=coureursMap[r.dossard];
+          return c && !["DNF","DNS","ELIMINE"].includes(c.statut);
+        }).length;
+    }
+
+    totalParTour[t] = total;
+  });
+
+  construireOnglets();
+  rafraichir();
+});
+
+function rafraichir(){
+  if(ongletActif==="general") afficherGeneral();
+  else afficherTour(Number(ongletActif));
+}
+</script>
+
+</body>
+</html>
