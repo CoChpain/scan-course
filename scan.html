@@ -31,6 +31,9 @@
   <h1>🏁 SCAN</h1>
   <a href="index.html" style="color:gray;">⬅ Retour</a>
 
+  <!-- 🌐 État réseau -->
+  <div id="offline-status" style="font-size:18px;margin-top:10px;color:orange;"></div>
+
   <div id="reader" style="width:320px;margin:20px auto;"></div>
 
   <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
@@ -78,7 +81,51 @@
 
     let firestoreReady = false;
 
-    /* Format HH:MM:SS */
+    /* ---------------------------------------------------------
+       🌐 MODE OFFLINE
+    --------------------------------------------------------- */
+    function updateNetworkStatus() {
+      const div = document.getElementById("offline-status");
+      if (navigator.onLine) {
+        div.innerHTML = "🟢 Connecté";
+        div.style.color = "lime";
+        envoyerScansEnAttente();
+      } else {
+        div.innerHTML = "🔴 Hors ligne – stockage local activé";
+        div.style.color = "orange";
+      }
+    }
+
+    window.addEventListener("online", updateNetworkStatus);
+    window.addEventListener("offline", updateNetworkStatus);
+    updateNetworkStatus();
+
+    function stockerScanLocal(scan) {
+      let liste = JSON.parse(localStorage.getItem("scansOffline") || "[]");
+      liste.push(scan);
+      localStorage.setItem("scansOffline", JSON.stringify(liste));
+    }
+
+    async function envoyerScansEnAttente() {
+      let liste = JSON.parse(localStorage.getItem("scansOffline") || "[]");
+      if (liste.length === 0) return;
+
+      for (const scan of liste) {
+        try {
+          await addDoc(collection(db, "resultats"), scan);
+        } catch (e) {
+          console.error("Erreur envoi offline:", e);
+          return;
+        }
+      }
+
+      localStorage.removeItem("scansOffline");
+      showMessage("📡 Scans offline synchronisés", "lime");
+    }
+
+    /* ---------------------------------------------------------
+       ⏱️ Format HH:MM:SS
+    --------------------------------------------------------- */
     function formatHMS(ms) {
       const totalSec = Math.floor(ms / 1000);
       const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
@@ -97,6 +144,9 @@
       `;
     }
 
+    /* ---------------------------------------------------------
+       🔥 Calcul des départs théoriques
+    --------------------------------------------------------- */
     function recalculerDepartTours() {
       if (!startMs || Object.keys(limites).length === 0) return;
 
@@ -135,9 +185,9 @@
       fb.innerHTML = msg;
     }
 
-    /* -------------------------------------------
+    /* ---------------------------------------------------------
        🔍 Fonction principale de scan
-    --------------------------------------------*/
+    --------------------------------------------------------- */
     async function handleScan(decodedText){
 
       if (!firestoreReady) {
@@ -216,12 +266,19 @@
       showScanInfo(tour, limite, msDepuisDepart);
 
       /* Enregistrer le scan */
-      await addDoc(collection(db, "resultats"), {
+      const scanData = {
         dossard: dossard,
         tour: tour,
         timestamp: serverTimestamp(),
         horsDelai: horsDelai
-      });
+      };
+
+      if (navigator.onLine) {
+        await addDoc(collection(db, "resultats"), scanData);
+      } else {
+        stockerScanLocal(scanData);
+        showMessage("📦 Scan enregistré hors ligne", "orange");
+      }
 
       beepOk.play();
       showMessage(`Scan OK<br>Dossard : ${dossard}<br>Tour : ${tour}`, "lime");
