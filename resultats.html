@@ -106,6 +106,48 @@ button{
   border-radius:6px;
   display:none;
 }
+
+/* 🔻 SLIDER PARTENAIRES */
+.partners-slider{
+  position:fixed;
+  bottom:0;
+  left:0;
+  width:100%;
+  overflow:hidden;
+  background:#111;
+  border-top:2px solid #00ffcc;
+  z-index:999;
+}
+
+.partners-track{
+  display:flex;
+  width:calc(200%); /* important pour boucle */
+  animation:scroll 25s linear infinite;
+}
+
+.partners-track img{
+  height:60px;
+  margin:10px 30px;
+  object-fit:contain;
+  filter:brightness(0.9);
+  transition:0.3s;
+}
+
+.partners-track img:hover{
+  filter:brightness(1.2);
+  transform:scale(1.1);
+}
+
+@keyframes scroll{
+  from{transform:translateX(0);}
+  to{transform:translateX(-50%);}
+}
+
+/* éviter que le slider cache le contenu */
+body{
+  padding-bottom:90px;
+}
+
 </style>
 
 </head>
@@ -579,6 +621,32 @@ function rafraichir(){
   else afficherTour(Number(ongletActif));
 }
 </script>
+
+<!-- 🔻 PARTENAIRES -->
+<div class="partners-slider">
+  <div class="partners-track">
+    <!-- 8 logos -->
+    <img src="Z1.png">
+    <img src="Z2.png">
+    <img src="Z3.png">
+    <img src="Z4.png">
+    <img src="Z5.png">
+    <img src="Z6.png">
+    <img src="Z7.png">
+    <img src="Z8.png">
+
+    <!-- duplication pour boucle infinie -->
+    <img src="Z1.png">
+    <img src="Z2.png">
+    <img src="Z3.png">
+    <img src="Z4.png">
+    <img src="Z5.png">
+    <img src="Z6.png">
+    <img src="Z7.png">
+    <img src="Z8.png">
+  </div>
+</div>
+
 
 </body>
 </html>
