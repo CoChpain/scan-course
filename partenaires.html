@@ -43,6 +43,8 @@ h1{
   background:#111;
   border:2px solid #ffcc00;
   box-shadow:0 0 15px #ffcc00;
+  max-height:200px;
+  width:auto;
 }
 
 /* Image centrale */
@@ -94,45 +96,52 @@ h1{
 <h1>🤝 NOS PARTENAIRES</h1>
 
 <div class="carousel" id="carousel">
-  <img src="apollo3s.png">
-  <img src="comptoir.png">
-  <img src="CYRIL LECLAIR.png">
-  <img src="logo4.png">
-  <img src="logo5.png">
-  <img src="logo6.png">
-  <img src="logo7.png">
-  <img src="logo8.png">
+  <img src="apollo3s.png" alt="">
+  <img src="comptoir.png" alt="">
+  <img src="CYRIL LECLAIR.png" alt="">
+  <img src="logo4.png" alt="">
+  <img src="logo5.png" alt="">
+  <img src="logo6.png" alt="">
+  <img src="logo7.png" alt="">
+  <img src="logo8.png" alt="">
 </div>
 
 <script>
-const logos = document.querySelectorAll("#carousel img");
-let index = 0;
+window.onload = function(){
+  var logos = document.querySelectorAll("#carousel img");
+  var index = 0;
 
-function updateCarousel(){
-  logos.forEach((img,i)=>{
-    img.className = "hidden"; // reset
-  });
+  if (!logos || logos.length === 0) {
+    console.log("Aucun logo trouvé");
+    return;
+  }
 
-  const total = logos.length;
+  function updateCarousel(){
+    var total = logos.length;
+    for (var i = 0; i < total; i++) {
+      logos[i].className = "hidden";
+    }
 
-  const center = index % total;
-  const left1 = (index - 1 + total) % total;
-  const left2 = (index - 2 + total) % total;
-  const right1 = (index + 1) % total;
-  const right2 = (index + 2) % total;
+    var center = index % total;
+    var left1 = (index - 1 + total) % total;
+    var left2 = (index - 2 + total) % total;
+    var right1 = (index + 1) % total;
+    var right2 = (index + 2) % total;
 
-  logos[center].classList.add("center");
-  logos[left1].classList.add("left1");
-  logos[left2].classList.add("left2");
-  logos[right1].classList.add("right1");
-  logos[right2].classList.add("right2");
-}
+    logos[center].className = "center";
+    logos[left1].className = "left1";
+    logos[left2].className = "left2";
+    logos[right1].className = "right1";
+    logos[right2].className = "right2";
+  }
 
-updateCarousel();
-setInterval(()=>{
-  index = (index + 1) % logos.length;
   updateCarousel();
-}, 2500);
+
+  setInterval(function(){
+    index = (index + 1) % logos.length;
+    updateCarousel();
+  }, 2500);
+};
 </script>
 
 </body>
