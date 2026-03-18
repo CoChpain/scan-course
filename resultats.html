@@ -369,10 +369,18 @@ window.afficherTour=function(tour){
     col.forEach(r=>{
       const c=coureursMap[r.dossard]||{};
       const tempsTour=calculTempsTour(r.dossard,tour);
-      const classe = r.dns||r.dnf ? "red fade" :
-                     r.horsDelai ? "red fade" :
-                     (c.categorie==="F"?"femme fade":"fade");
-      const labelTemps = r.dnf?"DNF":r.dns?"DNS":formatTemps(tempsTour);
+      const classe =
+  r.dns ? "red fade" :
+  r.dnf ? "red fade" :
+  r.horsDelai ? "red fade" :
+  (c.categorie==="F" ? "femme fade" : "fade");
+
+const labelTemps =
+  r.dns ? "DNS" :
+  r.dnf ? "DNF" :
+  r.horsDelai ? "Hors délais" :
+  formatTemps(tempsTour);
+
       html+=`
         <tr class="${classe}">
           <td>${rank++}</td>
@@ -550,6 +558,19 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
       return {...r, horsDelai: diffMin>limite};
     });
   });
+
+  // 🔥 Marquer les coureurs hors délais comme ELIMINE
+Object.keys(tours).forEach(t=>{
+  tours[t].forEach(r=>{
+    if (r.horsDelai) {
+      const c = coureursMap[r.dossard];
+      if (c) {
+        c.statut = "ELIMINE";
+      }
+    }
+  });
+});
+
 
   Object.values(coureursMap).forEach(c=>{
     if(c.statut==="DNF" || c.statut==="DNS"){
