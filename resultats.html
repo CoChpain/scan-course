@@ -152,72 +152,6 @@ body{
 }
 
 
-/* 🔻 MENU LATÉRAL */
-.side-menu{
-  position:fixed;
-  right:0;
-  top:50%;
-  transform:translateY(-50%);
-  background:#000;
-  border-left:2px solid #00ffcc;
-  padding:10px;
-  z-index:1000;
-  transition:0.3s;
-}
-
-.side-menu.closed{
-  right:-180px;
-}
-
-/* bouton flèche */
-.toggle-menu{
-  position:absolute;
-  left:-30px;
-  top:50%;
-  transform:translateY(-50%);
-  background:#00ffcc;
-  color:#000;
-  padding:5px;
-  cursor:pointer;
-  font-weight:bold;
-}
-
-/* boutons cam */
-.cam-btn{
-  display:block;
-  margin:5px 0;
-  padding:8px;
-  background:#111;
-  border:1px solid #333;
-  cursor:pointer;
-  text-align:center;
-}
-
-.cam-btn.active{
-  background:#00ffcc;
-  color:#000;
-}
-
-/* 🔻 ZONE CAMÉRAS */
-#zone-cameras{
-  margin-top:20px;
-  display:grid;
-  gap:10px;
-}
-
-/* colonnes dynamiques */
-.cols-1{grid-template-columns:1fr;}
-.cols-2{grid-template-columns:1fr 1fr;}
-.cols-3{grid-template-columns:1fr 1fr 1fr;}
-.cols-4{grid-template-columns:1fr 1fr;}
-
-@media(max-width:900px){
-  .cols-2,.cols-3,.cols-4{
-    grid-template-columns:1fr;
-  }
-}
-
-
 </style>
 
 </head>
@@ -667,71 +601,6 @@ function rafraichir(){
   if(ongletActif==="general") afficherGeneral();
   else afficherTour(Number(ongletActif));
 }
-
-let camsActives = [];
-
-/* URLs */
-const cams = {
-  1:'https://vdo.ninja/?view=6y6cwRA&solo&room=testaa09A&password=aaa',
-  2:'https://vdo.ninja/?view=E93hSvh&solo&room=testaa09A&password=aaa',
-  3:'https://vdo.ninja/?view=UwDVSZz&solo&room=testaa09A&password=aaa',
-  4:'https://vdo.ninja/?view=fnwaaT8&solo&room=testaa09A&password=aaa'
-};
-
-/* ouvrir / fermer menu */
-window.toggleMenu = function(){
-  const menu = document.getElementById("menuCam");
-  menu.classList.toggle("closed");
-}
-
-/* activer cam */
-window.toggleCam = function(id){
-
-  const index = camsActives.indexOf(id);
-
-  if(index > -1){
-    camsActives.splice(index,1);
-  }else{
-    camsActives.push(id);
-  }
-
-  updateCameras();
-  updateButtons();
-}
-
-/* mise à jour affichage */
-function updateCameras(){
-
-  const zone = document.getElementById("zone-cameras");
-
-  let nb = camsActives.length;
-
-  let cols = 1;
-  if(nb === 2) cols = 2;
-  if(nb >= 3) cols = 2;
-
-  zone.className = "cols-" + cols;
-
-  let html = "";
-
-  camsActives.forEach(id=>{
-    html += `
-      <div class="camera">
-        <iframe src="${cams[id]}"></iframe>
-      </div>
-    `;
-  });
-
-  zone.innerHTML = html;
-}
-
-/* état boutons */
-function updateButtons(){
-  document.querySelectorAll(".cam-btn").forEach((btn,i)=>{
-    btn.classList.toggle("active", camsActives.includes(i+1));
-  });
-}
-
 </script>
 
 <!-- 🔻 PARTENAIRES -->
@@ -767,20 +636,6 @@ function updateButtons(){
     <img src="Z8.png">
   </div>
 </div>
-<!-- 🔻 MENU LATÉRAL CAMÉRAS -->
-<div id="menuCam" class="side-menu closed">
-
-  <div class="toggle-menu" onclick="toggleMenu()">◀</div>
-
-  <div class="cam-btn" onclick="toggleCam(1)">Caméra 1</div>
-  <div class="cam-btn" onclick="toggleCam(2)">Caméra 2</div>
-  <div class="cam-btn" onclick="toggleCam(3)">Caméra 3</div>
-  <div class="cam-btn" onclick="toggleCam(4)">Caméra 4</div>
-
-</div>
-
-<!-- 🔻 ZONE D’AFFICHAGE -->
-<div id="zone-cameras"></div>
 
 
 </body>
