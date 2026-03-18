@@ -32,7 +32,11 @@
   <a href="index.html" style="color:gray;">⬅ Retour</a>
 
   <div id="reader" style="width:320px;margin:20px auto;"></div>
+
   <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
+
+  <!-- ℹ️ Infos détaillées -->
+  <div id="scan-info" style="margin-top:15px;font-size:20px;color:#ccc;"></div>
 
   <!-- DNF MANUEL -->
   <div style="margin-top:20px;">
@@ -73,6 +77,25 @@
     let departTours = {};
 
     let firestoreReady = false;
+
+    /* Format HH:MM:SS */
+    function formatHMS(ms) {
+      const totalSec = Math.floor(ms / 1000);
+      const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
+      const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
+      const s = String(totalSec % 60).padStart(2, "0");
+      return `${h}:${m}:${s}`;
+    }
+
+    function showScanInfo(tour, limite, msDepuisDepart) {
+      const div = document.getElementById("scan-info");
+
+      div.innerHTML = `
+        <div>Tour en cours : <b>${tour}</b></div>
+        <div>Temps limite : <b>${limite} min</b></div>
+        <div>Temps réel : <b>${formatHMS(msDepuisDepart)}</b></div>
+      `;
+    }
 
     function recalculerDepartTours() {
       if (!startMs || Object.keys(limites).length === 0) return;
@@ -176,11 +199,11 @@
       const nowMs = Date.now();
       const limite = limites["t" + tour] || 0;
       const departTheorique = departTours[tour];
-      const minutesDepuisDepart = (nowMs - departTheorique) / 60000;
+      const msDepuisDepart = nowMs - departTheorique;
 
       let horsDelai = false;
 
-      if (minutesDepuisDepart > limite) {
+      if (msDepuisDepart > limite * 60000) {
         horsDelai = true;
 
         /* ELIMINATION */
@@ -188,6 +211,9 @@
           statut: "ELIMINE"
         });
       }
+
+      /* Affichage des infos */
+      showScanInfo(tour, limite, msDepuisDepart);
 
       /* Enregistrer le scan */
       await addDoc(collection(db, "resultats"), {
