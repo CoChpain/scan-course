@@ -274,21 +274,6 @@ function calculTempsTour(dossard,tour){
   return actuel.timestamp - departTours[tour];
 }
 
-/* 🔽 Liste des dossards encore en course */
-function getDossardsEnCourse(tour){
-  let liste = tours[tour] || [];
-  return liste
-    .filter(r => !r.horsDelai && !r.dnf && !r.dns)
-    .map(r => r.dossard)
-    .sort((a,b)=>a-b);
-}
-
-window.toggleDossards = function(){
-  const box = document.getElementById("listeDossards");
-  box.style.display = (box.style.display === "none" || box.style.display === "") 
-    ? "block" 
-    : "none";
-};
 
 /* -------------------------------------------
    🔥 Onglets dynamiques
