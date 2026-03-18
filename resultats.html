@@ -26,8 +26,9 @@ body{
 .partenaires-track {
   display: flex;
   gap: 40px;
-  animation: defilement 40s linear infinite;
+  will-change: transform;
 }
+
 
 .partenaires-track img {
   height: 75px;
@@ -36,10 +37,7 @@ body{
   filter: drop-shadow(0 0 4px #000);
 }
 
-@keyframes defilement {
-  0% { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
-}
+
 
 
 .columns{
@@ -443,6 +441,9 @@ html += `
 
 
   div.innerHTML=html;
+  div.innerHTML = html;
+lancerDefilementLogos();
+
 };
 
 /* -------------------------------------------
@@ -585,6 +586,9 @@ html += `
 
   html+="</div>";
   div.innerHTML=html;
+  div.innerHTML = html;
+lancerDefilementLogos();
+
 };
 
 /* -------------------------------------------
@@ -679,6 +683,36 @@ function rafraichir(){
   if(ongletActif==="general") afficherGeneral();
   else afficherTour(Number(ongletActif));
 }
+
+  function lancerDefilementLogos() {
+  const track = document.querySelector(".partenaires-track");
+  if (!track) return;
+
+  let position = 0;
+  const vitesse = 0.05; // vitesse (plus petit = plus lent)
+  let lastTime = performance.now();
+
+  function animate(now) {
+    const delta = now - lastTime;
+    lastTime = now;
+
+    position -= vitesse * delta;
+
+    // largeur totale du contenu
+    const width = track.scrollWidth / 3; // car tu dupliques 3 fois
+
+    if (Math.abs(position) >= width) {
+      position = 0;
+    }
+
+    track.style.transform = `translateX(${position}px)`;
+
+    requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+}
+
 </script>
 
 </body>
