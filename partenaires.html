@@ -24,42 +24,67 @@ h1{
 }
 
 /* CARROUSEL */
-.carousel-container{
-  width:100%;
-  overflow:hidden;
-  margin-top:60px;
-}
-
-.carousel-track{
+.carousel{
+  position:relative;
+  width:80%;
+  margin:80px auto;
+  height:260px;
   display:flex;
-  gap:60px;
-  animation:scroll 18s linear infinite;
+  justify-content:center;
+  align-items:center;
+  perspective:1000px;
 }
 
-.carousel-track img{
-  height:120px;
-  width:auto;
+.carousel img{
+  position:absolute;
+  transition:transform 0.6s ease, opacity 0.6s ease;
   border-radius:12px;
   padding:10px;
   background:#111;
   border:2px solid #ffcc00;
-  box-shadow:0 0 15px #ffcc00, 0 0 30px #ffcc00 inset;
-  transition:0.3s;
+  box-shadow:0 0 15px #ffcc00;
 }
 
-/* Effet néon animé */
-.carousel-track img:hover{
-  transform:scale(1.1);
+/* Image centrale */
+.center{
+  transform:translateX(0) scale(1.4);
+  z-index:5;
+  opacity:1;
   box-shadow:
     0 0 20px #ffcc00,
     0 0 40px #ffcc00,
     0 0 60px #ffcc00 inset;
 }
 
-/* Animation horizontale infinie */
-@keyframes scroll{
-  0% { transform:translateX(0); }
-  100% { transform:translateX(-50%); }
+/* Images latérales */
+.left1{
+  transform:translateX(-180px) scale(0.9);
+  opacity:0.7;
+  z-index:4;
+}
+.right1{
+  transform:translateX(180px) scale(0.9);
+  opacity:0.7;
+  z-index:4;
+}
+
+/* Images encore plus loin */
+.left2{
+  transform:translateX(-340px) scale(0.6);
+  opacity:0.4;
+  z-index:3;
+}
+.right2{
+  transform:translateX(340px) scale(0.6);
+  opacity:0.4;
+  z-index:3;
+}
+
+/* Images hors champ */
+.hidden{
+  opacity:0;
+  transform:scale(0.3);
+  z-index:1;
 }
 </style>
 </head>
@@ -68,31 +93,47 @@ h1{
 
 <h1>🤝 NOS PARTENAIRES</h1>
 
-<div class="carousel-container">
-  <div class="carousel-track">
-
-    <!-- 8 logos (dupliqués pour scroll infini) -->
-    <img src="apollo3s.png">
-    <img src="comptoir.png">
-    <img src="CYRIL LECLAIR.png">
-    <img src="logo4.png">
-    <img src="logo5.png">
-    <img src="logo6.png">
-    <img src="logo7.png">
-    <img src="logo8.png">
-
-    <!-- DUPLICATION pour effet infini -->
-    <img src="apollo3s.png">
-    <img src="comptoir.png">
-    <img src="CYRIL LECLAIR.png">
-    <img src="logo4.png">
-    <img src="logo5.png">
-    <img src="logo6.png">
-    <img src="logo7.png">
-    <img src="logo8.png">
-
-  </div>
+<div class="carousel" id="carousel">
+  <img src="apollo3s.png">
+  <img src="comptoir.png">
+  <img src="CYRIL LECLAIR.png">
+  <img src="logo4.png">
+  <img src="logo5.png">
+  <img src="logo6.png">
+  <img src="logo7.png">
+  <img src="logo8.png">
 </div>
+
+<script>
+const logos = document.querySelectorAll("#carousel img");
+let index = 0;
+
+function updateCarousel(){
+  logos.forEach((img,i)=>{
+    img.className = "hidden"; // reset
+  });
+
+  const total = logos.length;
+
+  const center = index % total;
+  const left1 = (index - 1 + total) % total;
+  const left2 = (index - 2 + total) % total;
+  const right1 = (index + 1) % total;
+  const right2 = (index + 2) % total;
+
+  logos[center].classList.add("center");
+  logos[left1].classList.add("left1");
+  logos[left2].classList.add("left2");
+  logos[right1].classList.add("right1");
+  logos[right2].classList.add("right2");
+}
+
+updateCarousel();
+setInterval(()=>{
+  index = (index + 1) % logos.length;
+  updateCarousel();
+}, 2500);
+</script>
 
 </body>
 </html>
