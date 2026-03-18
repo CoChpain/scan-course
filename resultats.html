@@ -106,7 +106,6 @@ button{
   border-radius:6px;
   display:none;
 }
-
 </style>
 
 </head>
@@ -144,8 +143,9 @@ let limites = {};
 let departTours = {};
 let ongletActif = "general";
 
-/* 🔥 Nouveau : total figé par tour */
+/* 🔥 Totaux figés par tour */
 let totalParTour = {};
+
 /* -------------------------------------------
    🔥 Charger startMs
 --------------------------------------------*/
@@ -276,6 +276,7 @@ function construireOnglets(){
 
   document.getElementById("onglets").innerHTML = html;
 }
+
 /* -------------------------------------------
    🔥 AFFICHAGE TOUR
 --------------------------------------------*/
@@ -299,11 +300,6 @@ window.afficherTour=function(tour){
 
   arrives=(tours[tour]||[]).filter(r=>!r.horsDelai && !r.dnf && !r.dns).length;
 
-  /* 🔥 Nouveau : figer le total du tour */
-  if (!totalParTour[tour]) {
-    totalParTour[tour] = total;
-  }
-
   const limite=limites["t"+tour]||0;
 
   let html=`
@@ -315,7 +311,7 @@ window.afficherTour=function(tour){
     </div>
 
     <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatTemps(limite*60000)}</h3>
-    <h3 style="color:yellow">Arrivés : ${arrives} / ${totalParTour[tour]}</h3>
+    <h3 style="color:yellow">Arrivés : ${arrives} / ${totalParTour[tour] ?? total}</h3>
   `;
 
   const nb=liste.length;
@@ -389,7 +385,6 @@ window.afficherGeneral=function(){
       if(idx!==-1) rang=idx+1;
     }
 
-    /* 🔥 Calcul du tour atteint */
     let tourAtteint = 0;
 
     if(c.statut === "ELIMINE"){
@@ -405,7 +400,6 @@ window.afficherGeneral=function(){
       tourAtteint = lastTour + 1;
     }
 
-    /* 🔥 Ordre des statuts */
     let statutTxt="", statutOrdre=0;
 
     if(c.statut==="DNF"){
@@ -429,8 +423,8 @@ window.afficherGeneral=function(){
       dossard:c.dossard,
       nom:c.nom||"",
       prenom:c.prenom||"",
-      tours:lastTour,         // affichage
-      tourAtteint:tourAtteint, // classement
+      tours:lastTour,
+      tourAtteint:tourAtteint,
       rang:rang,
       statut:c.statut,
       statutTxt:statutTxt,
@@ -438,18 +432,14 @@ window.afficherGeneral=function(){
     });
   });
 
-  /* 🔥 TRI FINAL */
   classement.sort((a,b)=>{
 
-    // 1️⃣ Tour atteint (desc)
     if(b.tourAtteint !== a.tourAtteint)
         return b.tourAtteint - a.tourAtteint;
 
-    // 2️⃣ Statut (OK → Hors délai → DNF → DNS)
     if(a.statutOrdre !== b.statutOrdre)
         return a.statutOrdre - b.statutOrdre;
 
-    // 3️⃣ Rang dans le tour
     return a.rang - b.rang;
   });
 
@@ -554,6 +544,30 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
         timestamp:null
       });
     }
+  });
+
+  /* 🔥 Calcul et figement des totaux par tour */
+  Object.keys(limites).forEach(key=>{
+    const t = Number(key.replace("t",""));
+    if (!t) return;
+
+    let total = 0;
+
+    if (t === 1) {
+      total = Object.values(coureursMap)
+        .filter(c=>c.dossard && Number(c.dossard)>0)
+        .filter(c=>!["DNF","DNS","ELIMINE"].includes(c.statut))
+        .length;
+    } else {
+      total = (tours[t-1] || [])
+        .filter(r=>!r.horsDelai && !r.dnf && !r.dns)
+        .filter(r=>{
+          const c=coureursMap[r.dossard];
+          return c && !["DNF","DNS","ELIMINE"].includes(c.statut);
+        }).length;
+    }
+
+    totalParTour[t] = total;
   });
 
   construireOnglets();
