@@ -15,7 +15,7 @@ body{
 }
 /* PARTENAIRES défilants */
 .partenaires-marquee {
-  width: 100%;
+  width: 120%;
   overflow: hidden;
   background: #111;
   border-top: 2px solid #444;
@@ -26,11 +26,11 @@ body{
 .partenaires-track {
   display: flex;
   gap: 40px;
-  animation: defilement 18s linear infinite;
+  animation: defilement 40s linear infinite;
 }
 
 .partenaires-track img {
-  height: 45px;
+  height: 75px;
   width: auto;
   object-fit: contain;
   filter: drop-shadow(0 0 4px #000);
@@ -275,20 +275,30 @@ window.toggleDossards = function(){
 /* -------------------------------------------
    🔥 Onglets dynamiques
 --------------------------------------------*/
-function construireOnglets(){
+function construireOnglets() {
 
   let html = `<button onclick="afficherGeneral()">Général</button>`;
 
   let tourMax = 1;
+  let tourActifAuto = 1;
 
-  Object.keys(limites).forEach(key=>{
+  Object.keys(limites).forEach(key => {
     const t = Number(key.replace("t",""));
-    if(!departTours[t]) return;
+    if (!departTours[t]) return;
 
     const finTheorique = departTours[t] + limites[key] * 60000;
+    const debutTheorique = departTours[t];
 
-    if(Date.now() >= finTheorique){
-      tourMax = Math.max(tourMax, t+1);
+    const now = Date.now();
+
+    // Le tour est "ouvert" dès son début
+    if (now >= debutTheorique) {
+      tourActifAuto = t;
+    }
+
+    // Le tour suivant devient visible quand celui-ci est terminé
+    if (now >= finTheorique) {
+      tourMax = Math.max(tourMax, t + 1);
     }
   });
 
@@ -303,7 +313,13 @@ function construireOnglets(){
   });
 
   document.getElementById("onglets").innerHTML = html;
+
+  // 🔥 Si aucun onglet n'est actif ou si on est en général → activer automatiquement le tour en cours
+  if (ongletActif === "general" || ongletActif > tourMax) {
+    afficherTour(tourActifAuto);
+  }
 }
+
 
 /* -------------------------------------------
    🔥 AFFICHAGE TOUR
@@ -404,6 +420,15 @@ html += `
       <img src="Z7.png">
       <img src="Z8.png">
       <!-- duplication pour boucle fluide -->
+      <img src="Z1.png">
+      <img src="Z2.png">
+      <img src="Z3.png">
+      <img src="Z4.png">
+      <img src="Z5.png">
+      <img src="Z6.png">
+      <img src="Z7.png">
+      <img src="Z8.png">
+       <!-- duplication pour boucle fluide -->
       <img src="Z1.png">
       <img src="Z2.png">
       <img src="Z3.png">
