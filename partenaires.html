@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Partenaires - Diaporama</title>
+<title>Partenaires</title>
 
 <style>
 body{
@@ -14,6 +14,7 @@ body{
   padding:0;
 }
 
+/* TITRE */
 h1{
   font-size:50px;
   margin-top:40px;
@@ -22,35 +23,43 @@ h1{
   text-shadow:0 0 15px #ffcc00;
 }
 
-/* SLIDESHOW */
-.slideshow{
+/* CARROUSEL */
+.carousel-container{
+  width:100%;
+  overflow:hidden;
   margin-top:60px;
-  width:100%;
-  max-width:400px;
-  margin-left:auto;
-  margin-right:auto;
-  position:relative;
-  height:250px;
 }
 
-.slide{
-  position:absolute;
-  top:0;
-  left:0;
-  width:100%;
-  opacity:0;
-  transition:opacity 1s ease-in-out;
+.carousel-track{
+  display:flex;
+  gap:60px;
+  animation:scroll 18s linear infinite;
 }
 
-.slide img{
-  width:100%;
-  max-height:250px;
-  object-fit:contain;
-  filter:drop-shadow(0 0 10px #000);
+.carousel-track img{
+  height:120px;
+  width:auto;
+  border-radius:12px;
+  padding:10px;
+  background:#111;
+  border:2px solid #ffcc00;
+  box-shadow:0 0 15px #ffcc00, 0 0 30px #ffcc00 inset;
+  transition:0.3s;
 }
 
-.slide.active{
-  opacity:1;
+/* Effet néon animé */
+.carousel-track img:hover{
+  transform:scale(1.1);
+  box-shadow:
+    0 0 20px #ffcc00,
+    0 0 40px #ffcc00,
+    0 0 60px #ffcc00 inset;
+}
+
+/* Animation horizontale infinie */
+@keyframes scroll{
+  0% { transform:translateX(0); }
+  100% { transform:translateX(-50%); }
 }
 </style>
 </head>
@@ -59,27 +68,31 @@ h1{
 
 <h1>🤝 NOS PARTENAIRES</h1>
 
-<div class="slideshow">
-  <div class="slide active"><img src="IMG_6603.jpg"></div>
-  <div class="slide"><img src="logo2.png"></div>
-  <div class="slide"><img src="logo3.png"></div>
-  <div class="slide"><img src="logo4.png"></div>
-  <div class="slide"><img src="logo5.png"></div>
-  <div class="slide"><img src="logo6.png"></div>
-  <div class="slide"><img src="logo7.png"></div>
-  <div class="slide"><img src="logo8.png"></div>
+<div class="carousel-container">
+  <div class="carousel-track">
+
+    <!-- 8 logos (dupliqués pour scroll infini) -->
+    <img src="logo1.png">
+    <img src="logo2.png">
+    <img src="logo3.png">
+    <img src="logo4.png">
+    <img src="logo5.png">
+    <img src="logo6.png">
+    <img src="logo7.png">
+    <img src="logo8.png">
+
+    <!-- DUPLICATION pour effet infini -->
+    <img src="logo1.png">
+    <img src="logo2.png">
+    <img src="logo3.png">
+    <img src="logo4.png">
+    <img src="logo5.png">
+    <img src="logo6.png">
+    <img src="logo7.png">
+    <img src="logo8.png">
+
+  </div>
 </div>
-
-<script>
-let index = 0;
-const slides = document.querySelectorAll(".slide");
-
-setInterval(() => {
-  slides[index].classList.remove("active");
-  index = (index + 1) % slides.length;
-  slides[index].classList.add("active");
-}, 2500);
-</script>
 
 </body>
 </html>
