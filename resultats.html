@@ -13,6 +13,24 @@ body{
   font-family:Arial;
   text-align:center;
 }
+/* PARTENAIRES */
+.partenaires-container{
+  margin-top:25px;
+  padding:10px 0;
+  background:#111;
+  border-top:2px solid #444;
+  display:flex;
+  justify-content:center;
+  gap:25px;
+  flex-wrap:wrap;
+}
+
+.partenaires-container img{
+  height:45px;
+  width:auto;
+  object-fit:contain;
+  filter:drop-shadow(0 0 4px #000);
+}
 
 .columns{
   display:grid;
@@ -364,6 +382,18 @@ window.afficherTour=function(tour){
       </div>
     </div>
   `;
+html += `
+  <div class="partenaires-container">
+    <img src="Z1.png">
+    <img src="Z2.png">
+    <img src="Z3.png">
+    <img src="Z4.png">
+    <img src="Z5.png">
+    <img src="Z6.png">
+    <img src="Z7.png">
+    <img src="Z8.png">
+  </div>
+`;
 
   div.innerHTML=html;
 };
@@ -481,6 +511,18 @@ window.afficherGeneral=function(){
     });
     html+="</table>";
   });
+html += `
+  <div class="partenaires-container">
+    <img src="Z1.png">
+    <img src="Z2.png">
+    <img src="Z3.png">
+    <img src="Z4.png">
+    <img src="Z5.png">
+    <img src="Z6.png">
+    <img src="Z7.png">
+    <img src="Z8.png">
+  </div>
+`;
 
   html+="</div>";
   div.innerHTML=html;
