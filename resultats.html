@@ -144,7 +144,9 @@ let limites = {};
 let departTours = {};
 let ongletActif = "general";
 
-  /* -------------------------------------------
+/* 🔥 Nouveau : total figé par tour */
+let totalParTour = {};
+/* -------------------------------------------
    🔥 Charger startMs
 --------------------------------------------*/
 onSnapshot(doc(db,"course","depart"), snap=>{
@@ -294,7 +296,13 @@ window.afficherTour=function(tour){
         return c && !["DNF","DNS","ELIMINE"].includes(c.statut);
       }).length;
   }
+
   arrives=(tours[tour]||[]).filter(r=>!r.horsDelai && !r.dnf && !r.dns).length;
+
+  /* 🔥 Nouveau : figer le total du tour */
+  if (!totalParTour[tour]) {
+    totalParTour[tour] = total;
+  }
 
   const limite=limites["t"+tour]||0;
 
@@ -307,7 +315,7 @@ window.afficherTour=function(tour){
     </div>
 
     <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatTemps(limite*60000)}</h3>
-    <h3 style="color:yellow">Arrivés : ${arrives} / ${total}</h3>
+    <h3 style="color:yellow">Arrivés : ${arrives} / ${totalParTour[tour]}</h3>
   `;
 
   const nb=liste.length;
@@ -385,16 +393,16 @@ window.afficherGeneral=function(){
     let tourAtteint = 0;
 
     if(c.statut === "ELIMINE"){
-      tourAtteint = lastTour; // hors délai au tour X
+      tourAtteint = lastTour;
     }
     else if(c.statut === "DNF"){
-      tourAtteint = lastTour + 1; // abandon pendant le tour suivant
+      tourAtteint = lastTour + 1;
     }
     else if(c.statut === "DNS"){
-      tourAtteint = lastTour + 1; // n'a pas pris le départ du tour suivant
+      tourAtteint = lastTour + 1;
     }
     else{
-      tourAtteint = lastTour + 1; // OK → en cours du tour suivant
+      tourAtteint = lastTour + 1;
     }
 
     /* 🔥 Ordre des statuts */
@@ -421,7 +429,7 @@ window.afficherGeneral=function(){
       dossard:c.dossard,
       nom:c.nom||"",
       prenom:c.prenom||"",
-      tours:lastTour,        // affichage
+      tours:lastTour,         // affichage
       tourAtteint:tourAtteint, // classement
       rang:rang,
       statut:c.statut,
