@@ -121,32 +121,27 @@ button{
 
 .partners-track{
   display:flex;
-  width:calc(200%); /* important pour boucle */
-  animation:scroll 25s linear infinite;
+  width:max-content;
+  animation:scroll 20s linear infinite;
 }
 
 .partners-track img{
   height:60px;
-  margin:10px 30px;
+  margin:10px 40px;
   object-fit:contain;
-  filter:brightness(0.9);
-  transition:0.3s;
+  flex-shrink:0;
 }
 
-.partners-track img:hover{
-  filter:brightness(1.2);
-  transform:scale(1.1);
-}
-
+/* 🔥 animation parfaitement fluide */
 @keyframes scroll{
   from{transform:translateX(0);}
   to{transform:translateX(-50%);}
 }
 
-/* éviter que le slider cache le contenu */
 body{
   padding-bottom:90px;
 }
+
 
 </style>
 
