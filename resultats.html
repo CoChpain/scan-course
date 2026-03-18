@@ -262,18 +262,15 @@ function construireOnglets(){
     }
   });
 
- // 🔥 Nombre total de tours définis dans Firestore
-const totalTours = Object.keys(limites)
-  .map(k => Number(k.replace("t","")))
-  .sort((a,b)=>a-b);
+  const totalTours = Object.keys(limites)
+    .map(k => Number(k.replace("t","")))
+    .sort((a,b)=>a-b);
 
-// 🔥 Afficher tous les tours débloqués
-totalTours.forEach(t => {
-  if (t <= tourMax) {
-    html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
-  }
-});
-
+  totalTours.forEach(t => {
+    if (t <= tourMax) {
+      html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
+    }
+  });
 
   document.getElementById("onglets").innerHTML = html;
 }
@@ -369,7 +366,7 @@ window.afficherTour=function(tour){
 };
 
 /* -------------------------------------------
-   🔥 CLASSEMENT GÉNÉRAL
+   🔥 CLASSEMENT GÉNÉRAL (CORRIGÉ)
 --------------------------------------------*/
 window.afficherGeneral=function(){
   ongletActif="general";
@@ -416,10 +413,24 @@ window.afficherGeneral=function(){
     });
   });
 
+  /* ---------------------------------------------------------
+     🔥 TRI CORRIGÉ SELON TA LOGIQUE EXACTE
+     1️⃣ Nombre de tours (desc)
+     2️⃣ Statut (OK → Hors délai → DNF → DNS)
+     3️⃣ Rang dans le tour
+  --------------------------------------------------------- */
   classement.sort((a,b)=>{
-    if(b.tours!==a.tours) return b.tours-a.tours;
-    if(a.rang!==b.rang) return a.rang-b.rang;
-    return a.statutOrdre-b.statutOrdre;
+
+    // 1️⃣ Nombre de tours
+    if(b.tours !== a.tours)
+        return b.tours - a.tours;
+
+    // 2️⃣ Statut
+    if(a.statutOrdre !== b.statutOrdre)
+        return a.statutOrdre - b.statutOrdre;
+
+    // 3️⃣ Rang dans le tour
+    return a.rang - b.rang;
   });
 
   const nb=classement.length;
@@ -534,7 +545,6 @@ function rafraichir(){
   else afficherTour(Number(ongletActif));
 }
 </script>
-
 
 </body>
 </html>
