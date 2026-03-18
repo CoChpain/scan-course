@@ -144,7 +144,7 @@ let limites = {};
 let departTours = {};
 let ongletActif = "general";
 
-/* -------------------------------------------
+  /* -------------------------------------------
    🔥 Charger startMs
 --------------------------------------------*/
 onSnapshot(doc(db,"course","depart"), snap=>{
@@ -274,7 +274,6 @@ function construireOnglets(){
 
   document.getElementById("onglets").innerHTML = html;
 }
-
 /* -------------------------------------------
    🔥 AFFICHAGE TOUR
 --------------------------------------------*/
@@ -382,6 +381,23 @@ window.afficherGeneral=function(){
       if(idx!==-1) rang=idx+1;
     }
 
+    /* 🔥 Calcul du tour atteint */
+    let tourAtteint = 0;
+
+    if(c.statut === "ELIMINE"){
+      tourAtteint = lastTour; // hors délai au tour X
+    }
+    else if(c.statut === "DNF"){
+      tourAtteint = lastTour + 1; // abandon pendant le tour suivant
+    }
+    else if(c.statut === "DNS"){
+      tourAtteint = lastTour + 1; // n'a pas pris le départ du tour suivant
+    }
+    else{
+      tourAtteint = lastTour + 1; // OK → en cours du tour suivant
+    }
+
+    /* 🔥 Ordre des statuts */
     let statutTxt="", statutOrdre=0;
 
     if(c.statut==="DNF"){
@@ -405,7 +421,8 @@ window.afficherGeneral=function(){
       dossard:c.dossard,
       nom:c.nom||"",
       prenom:c.prenom||"",
-      tours:lastTour,
+      tours:lastTour,        // affichage
+      tourAtteint:tourAtteint, // classement
       rang:rang,
       statut:c.statut,
       statutTxt:statutTxt,
@@ -413,19 +430,14 @@ window.afficherGeneral=function(){
     });
   });
 
-  /* ---------------------------------------------------------
-     🔥 TRI CORRIGÉ SELON TA LOGIQUE EXACTE
-     1️⃣ Nombre de tours (desc)
-     2️⃣ Statut (OK → Hors délai → DNF → DNS)
-     3️⃣ Rang dans le tour
-  --------------------------------------------------------- */
+  /* 🔥 TRI FINAL */
   classement.sort((a,b)=>{
 
-    // 1️⃣ Nombre de tours
-    if(b.tours !== a.tours)
-        return b.tours - a.tours;
+    // 1️⃣ Tour atteint (desc)
+    if(b.tourAtteint !== a.tourAtteint)
+        return b.tourAtteint - a.tourAtteint;
 
-    // 2️⃣ Statut
+    // 2️⃣ Statut (OK → Hors délai → DNF → DNS)
     if(a.statutOrdre !== b.statutOrdre)
         return a.statutOrdre - b.statutOrdre;
 
