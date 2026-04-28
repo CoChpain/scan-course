@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <title>SCAN COURSE</title>
 
-  <!-- ✅ LIBRAIRIE QR CODE (OBLIGATOIRE) -->
+  <!-- ✅ LIBRAIRIE QR -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
 <!-- 🔒 VERROUILLAGE -->
-<div id="lock" style="position:fixed;inset:0;background:black;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;">
+<div id="lock" style="position:fixed;inset:0;background:black;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
   <h2>🔒 Accès protégé</h2>
   <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px">
   <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px">Entrer</button>
@@ -20,10 +20,10 @@
 
 <script>
 function checkPwd(){
-  if(document.getElementById("pwd").value==="3sRunTravel2026"){
-    document.getElementById("lock").style.display="none";
+  if(document.getElementById("pwd").value === "3sRunTravel2026"){
+    document.getElementById("lock").style.display = "none";
   } else {
-    document.getElementById("err").innerText="Mot de passe incorrect";
+    document.getElementById("err").innerText = "Mot de passe incorrect";
   }
 }
 </script>
@@ -67,7 +67,7 @@ const db = getFirestore(app);
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-/* 🔒 ANTI-DOUBLON 10 MIN */
+/* 🔒 ANTI-DOUBLON GLOBAL 10 MINUTES */
 async function checkCooldown(dossard){
   const q = query(
     collection(db,"resultats"),
@@ -84,6 +84,7 @@ async function checkCooldown(dossard){
 
 /* ✅ LOGIQUE UNIQUE ARRIVÉE (SCAN + MANUEL) */
 async function traiterArrivee(dossard, mode){
+
   if(!dossard){
     feedback("❌ Dossard invalide","red");
     beepError.play();
@@ -96,38 +97,46 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
-  const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
-  const snap = await getDocs(q);
+  const qCoureur = query(collection(db,"coureurs"), where("dossard","==",dossard));
+  const snapCoureur = await getDocs(qCoureur);
 
-  if(snap.empty){
+  if(snapCoureur.empty){
     feedback("❌ Dossard inconnu : "+dossard,"red");
     beepError.play();
     return;
   }
 
-  const coureur = snap.docs[0].data();
+  const coureur = snapCoureur.docs[0].data();
   if(["DNS","DNF","ELIMINE"].includes(coureur.statut)){
     feedback("⛔ Coureur non autorisé","red");
     beepError.play();
     return;
   }
 
+  /* 🧮 CALCUL DU TOUR */
+  const qTours = query(
+    collection(db,"resultats"),
+    where("dossard","==",dossard),
+    where("type","==","PASSAGE")
+  );
+  const snapTours = await getDocs(qTours);
+  const tour = snapTours.size + 1;
+
+  /* ✅ ENREGISTREMENT COMPLET */
   await addDoc(collection(db,"resultats"),{
     dossard,
-    type:"PASSAGE",
-    mode,
+    type: "PASSAGE",
+    tour: tour,
+    mode: mode,
     timestamp: serverTimestamp()
   });
 
   beepOk.play();
-  feedback("✅ Arrivée enregistrée : "+dossard,"lime");
+  feedback(`✅ Arrivée enregistrée<br>Dossard ${dossard} – Tour ${tour}`,"lime");
 }
 
 /* 📷 SCAN QR */
-const scanner = new Html5QrcodeScanner("reader",{
-  fps:10,
-  qrbox:220
-});
+const scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
 scanner.render(text=>{
   const d = text.split("-").pop().replace(/\D/g,"");
   traiterArrivee(d,"SCAN");
@@ -145,12 +154,17 @@ document.getElementById("btn-dnf").onclick = async ()=>{
   if(!(await checkCooldown(d))){
     feedback("⏳ Doublon interdit","orange"); return;
   }
-  const q = query(collection(db,"coureurs"),where("dossard","==",d));
-  const snap = await getDocs(q);
-  if(snap.empty) return feedback("❌ Inconnu","red");
 
-  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{statut:"DNF"});
-  await addDoc(collection(db,"resultats"),{dossard:d,type:"DNF",timestamp:serverTimestamp()});
+  const q = query(collection(db,"coureurs"), where("dossard","==",d));
+  const snap = await getDocs(q);
+  if(snap.empty) return feedback("❌ Dossard inconnu","red");
+
+  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNF" });
+  await addDoc(collection(db,"resultats"),{
+    dossard:d,
+    type:"DNF",
+    timestamp:serverTimestamp()
+  });
 
   beepError.play();
   feedback("🏳️ DNF enregistré : "+d,"orange");
@@ -162,12 +176,17 @@ document.getElementById("btn-dns").onclick = async ()=>{
   if(!(await checkCooldown(d))){
     feedback("⏳ Doublon interdit","orange"); return;
   }
-  const q = query(collection(db,"coureurs"),where("dossard","==",d));
-  const snap = await getDocs(q);
-  if(snap.empty) return feedback("❌ Inconnu","red");
 
-  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{statut:"DNS"});
-  await addDoc(collection(db,"resultats"),{dossard:d,type:"DNS",timestamp:serverTimestamp()});
+  const q = query(collection(db,"coureurs"), where("dossard","==",d));
+  const snap = await getDocs(q);
+  if(snap.empty) return feedback("❌ Dossard inconnu","red");
+
+  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNS" });
+  await addDoc(collection(db,"resultats"),{
+    dossard:d,
+    type:"DNS",
+    timestamp:serverTimestamp()
+  });
 
   beepError.play();
   feedback("🚫 DNS enregistré : "+d,"orange");
