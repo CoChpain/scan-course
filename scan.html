@@ -8,357 +8,159 @@
 
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
-  <!-- 🔒 VERROUILLAGE PAR MOT DE PASSE -->
-  <div id="lock" style="position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
-    <h2>🔒 Accès protégé</h2>
-    <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
-    <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px;">Entrer</button>
-    <div id="err" style="color:red;margin-top:10px;"></div>
-  </div>
+<!-- 🔒 VERROUILLAGE -->
+<div id="lock" style="position:fixed;inset:0;background:black;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
+  <h2>🔒 Accès protégé</h2>
+  <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
+  <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px;">Entrer</button>
+  <div id="err" style="color:red;margin-top:10px;"></div>
+</div>
 
-  <script>
-  function checkPwd(){
-    const good = "3sRunTravel2026";
-    const val = document.getElementById("pwd").value;
-    if(val === good){
-      document.getElementById("lock").style.display = "none";
-    } else {
-      document.getElementById("err").innerHTML = "Mot de passe incorrect";
-    }
+<script>
+function checkPwd(){
+  if(document.getElementById("pwd").value === "3sRunTravel2026"){
+    document.getElementById("lock").style.display = "none";
+  } else {
+    document.getElementById("err").innerText = "Mot de passe incorrect";
   }
-  </script>
-
-  <h1>🏁 SCAN</h1>
-  <a href="index.html" style="color:gray;">⬅ Retour</a>
-
-  <!-- 🌐 État réseau -->
-  <div id="offline-status" style="font-size:18px;margin-top:10px;color:orange;"></div>
-
-  <div id="reader" style="width:320px;margin:20px auto;"></div>
-
-  <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
-
-  <!-- ℹ️ Infos détaillées -->
-  <div id="scan-info" style="margin-top:15px;font-size:20px;color:#ccc;"></div>
-
-  <!-- DNF MANUEL -->
-  <div style="margin-top:20px;">
-    <input id="dossard-manuel" type="text" placeholder="Dossard DNF" style="padding:10px;font-size:18px;">
-    <button id="btn-dnf" style="padding:10px 20px;font-size:18px;">DNF</button>
-  </div>
-
-  <!-- DNS MANUEL -->
-  <div style="margin-top:10px;">
-    <input id="dossard-dns" type="text" placeholder="Dossard DNS" style="padding:10px;font-size:18px;">
-    <button id="btn-dns" style="padding:10px 20px;font-size:18px;">DNS</button>
-  </div>
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { 
-      getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp,
-      orderBy, limit, doc, updateDoc, onSnapshot
-    } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-    import { firebaseConfig } from "./firebase-config.js";
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    let scanner;
-    let isProcessing = false;
-
-    const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
-    const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-
-    /* 🔥 Chrono Firestore */
-    let startMs = null;
-
-    /* 🔥 Limites Firestore */
-    let limites = {};
-
-    /* 🔥 Départs théoriques */
-    let departTours = {};
-
-    let firestoreReady = false;
-
-    /* ---------------------------------------------------------
-       🌐 MODE OFFLINE
-    --------------------------------------------------------- */
-    function updateNetworkStatus() {
-      const div = document.getElementById("offline-status");
-      if (navigator.onLine) {
-        div.innerHTML = "🟢 Connecté";
-        div.style.color = "lime";
-        envoyerScansEnAttente();
-      } else {
-        div.innerHTML = "🔴 Hors ligne – stockage local activé";
-        div.style.color = "orange";
-      }
-    }
-
-    window.addEventListener("online", updateNetworkStatus);
-    window.addEventListener("offline", updateNetworkStatus);
-    updateNetworkStatus();
-
-    function stockerScanLocal(scan) {
-      let liste = JSON.parse(localStorage.getItem("scansOffline") || "[]");
-      liste.push(scan);
-      localStorage.setItem("scansOffline", JSON.stringify(liste));
-    }
-
-    async function envoyerScansEnAttente() {
-      let liste = JSON.parse(localStorage.getItem("scansOffline") || "[]");
-      if (liste.length === 0) return;
-
-      for (const scan of liste) {
-        try {
-          await addDoc(collection(db, "resultats"), scan);
-        } catch (e) {
-          console.error("Erreur envoi offline:", e);
-          return;
-        }
-      }
-
-      localStorage.removeItem("scansOffline");
-      showMessage("📡 Scans offline synchronisés", "lime");
-    }
-
-    /* ---------------------------------------------------------
-       ⏱️ Format HH:MM:SS
-    --------------------------------------------------------- */
-    function formatHMS(ms) {
-      const totalSec = Math.floor(ms / 1000);
-      const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
-      const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
-      const s = String(totalSec % 60).padStart(2, "0");
-      return `${h}:${m}:${s}`;
-    }
-
-    function showScanInfo(tour, limite, msDepuisDepart) {
-      const div = document.getElementById("scan-info");
-
-      div.innerHTML = `
-        <div>Tour en cours : <b>${tour}</b></div>
-        <div>Temps limite : <b>${limite} min</b></div>
-        <div>Temps réel : <b>${formatHMS(msDepuisDepart)}</b></div>
-      `;
-    }
-
-    /* ---------------------------------------------------------
-       🔥 Calcul des départs théoriques
-    --------------------------------------------------------- */
-    function recalculerDepartTours() {
-      if (!startMs || Object.keys(limites).length === 0) return;
-
-      departTours = {};
-      let cumul = 0;
-
-      for (let i = 1; i <= 200; i++) {
-        if (!limites["t" + i]) break;
-        departTours[i] = startMs + cumul * 60000;
-        cumul += limites["t" + i] || 0;
-      }
-
-      firestoreReady = true;
-      showMessage("🔥 Système prêt", "lime");
-    }
-
-    /* Charger startMs */
-    onSnapshot(doc(db, "course", "depart"), snap => {
-      if (snap.exists()) {
-        startMs = snap.data().startMs;
-        recalculerDepartTours();
-      }
-    });
-
-    /* Charger limites */
-    onSnapshot(doc(db, "course", "limitesTours"), snap => {
-      if (snap.exists()) {
-        limites = snap.data();
-        recalculerDepartTours();
-      }
-    });
-
-    function showMessage(msg, color="white"){
-      const fb = document.getElementById("feedback");
-      fb.style.color = color;
-      fb.innerHTML = msg;
-    }
-
-    /* ---------------------------------------------------------
-       🔍 Fonction principale de scan
-    --------------------------------------------------------- */
-    async function handleScan(decodedText){
-
-      if (!firestoreReady) {
-        showMessage("⏳ Initialisation du système…", "orange");
-        return;
-      }
-
-      /* Nettoyage du dossard */
-      const dossard = decodedText.split("-").pop().trim().replace(/\D/g, "");
-
-      /* Vérifier si le coureur existe */
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        beepError.play();
-        showMessage("❌ Dossard inconnu : " + dossard, "red");
-        return;
-      }
-
-      const docCoureur = snap.docs[0];
-      const coureur = docCoureur.data();
-
-      /* ❌ Coureur éliminé ou DNF/DNS → interdit */
-      if (["ELIMINE","DNF","DNS"].includes(coureur.statut)) {
-        beepError.play();
-        showMessage("⛔ Coureur non autorisé (" + dossard + ")", "red");
-        return;
-      }
-
-      /* Anti double-scan 10 minutes */
-      const qLast = query(
-        collection(db, "resultats"),
-        where("dossard", "==", dossard),
-        orderBy("timestamp", "desc"),
-        limit(1)
-      );
-
-      const lastSnap = await getDocs(qLast);
-
-      if (!lastSnap.empty) {
-        const last = lastSnap.docs[0].data();
-        const lastTime = last.timestamp?.toDate()?.getTime?.() ?? 0;
-        const now = Date.now();
-
-        if (now - lastTime < 600000) { // 10 minutes
-          beepError.play();
-          showMessage("⏳ Attendre 10 minutes avant un nouveau scan", "orange");
-          return;
-        }
-      }
-
-      /* Déterminer le numéro du tour */
-      const qCount = query(collection(db, "resultats"), where("dossard", "==", dossard));
-      const countSnap = await getDocs(qCount);
-      const tour = countSnap.size + 1;
-
-      /* Vérifier limite du tour */
-      const nowMs = Date.now();
-      const limite = limites["t" + tour] || 0;
-      const departTheorique = departTours[tour];
-      const msDepuisDepart = nowMs - departTheorique;
-
-      let horsDelai = false;
-
-      if (msDepuisDepart > limite * 60000) {
-        horsDelai = true;
-
-        /* ELIMINATION */
-        await updateDoc(doc(db, "coureurs", docCoureur.id), {
-          statut: "ELIMINE"
-        });
-      }
-
-      /* Affichage des infos */
-      showScanInfo(tour, limite, msDepuisDepart);
-
-      /* Enregistrer le scan */
-      const scanData = {
-        dossard: dossard,
-        tour: tour,
-        timestamp: serverTimestamp(),
-        horsDelai: horsDelai
-      };
-
-      if (navigator.onLine) {
-        await addDoc(collection(db, "resultats"), scanData);
-      } else {
-        stockerScanLocal(scanData);
-        showMessage("📦 Scan enregistré hors ligne", "orange");
-      }
-
-      beepOk.play();
-      showMessage(`Scan OK<br>Dossard : ${dossard}<br>Tour : ${tour}`, "lime");
-    }
-
-    function onScanSuccess(decodedText){
-      if(isProcessing) return;
-
-      isProcessing = true;
-      scanner.pause(true);
-
-      handleScan(decodedText)
-        .catch(err => {
-          beepError.play();
-          showMessage("❌ Erreur Firebase :<br>" + err.message, "red");
-        })
-        .finally(()=>{
-          setTimeout(()=>{
-            scanner.resume();
-            isProcessing = false;
-          }, 1200);
-        });
-    }
-
-    scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
-    scanner.render(onScanSuccess);
-
-    /* -------------------------------------------
-       🏳️ DNF manuel
-    --------------------------------------------*/
-    document.getElementById("btn-dnf").addEventListener("click", async () => {
-      const dossard = document.getElementById("dossard-manuel").value.trim();
-      if (!dossard) return;
-
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        beepError.play();
-        showMessage("❌ Dossard inconnu : " + dossard, "red");
-        return;
-      }
-
-      const docCoureur = snap.docs[0];
-
-      await updateDoc(doc(db, "coureurs", docCoureur.id), {
-        statut: "DNF"
-      });
-
-      beepError.play();
-      showMessage("🏳️ Coureur " + dossard + " marqué DNF", "orange");
-    });
-
-    /* -------------------------------------------
-       🚫 DNS manuel
-    --------------------------------------------*/
-    document.getElementById("btn-dns").addEventListener("click", async () => {
-      const dossard = document.getElementById("dossard-dns").value.trim();
-      if (!dossard) return;
-
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        beepError.play();
-        showMessage("❌ Dossard inconnu : " + dossard, "red");
-        return;
-      }
-
-      const docCoureur = snap.docs[0];
-
-      await updateDoc(doc(db, "coureurs", docCoureur.id), {
-        statut: "DNS"
-      });
-
-      beepError.play();
-      showMessage("🚫 Coureur " + dossard + " marqué DNS", "orange");
-    });
-
-  </script>
+}
+</script>
+
+<h1>🏁 SCAN ARRIVÉE</h1>
+<a href="index.html" style="color:gray;">⬅ Retour</a>
+
+<div id="offline-status" style="margin-top:10px;font-size:18px;"></div>
+<div id="reader" style="width:320px;margin:20px auto;"></div>
+<div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
+<div id="scan-info" style="margin-top:15px;font-size:18px;color:#ccc;"></div>
+
+<!-- 🏁 ARRIVÉE MANUELLE -->
+<div style="margin-top:20px;">
+  <input id="arrivee-manuel" placeholder="Dossard arrivée" style="padding:10px;font-size:18px;">
+  <button id="btn-arrivee" style="padding:10px 20px;font-size:18px;">✅ ARRIVÉE</button>
+</div>
+
+<!-- 🏳️ DNF -->
+<div style="margin-top:10px;">
+  <input id="dossard-dnf" placeholder="Dossard DNF" style="padding:10px;font-size:18px;">
+  <button id="btn-dnf" style="padding:10px 20px;font-size:18px;">DNF</button>
+</div>
+
+<!-- 🚫 DNS -->
+<div style="margin-top:10px;">
+  <input id="dossard-dns" placeholder="Dossard DNS" style="padding:10px;font-size:18px;">
+  <button id="btn-dns" style="padding:10px 20px;font-size:18px;">DNS</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import {
+  getFirestore, collection, query, where, getDocs, addDoc,
+  serverTimestamp, orderBy, limit, updateDoc, doc
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+
+/* 🔒 ANTI DOUBLON GLOBAL 10 MIN */
+async function checkCooldown(dossard){
+  const q = query(
+    collection(db,"resultats"),
+    where("dossard","==",dossard),
+    orderBy("timestamp","desc"),
+    limit(1)
+  );
+
+  const snap = await getDocs(q);
+  if(snap.empty) return true;
+
+  const last = snap.docs[0].data().timestamp?.toDate()?.getTime() ?? 0;
+  return Date.now() - last > 600000;
+}
+
+/* 🔍 TRAITEMENT ARRIVÉE */
+async function traiterArrivee(dossard){
+  if(!(await checkCooldown(dossard))){
+    beepError.play();
+    feedback("⏳ Doublon interdit (<10 min)", "orange");
+    return;
+  }
+
+  const q = query(collection(db,"coureurs"), where("dossard","==",dossard));
+  const snap = await getDocs(q);
+  if(snap.empty){
+    feedback("❌ Dossard inconnu", "red");
+    beepError.play();
+    return;
+  }
+
+  await addDoc(collection(db,"resultats"),{
+    dossard,
+    type:"PASSAGE",
+    timestamp: serverTimestamp()
+  });
+
+  beepOk.play();
+  feedback("✅ Arrivée enregistrée : "+dossard,"lime");
+}
+
+/* 🏁 MANUEL */
+document.getElementById("btn-arrivee").onclick = () => {
+  const d = document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
+  if(d) traiterArrivee(d);
+};
+
+/* 🏳️ DNF */
+document.getElementById("btn-dnf").onclick = async () => {
+  const d = document.getElementById("dossard-dnf").value.replace(/\D/g,"");
+  if(!(await checkCooldown(d))){
+    feedback("⏳ Doublon interdit (<10 min)", "orange"); return;
+  }
+  const q = query(collection(db,"coureurs"), where("dossard","==",d));
+  const snap = await getDocs(q);
+  if(snap.empty) return feedback("❌ Inconnu","red");
+
+  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNF"});
+  await addDoc(collection(db,"resultats"),{ dossard:d, type:"DNF", timestamp:serverTimestamp() });
+
+  beepError.play();
+  feedback("🏳️ DNF enregistré : "+d,"orange");
+};
+
+/* 🚫 DNS */
+document.getElementById("btn-dns").onclick = async () => {
+  const d = document.getElementById("dossard-dns").value.replace(/\D/g,"");
+  if(!(await checkCooldown(d))){
+    feedback("⏳ Doublon interdit (<10 min)", "orange"); return;
+  }
+  const q = query(collection(db,"coureurs"), where("dossard","==",d));
+  const snap = await getDocs(q);
+  if(snap.empty) return feedback("❌ Inconnu","red");
+
+  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNS"});
+  await addDoc(collection(db,"resultats"),{ dossard:d, type:"DNS", timestamp:serverTimestamp() });
+
+  beepError.play();
+  feedback("🚫 DNS enregistré : "+d,"orange");
+};
+
+/* 📷 SCAN */
+const scanner = new Html5QrcodeScanner("reader",{fps:10,qrbox:220});
+scanner.render(text=>{
+  const d = text.split("-").pop().replace(/\D/g,"");
+  traiterArrivee(d);
+});
+
+function feedback(msg,color){
+  const f=document.getElementById("feedback");
+  f.style.color=color;
+  f.innerHTML=msg;
+}
+</script>
 
 </body>
 </html>
