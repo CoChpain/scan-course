@@ -77,36 +77,6 @@ button{
   font-size:14px;
 }
 
-.toggle-box{
-  margin-top:20px;
-}
-
-.toggle-btn{
-  background:#00ffcc;
-  color:#000;
-  padding:8px 14px;
-  border:none;
-  border-radius:6px;
-  font-weight:bold;
-  cursor:pointer;
-  box-shadow:0 0 10px #00ffcc;
-  transition:0.2s;
-}
-
-.toggle-btn:hover{
-  background:#00ffaa;
-  box-shadow:0 0 15px #00ffaa;
-}
-
-.toggle-content{
-  margin-top:10px;
-  padding:10px;
-  background:rgba(255,255,255,0.05);
-  border:1px solid #333;
-  border-radius:6px;
-  display:none;
-}
-
 /* 🔻 SLIDER PARTENAIRES */
 .partners-slider{
   position:fixed;
@@ -130,27 +100,16 @@ button{
   margin:10px 40px;
   object-fit:contain;
   flex-shrink:0;
-
-  @media (max-width: 768px) {
- height:15px;
-  margin:5px 15px;
-  object-fit:contain;
-  flex-shrink:0;
-
-}
 }
 
-/* 🔥 animation parfaitement fluide */
 @keyframes scroll{
   from{transform:translateX(0);}
   to{transform:translateX(-50%);}
- 
 }
 
 body{
   padding-bottom:90px;
 }
-
 
 </style>
 
@@ -221,7 +180,7 @@ function recalculerDepartTours(){
   if(!startMs || !limites) return;
   departTours={};
   let cumul=0;
-  for(let i=1;i<=200;i++){
+  for(let i=1;i<=10;i++){
     if(!limites["t"+i]) break;
     departTours[i]=startMs + cumul*60000;
     cumul+=limites["t"+i];
@@ -274,36 +233,28 @@ function calculTempsTour(dossard,tour){
   return actuel.timestamp - departTours[tour];
 };
 
-
 /* -------------------------------------------
-   🔥 Onglets dynamiques
+   🔥 Onglets dynamiques (VERSION CORRIGÉE)
 --------------------------------------------*/
 function construireOnglets(){
 
   let html = `<button onclick="afficherGeneral()">Général</button>`;
 
+  // 🔥 Détecter le tour maximum réellement scanné
   let tourMax = 1;
 
-  Object.keys(limites).forEach(key=>{
-    const t = Number(key.replace("t",""));
-    if(!departTours[t]) return;
-
-    const finTheorique = departTours[t] + limites[key] * 60000;
-
-    if(Date.now() >= finTheorique){
-      tourMax = Math.max(tourMax, t+1);
-    }
+  Object.keys(tours).forEach(t=>{
+    const num = Number(t);
+    if(num > tourMax && num <= 10) tourMax = num;
   });
 
-  const totalTours = Object.keys(limites)
-    .map(k => Number(k.replace("t","")))
-    .sort((a,b)=>a-b);
+  // 🔥 Si le chrono vient juste de démarrer → afficher T1
+  if(startMs && tourMax < 1) tourMax = 1;
 
-  totalTours.forEach(t => {
-    if (t <= tourMax) {
-      html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
-    }
-  });
+  // 🔥 Générer les onglets jusqu’à tourMax (max 10)
+  for(let t=1; t<=tourMax && t<=10; t++){
+    html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
+  }
 
   document.getElementById("onglets").innerHTML = html;
 }
@@ -370,15 +321,15 @@ window.afficherTour=function(tour){
       const c=coureursMap[r.dossard]||{};
       const tempsTour=calculTempsTour(r.dossard,tour);
       const classe =
-  r.dns ? "red fade" :
-  r.dnf ? "red fade" :
-  r.horsDelai ? "red fade" :
-  (c.categorie==="F" ? "femme fade" : "fade");
+        r.dns ? "red fade" :
+        r.dnf ? "red fade" :
+        r.horsDelai ? "red fade" :
+        (c.categorie==="F" ? "femme fade" : "fade");
 
-const labelTemps =
-  r.dns ? "DNS" :
-  r.dnf ? "DNF" :
-  formatTemps(tempsTour);
+      const labelTemps =
+        r.dns ? "DNS" :
+        r.dnf ? "DNF" :
+        formatTemps(tempsTour);
 
       html+=`
         <tr class="${classe}">
@@ -393,13 +344,11 @@ const labelTemps =
 
   html+="</div>";
 
- 
-
   div.innerHTML=html;
 };
 
 /* -------------------------------------------
-   🔥 CLASSEMENT GÉNÉRAL (CORRIGÉ)
+   🔥 CLASSEMENT GÉNÉRAL (inchangé)
 --------------------------------------------*/
 window.afficherGeneral=function(){
   ongletActif="general";
@@ -536,7 +485,10 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
 
   snap.forEach(doc=>{
     const r=doc.data();
-    if(!r.tour) return;
+
+    // 🔥 Limite stricte : 10 tours max
+    if(!r.tour || r.tour < 1 || r.tour > 10) return;
+
     const ts=r.timestamp?.toDate().getTime() ?? null;
 
     if(!tours[r.tour]) tours[r.tour]=[];
@@ -559,17 +511,16 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
   });
 
   // 🔥 Marquer les coureurs hors délais comme ELIMINE
-Object.keys(tours).forEach(t=>{
-  tours[t].forEach(r=>{
-    if (r.horsDelai) {
-      const c = coureursMap[r.dossard];
-      if (c) {
-        c.statut = "ELIMINE";
+  Object.keys(tours).forEach(t=>{
+    tours[t].forEach(r=>{
+      if (r.horsDelai) {
+        const c = coureursMap[r.dossard];
+        if (c) {
+          c.statut = "ELIMINE";
+        }
       }
-    }
+    });
   });
-});
-
 
   Object.values(coureursMap).forEach(c=>{
     if(c.statut==="DNF" || c.statut==="DNS"){
@@ -589,7 +540,7 @@ Object.keys(tours).forEach(t=>{
     }
   });
 
-  /* 🔥 Calcul et figement des totaux par tour */
+   /* 🔥 Calcul et figement des totaux par tour */
   Object.keys(limites).forEach(key=>{
     const t = Number(key.replace("t",""));
     if (!t) return;
@@ -613,10 +564,28 @@ Object.keys(tours).forEach(t=>{
     totalParTour[t] = total;
   });
 
+  /* ---------------------------------------------------------
+     🔥 Déterminer automatiquement le tour actif
+  --------------------------------------------------------- */
+  let tourActifAuto = 1;
+
+  Object.keys(tours).forEach(t=>{
+    const num = Number(t);
+    if(num > tourActifAuto && num <= 10) tourActifAuto = num;
+  });
+
+  // Si on n’est pas sur le général → afficher le tour actif
+  if(ongletActif !== "general"){
+    ongletActif = tourActifAuto;
+  }
+
   construireOnglets();
   rafraichir();
 });
 
+/* ---------------------------------------------------------
+   🔥 RAFRAICHIR L’AFFICHAGE
+--------------------------------------------------------- */
 function rafraichir(){
   if(ongletActif==="general") afficherGeneral();
   else afficherTour(Number(ongletActif));
@@ -626,7 +595,6 @@ function rafraichir(){
 <!-- 🔻 PARTENAIRES -->
 <div class="partners-slider">
   <div class="partners-track">
-    <!-- 8 logos -->
     <img src="Z1.png">
     <img src="Z2.png">
     <img src="Z3.png">
@@ -636,7 +604,7 @@ function rafraichir(){
     <img src="Z7.png">
     <img src="Z8.png">
 
-     <!-- duplication pour boucle infinie -->
+    <!-- duplication pour boucle infinie -->
     <img src="Z1.png">
     <img src="Z2.png">
     <img src="Z3.png">
@@ -645,6 +613,7 @@ function rafraichir(){
     <img src="Z6.png">
     <img src="Z7.png">
     <img src="Z8.png">
+
     <!-- duplication pour boucle infinie -->
     <img src="Z1.png">
     <img src="Z2.png">
@@ -656,7 +625,6 @@ function rafraichir(){
     <img src="Z8.png">
   </div>
 </div>
-
 
 </body>
 </html>
