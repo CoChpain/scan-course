@@ -127,7 +127,6 @@ body{
 
 <div id="onglets" style="margin:20px"></div>
 <div id="contenu"></div>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
@@ -147,8 +146,6 @@ let startMs = null;
 let limites = {};
 let departTours = {};
 let ongletActif = "general";
-
-/* 🔥 Totaux figés par tour */
 let totalParTour = {};
 
 /* -------------------------------------------
@@ -174,16 +171,17 @@ onSnapshot(doc(db,"course","limitesTours"), snap=>{
 });
 
 /* -------------------------------------------
-   🔥 Calcul départs théoriques
+   🔥 Calcul départs théoriques (corrigé)
 --------------------------------------------*/
 function recalculerDepartTours(){
   if(!startMs || !limites) return;
-  departTours={};
-  let cumul=0;
-  for(let i=1;i<=10;i++){
+  departTours = {};
+  let cumul = 0;
+
+  for(let i=1; i<=10; i++){
     if(!limites["t"+i]) break;
-    departTours[i]=startMs + cumul*60000;
-    cumul+=limites["t"+i];
+    departTours[i] = startMs + cumul * 60000;
+    cumul += limites["t"+i];
   }
 }
 
@@ -222,25 +220,27 @@ function updateChronos(){
 setInterval(updateChronos, 1000);
 
 /* -------------------------------------------
-   🔥 Calcul temps d’un tour pour un dossard
+   🔥 Calcul temps d’un tour
 --------------------------------------------*/
 function calculTempsTour(dossard,tour){
   if(!departTours[tour]) return null;
-  const scans=tousLesResultats[dossard];
+
+  const scans = tousLesResultats[dossard];
   if(!scans) return null;
-  const actuel=scans.find(r=>r.tour===tour);
-  if(!actuel||!actuel.timestamp) return null;
+
+  const actuel = scans.find(r => r.tour === tour);
+  if(!actuel || !actuel.timestamp) return null;
+
   return actuel.timestamp - departTours[tour];
-};
+}
 
 /* -------------------------------------------
-   🔥 Onglets dynamiques (VERSION CORRIGÉE)
+   🔥 Onglets dynamiques (corrigé)
 --------------------------------------------*/
 function construireOnglets(){
 
   let html = `<button onclick="afficherGeneral()">Général</button>`;
 
-  // 🔥 Détecter le tour maximum réellement scanné
   let tourMax = 1;
 
   Object.keys(tours).forEach(t=>{
@@ -248,10 +248,8 @@ function construireOnglets(){
     if(num > tourMax && num <= 10) tourMax = num;
   });
 
-  // 🔥 Si le chrono vient juste de démarrer → afficher T1
   if(startMs && tourMax < 1) tourMax = 1;
 
-  // 🔥 Générer les onglets jusqu’à tourMax (max 10)
   for(let t=1; t<=tourMax && t<=10; t++){
     html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
   }
@@ -260,13 +258,17 @@ function construireOnglets(){
 }
 
 /* -------------------------------------------
-   🔥 AFFICHAGE TOUR
+   🔥 AFFICHAGE TOUR (corrigé)
 --------------------------------------------*/
 window.afficherTour=function(tour){
+
+  recalculerDepartTours();
   ongletActif=tour;
+
   let liste=[...(tours[tour]||[])];
 
   let total=0, arrives=0;
+
   if(tour===1){
     total=Object.values(coureursMap)
       .filter(c=>c.dossard && Number(c.dossard)>0)
@@ -287,7 +289,6 @@ window.afficherTour=function(tour){
   let html=`
     <h2>Tour ${tour}</h2>
 
-    <!-- 🔥 CHRONO DU TOUR -->
     <div id="chrono-tour" style="font-size:22px;color:#00ffaa;margin-bottom:10px;">
       ⏱️ Chrono Tour ${tour} : --:--:--
     </div>
@@ -320,6 +321,7 @@ window.afficherTour=function(tour){
     col.forEach(r=>{
       const c=coureursMap[r.dossard]||{};
       const tempsTour=calculTempsTour(r.dossard,tour);
+
       const classe =
         r.dns ? "red fade" :
         r.dnf ? "red fade" :
@@ -352,6 +354,7 @@ window.afficherTour=function(tour){
 --------------------------------------------*/
 window.afficherGeneral=function(){
   ongletActif="general";
+
   let classement=[];
 
   Object.values(coureursMap).forEach(c=>{
@@ -364,20 +367,7 @@ window.afficherGeneral=function(){
       if(idx!==-1) rang=idx+1;
     }
 
-    let tourAtteint = 0;
-
-    if(c.statut === "ELIMINE"){
-      tourAtteint = lastTour;
-    }
-    else if(c.statut === "DNF"){
-      tourAtteint = lastTour + 1;
-    }
-    else if(c.statut === "DNS"){
-      tourAtteint = lastTour + 1;
-    }
-    else{
-      tourAtteint = lastTour + 1;
-    }
+    let tourAtteint = lastTour + 1;
 
     let statutTxt="", statutOrdre=0;
 
@@ -466,7 +456,7 @@ window.afficherGeneral=function(){
 };
 
 /* -------------------------------------------
-   🔥 LISTENERS FIRESTORE
+   🔥 LISTENERS FIRESTORE (corrigés)
 --------------------------------------------*/
 onSnapshot(collection(db,"coureurs"), snap=>{
   coureursMap={};
@@ -498,6 +488,7 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     tousLesResultats[r.dossard].push({...r, timestamp:ts});
   });
 
+  /* 🔥 Hors délais */
   Object.keys(tours).forEach(t=>{
     const tour=Number(t);
     const limite=limites["t"+tour]||0;
@@ -510,7 +501,7 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     });
   });
 
-  // 🔥 Marquer les coureurs hors délais comme ELIMINE
+  /* 🔥 Marquer ELIMINE */
   Object.keys(tours).forEach(t=>{
     tours[t].forEach(r=>{
       if (r.horsDelai) {
@@ -522,10 +513,13 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     });
   });
 
+  /* 🔥 Ajouter DNF/DNS dans le tour suivant */
   Object.values(coureursMap).forEach(c=>{
     if(c.statut==="DNF" || c.statut==="DNS"){
       const scans=tousLesResultats[c.dossard]||[];
       const abandonTour=scans.length>0 ? scans[scans.length-1].tour+1 : 1;
+
+      if(abandonTour > 10) return;
 
       if(!tours[abandonTour]) tours[abandonTour]=[];
 
@@ -535,12 +529,12 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
         horsDelai:false,
         dnf:c.statut==="DNF",
         dns:c.statut==="DNS",
-        timestamp:null
+        timestamp: departTours[abandonTour] ?? null
       });
     }
   });
 
-   /* 🔥 Calcul et figement des totaux par tour */
+  /* 🔥 Totaux par tour */
   Object.keys(limites).forEach(key=>{
     const t = Number(key.replace("t",""));
     if (!t) return;
@@ -564,9 +558,7 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     totalParTour[t] = total;
   });
 
-  /* ---------------------------------------------------------
-     🔥 Déterminer automatiquement le tour actif
-  --------------------------------------------------------- */
+  /* 🔥 Déterminer automatiquement le tour actif */
   let tourActifAuto = 1;
 
   Object.keys(tours).forEach(t=>{
@@ -574,7 +566,6 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
     if(num > tourActifAuto && num <= 10) tourActifAuto = num;
   });
 
-  // Si on n’est pas sur le général → afficher le tour actif
   if(ongletActif !== "general"){
     ongletActif = tourActifAuto;
   }
@@ -583,9 +574,9 @@ onSnapshot(query(collection(db,"resultats"),orderBy("timestamp","asc")), snap=>{
   rafraichir();
 });
 
-/* ---------------------------------------------------------
+/* -------------------------------------------
    🔥 RAFRAICHIR L’AFFICHAGE
---------------------------------------------------------- */
+--------------------------------------------*/
 function rafraichir(){
   if(ongletActif==="general") afficherGeneral();
   else afficherTour(Number(ongletActif));
