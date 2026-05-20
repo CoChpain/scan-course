@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>SCAN COURSE</title>
 
-  <!-- ✅ LIBRAIRIE QR -->
+  <!-- QR -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 
@@ -67,8 +67,10 @@ const db = getFirestore(app);
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-/* 🔒 ANTI-DOUBLON GLOBAL 10 MINUTES */
-async function checkCooldown(dossard){
+/* ---------------------------------------------------------
+   🔥 UTILITAIRE : DERNIER SCAN
+--------------------------------------------------------- */
+async function getLastScanTime(dossard){
   const q = query(
     collection(db,"resultats"),
     where("dossard","==",dossard),
@@ -76,13 +78,33 @@ async function checkCooldown(dossard){
     limit(1)
   );
   const snap = await getDocs(q);
-  if(snap.empty) return true;
-
-  const last = snap.docs[0].data().timestamp?.toDate()?.getTime() ?? 0;
-  return Date.now() - last > 600000;
+  if(snap.empty) return null;
+  return snap.docs[0].data().timestamp?.toDate()?.getTime() ?? null;
 }
 
-/* ✅ LOGIQUE UNIQUE ARRIVÉE (SCAN + MANUEL) */
+/* ---------------------------------------------------------
+   🔥 RÈGLES MÉTIER
+--------------------------------------------------------- */
+
+// PASSAGE interdit < 10 min
+async function canDoPassage(dossard){
+  const last = await getLastScanTime(dossard);
+  if(!last) return true;
+  return Date.now() - last > 10 * 60 * 1000;
+}
+
+// DNF interdit < 5 min
+async function canDoDNF(dossard){
+  const last = await getLastScanTime(dossard);
+  if(!last) return false;
+  return Date.now() - last > 5 * 60 * 1000;
+}
+
+// DNS → toujours autorisé
+
+/* ---------------------------------------------------------
+   🔥 TRAITEMENT ARRIVÉE (SCAN + MANUEL)
+--------------------------------------------------------- */
 async function traiterArrivee(dossard, mode){
 
   if(!dossard){
@@ -91,12 +113,14 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
-  if(!(await checkCooldown(dossard))){
-    feedback("⏳ Doublon interdit (<10 min)","orange");
+  // Anti-doublon PASSAGE
+  if(!(await canDoPassage(dossard))){
+    feedback("⏳ Passage impossible (<10 min)", "orange");
     beepError.play();
     return;
   }
 
+  // Vérifier coureur
   const qCoureur = query(collection(db,"coureurs"), where("dossard","==",dossard));
   const snapCoureur = await getDocs(qCoureur);
 
@@ -113,16 +137,12 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
-  /* 🧮 CALCUL DU TOUR */
-  const qTours = query(
-    collection(db,"resultats"),
-    where("dossard","==",dossard),
-    where("type","==","PASSAGE")
-  );
+  // Calcul du tour
+  const qTours = query(collection(db,"resultats"), where("dossard","==",dossard));
   const snapTours = await getDocs(qTours);
   const tour = snapTours.size + 1;
 
-  /* ✅ ENREGISTREMENT COMPLET */
+  // Enregistrement
   await addDoc(collection(db,"resultats"),{
     dossard,
     type: "PASSAGE",
@@ -135,24 +155,33 @@ async function traiterArrivee(dossard, mode){
   feedback(`✅ Arrivée enregistrée<br>Dossard ${dossard} – Tour ${tour}`,"lime");
 }
 
-/* 📷 SCAN QR */
+/* ---------------------------------------------------------
+   📷 SCAN QR
+--------------------------------------------------------- */
 const scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
 scanner.render(text=>{
   const d = text.split("-").pop().replace(/\D/g,"");
   traiterArrivee(d,"SCAN");
 });
 
-/* 🏁 ARRIVÉE MANUELLE */
+/* ---------------------------------------------------------
+   🏁 ARRIVÉE MANUELLE
+--------------------------------------------------------- */
 document.getElementById("btn-arrivee").onclick = ()=>{
   const d = document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
   traiterArrivee(d,"MANUEL");
 };
 
-/* 🏳️ DNF */
+/* ---------------------------------------------------------
+   🏳️ DNF (5 min après passage)
+--------------------------------------------------------- */
 document.getElementById("btn-dnf").onclick = async ()=>{
   const d = document.getElementById("dossard-dnf").value.replace(/\D/g,"");
-  if(!(await checkCooldown(d))){
-    feedback("⏳ Doublon interdit","orange"); return;
+
+  if(!(await canDoDNF(d))){
+    feedback("⏳ DNF possible 5 min après le dernier passage","orange");
+    beepError.play();
+    return;
   }
 
   const q = query(collection(db,"coureurs"), where("dossard","==",d));
@@ -170,12 +199,11 @@ document.getElementById("btn-dnf").onclick = async ()=>{
   feedback("🏳️ DNF enregistré : "+d,"orange");
 };
 
-/* 🚫 DNS */
+/* ---------------------------------------------------------
+   🚫 DNS (toujours autorisé)
+--------------------------------------------------------- */
 document.getElementById("btn-dns").onclick = async ()=>{
   const d = document.getElementById("dossard-dns").value.replace(/\D/g,"");
-  if(!(await checkCooldown(d))){
-    feedback("⏳ Doublon interdit","orange"); return;
-  }
 
   const q = query(collection(db,"coureurs"), where("dossard","==",d));
   const snap = await getDocs(q);
@@ -192,6 +220,9 @@ document.getElementById("btn-dns").onclick = async ()=>{
   feedback("🚫 DNS enregistré : "+d,"orange");
 };
 
+/* ---------------------------------------------------------
+   FEEDBACK
+--------------------------------------------------------- */
 function feedback(msg,color){
   const f=document.getElementById("feedback");
   f.style.color=color;
