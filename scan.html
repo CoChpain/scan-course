@@ -19,37 +19,60 @@
 </div>
 
 <script>
+const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes
+
 function checkPwd(){
-  if(document.getElementById("pwd").value === "3sRunTravel2026"){
-    document.getElementById("lock").style.display = "none";
+  const input = document.getElementById("pwd").value;
+
+  if(input === "3sRunTravel2026"){
+    localStorage.setItem("scanAuthTime", Date.now());
+    unlock();
   } else {
     document.getElementById("err").innerText = "Mot de passe incorrect";
   }
 }
+
+function unlock(){
+  document.getElementById("lock").style.display = "none";
+}
+
+function checkSession(){
+  const saved = localStorage.getItem("scanAuthTime");
+  if(!saved) return;
+
+  const elapsed = Date.now() - parseInt(saved);
+
+  if(elapsed < SESSION_DURATION){
+    unlock();
+  } else {
+    localStorage.removeItem("scanAuthTime");
+  }
+}
+
+checkSession();
 </script>
 
 <h1>🏁 ARRIVÉES COURSE</h1>
-<a href="index.html" style="color:gray;">⬅ Retour</a>
 
 <div id="reader" style="width:320px;margin:20px auto;"></div>
 <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
 
-<!-- 🏁 ARRIVÉE MANUELLE -->
+<!-- ARRIVEE -->
 <div style="margin-top:20px;">
   <input id="arrivee-manuel" placeholder="Dossard arrivée" style="padding:10px;font-size:18px;">
-  <button id="btn-arrivee" style="padding:10px 20px;font-size:18px;">✅ ARRIVÉE</button>
+  <button id="btn-arrivee">✅ ARRIVÉE</button>
 </div>
 
-<!-- 🏳️ DNF -->
+<!-- DNF -->
 <div style="margin-top:10px;">
-  <input id="dossard-dnf" placeholder="Dossard DNF" style="padding:10px;font-size:18px;">
-  <button id="btn-dnf" style="padding:10px 20px;font-size:18px;">DNF</button>
+  <input id="dossard-dnf" placeholder="Dossard DNF">
+  <button id="btn-dnf">DNF</button>
 </div>
 
-<!-- 🚫 DNS -->
+<!-- DNS -->
 <div style="margin-top:10px;">
-  <input id="dossard-dns" placeholder="Dossard DNS" style="padding:10px;font-size:18px;">
-  <button id="btn-dns" style="padding:10px 20px;font-size:18px;">DNS</button>
+  <input id="dossard-dns" placeholder="Dossard DNS">
+  <button id="btn-dns">DNS</button>
 </div>
 
 <script type="module">
@@ -57,7 +80,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebas
 import {
   getFirestore, collection, query, where, getDocs,
   addDoc, updateDoc, doc,
-  orderBy, limit, serverTimestamp
+  serverTimestamp, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -67,9 +90,12 @@ const db = getFirestore(app);
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-/* ---------------------------------------------------------
-   🔥 UTILITAIRE : DERNIER SCAN
---------------------------------------------------------- */
+// 🔥 ANTI DOUBLE SCAN
+let lastScan = null;
+let lastScanTime = 0;
+let processing = false;
+
+/* ---------------- LAST SCAN ---------------- */
 async function getLastScanTime(dossard){
   const q = query(
     collection(db,"resultats"),
@@ -82,30 +108,24 @@ async function getLastScanTime(dossard){
   return snap.docs[0].data().timestamp?.toDate()?.getTime() ?? null;
 }
 
-/* ---------------------------------------------------------
-   🔥 RÈGLES MÉTIER
---------------------------------------------------------- */
-
-// PASSAGE interdit < 10 min
-async function canDoPassage(dossard){
-  const last = await getLastScanTime(dossard);
+/* ---------------- RULES ---------------- */
+async function canDoPassage(d){
+  const last = await getLastScanTime(d);
   if(!last) return true;
   return Date.now() - last > 10 * 60 * 1000;
 }
 
-// DNF interdit < 5 min
-async function canDoDNF(dossard){
-  const last = await getLastScanTime(dossard);
+async function canDoDNF(d){
+  const last = await getLastScanTime(d);
   if(!last) return false;
   return Date.now() - last > 5 * 60 * 1000;
 }
 
-// DNS → toujours autorisé
-
-/* ---------------------------------------------------------
-   🔥 TRAITEMENT ARRIVÉE (SCAN + MANUEL)
---------------------------------------------------------- */
+/* ---------------- ARRIVEE ---------------- */
 async function traiterArrivee(dossard, mode){
+
+  // ✅ prolonger session
+  localStorage.setItem("scanAuthTime", Date.now());
 
   if(!dossard){
     feedback("❌ Dossard invalide","red");
@@ -113,82 +133,96 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
-  // Anti-doublon PASSAGE
   if(!(await canDoPassage(dossard))){
-    feedback("⏳ Passage impossible (<10 min)", "orange");
+    feedback("⏳ Passage impossible","orange");
     beepError.play();
     return;
   }
 
-  // Vérifier coureur
   const qCoureur = query(collection(db,"coureurs"), where("dossard","==",dossard));
-  const snapCoureur = await getDocs(qCoureur);
+  const snap = await getDocs(qCoureur);
 
-  if(snapCoureur.empty){
-    feedback("❌ Dossard inconnu : "+dossard,"red");
-    beepError.play();
+  if(snap.empty){
+    feedback("❌ Dossard inconnu","red");
     return;
   }
 
-  const coureur = snapCoureur.docs[0].data();
+  const coureur = snap.docs[0].data();
+
   if(["DNS","DNF","ELIMINE"].includes(coureur.statut)){
-    feedback("⛔ Coureur non autorisé","red");
-    beepError.play();
+    feedback("⛔ Interdit","red");
     return;
   }
 
-  // Calcul du tour
-  const qTours = query(collection(db,"resultats"), where("dossard","==",dossard));
-  const snapTours = await getDocs(qTours);
-  const tour = snapTours.size + 1;
+  const toursSnap = await getDocs(query(collection(db,"resultats"), where("dossard","==",dossard)));
 
-  // Enregistrement
+  let tour = 1;
+  toursSnap.forEach(doc=>{
+    if(doc.data().type === "PASSAGE") tour++;
+  });
+
   await addDoc(collection(db,"resultats"),{
     dossard,
-    type: "PASSAGE",
-    tour: tour,
-    mode: mode,
-    timestamp: serverTimestamp()
+    type:"PASSAGE",
+    tour,
+    mode,
+    timestamp:serverTimestamp()
   });
 
   beepOk.play();
-  feedback(`✅ Arrivée enregistrée<br>Dossard ${dossard} – Tour ${tour}`,"lime");
+  navigator.vibrate?.(150);
+
+  feedback(`✅ Dossard ${dossard} - Tour ${tour}`,"lime");
 }
 
-/* ---------------------------------------------------------
-   📷 SCAN QR
---------------------------------------------------------- */
+/* ---------------- SCAN ---------------- */
 const scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
-scanner.render(text=>{
+
+scanner.render(async (text)=>{
+
   const d = text.split("-").pop().replace(/\D/g,"");
-  traiterArrivee(d,"SCAN");
+  const now = Date.now();
+
+  if(d === lastScan && now - lastScanTime < 3000){
+    return;
+  }
+
+  if(processing) return;
+
+  lastScan = d;
+  lastScanTime = now;
+  processing = true;
+
+  try{
+    await traiterArrivee(d,"SCAN");
+  } finally {
+    setTimeout(()=> processing = false, 1500);
+  }
 });
 
-/* ---------------------------------------------------------
-   🏁 ARRIVÉE MANUELLE
---------------------------------------------------------- */
+/* ---------------- BOUTONS ---------------- */
 document.getElementById("btn-arrivee").onclick = ()=>{
   const d = document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
   traiterArrivee(d,"MANUEL");
 };
 
-/* ---------------------------------------------------------
-   🏳️ DNF (5 min après passage)
---------------------------------------------------------- */
 document.getElementById("btn-dnf").onclick = async ()=>{
   const d = document.getElementById("dossard-dnf").value.replace(/\D/g,"");
 
+  localStorage.setItem("scanAuthTime", Date.now());
+
   if(!(await canDoDNF(d))){
-    feedback("⏳ DNF possible 5 min après le dernier passage","orange");
-    beepError.play();
+    feedback("⏳ attendre 5 min","orange");
     return;
   }
 
   const q = query(collection(db,"coureurs"), where("dossard","==",d));
   const snap = await getDocs(q);
-  if(snap.empty) return feedback("❌ Dossard inconnu","red");
+
+  if(snap.empty) return feedback("❌ inconnu","red");
 
   await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNF" });
+
   await addDoc(collection(db,"resultats"),{
     dossard:d,
     type:"DNF",
@@ -196,37 +230,35 @@ document.getElementById("btn-dnf").onclick = async ()=>{
   });
 
   beepError.play();
-  feedback("🏳️ DNF enregistré : "+d,"orange");
+  feedback("🏳️ DNF "+d,"orange");
 };
 
-/* ---------------------------------------------------------
-   🚫 DNS (toujours autorisé)
---------------------------------------------------------- */
 document.getElementById("btn-dns").onclick = async ()=>{
   const d = document.getElementById("dossard-dns").value.replace(/\D/g,"");
 
+  localStorage.setItem("scanAuthTime", Date.now());
+
   const q = query(collection(db,"coureurs"), where("dossard","==",d));
   const snap = await getDocs(q);
-  if(snap.empty) return feedback("❌ Dossard inconnu","red");
+
+  if(snap.empty) return;
 
   await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNS" });
+
   await addDoc(collection(db,"resultats"),{
     dossard:d,
     type:"DNS",
     timestamp:serverTimestamp()
   });
 
-  beepError.play();
-  feedback("🚫 DNS enregistré : "+d,"orange");
+  feedback("🚫 DNS "+d,"orange");
 };
 
-/* ---------------------------------------------------------
-   FEEDBACK
---------------------------------------------------------- */
+/* ---------------- FEEDBACK ---------------- */
 function feedback(msg,color){
-  const f=document.getElementById("feedback");
-  f.style.color=color;
-  f.innerHTML=msg;
+  const f = document.getElementById("feedback");
+  f.style.color = color;
+  f.innerHTML = msg;
 }
 </script>
 
