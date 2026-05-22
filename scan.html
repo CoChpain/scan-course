@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <title>SCAN COURSE</title>
 
-  <!-- QR -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
-<!-- 🔒 VERROUILLAGE -->
+<!-- 🔒 VERROU -->
 <div id="lock" style="position:fixed;inset:0;background:black;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
   <h2>🔒 Accès protégé</h2>
   <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px">
@@ -29,81 +28,59 @@ function checkPwd(){
 </script>
 
 <h1>🏁 ARRIVÉES COURSE</h1>
-<a href="index.html" style="color:gray;">⬅ Retour</a>
 
 <div id="reader" style="width:320px;margin:20px auto;"></div>
 <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
 
-<!-- 🏁 ARRIVÉE MANUELLE -->
-<div style="margin-top:20px;">
-  <input id="arrivee-manuel" placeholder="Dossard arrivée" style="padding:10px;font-size:18px;">
-  <button id="btn-arrivee" style="padding:10px 20px;font-size:18px;">✅ ARRIVÉE</button>
-</div>
-
-<!-- 🏳️ DNF -->
-<div style="margin-top:10px;">
-  <input id="dossard-dnf" placeholder="Dossard DNF" style="padding:10px;font-size:18px;">
-  <button id="btn-dnf" style="padding:10px 20px;font-size:18px;">DNF</button>
-</div>
-
-<!-- 🚫 DNS -->
-<div style="margin-top:10px;">
-  <input id="dossard-dns" placeholder="Dossard DNS" style="padding:10px;font-size:18px;">
-  <button id="btn-dns" style="padding:10px 20px;font-size:18px;">DNS</button>
-</div>
-
 <script type="module">
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
   getFirestore, collection, query, where, getDocs,
   addDoc, updateDoc, doc,
   orderBy, limit, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// 🔊 Sons
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
+// ✅ Memo anti-spam scanner (ULTRA IMPORTANT)
+const lastScanLocal = {};
+
 /* ---------------------------------------------------------
-   🔥 UTILITAIRE : DERNIER SCAN
+   🔥 GET DERNIER SCAN
 --------------------------------------------------------- */
 async function getLastScanTime(dossard){
   const q = query(
     collection(db,"resultats"),
     where("dossard","==",dossard),
-    orderBy("timestamp","desc"),
+    orderBy("timestamp_client","desc"),
     limit(1)
   );
+
   const snap = await getDocs(q);
   if(snap.empty) return null;
-  return snap.docs[0].data().timestamp?.toDate()?.getTime() ?? null;
+
+  return snap.docs[0].data().timestamp_client ?? null;
 }
 
 /* ---------------------------------------------------------
-   🔥 RÈGLES MÉTIER
+   🔥 RÈGLES
 --------------------------------------------------------- */
-
-// PASSAGE interdit < 10 min
 async function canDoPassage(dossard){
   const last = await getLastScanTime(dossard);
   if(!last) return true;
   return Date.now() - last > 10 * 60 * 1000;
 }
 
-// DNF interdit < 5 min
-async function canDoDNF(dossard){
-  const last = await getLastScanTime(dossard);
-  if(!last) return false;
-  return Date.now() - last > 5 * 60 * 1000;
-}
-
-// DNS → toujours autorisé
-
 /* ---------------------------------------------------------
-   🔥 TRAITEMENT ARRIVÉE (SCAN + MANUEL)
+   🔥 TRAITEMENT ARRIVÉE
 --------------------------------------------------------- */
 async function traiterArrivee(dossard, mode){
 
@@ -113,121 +90,85 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
-  // Anti-doublon PASSAGE
+  // ✅ Sécurité Firestore
   if(!(await canDoPassage(dossard))){
-    feedback("⏳ Passage impossible (<10 min)", "orange");
+    feedback("⏳ Passage interdit (<10 min)","orange");
     beepError.play();
     return;
   }
 
-  // Vérifier coureur
+  // Vérification coureur
   const qCoureur = query(collection(db,"coureurs"), where("dossard","==",dossard));
   const snapCoureur = await getDocs(qCoureur);
 
   if(snapCoureur.empty){
-    feedback("❌ Dossard inconnu : "+dossard,"red");
+    feedback("❌ Dossard inconnu","red");
     beepError.play();
     return;
   }
 
   const coureur = snapCoureur.docs[0].data();
+
   if(["DNS","DNF","ELIMINE"].includes(coureur.statut)){
-    feedback("⛔ Coureur non autorisé","red");
+    feedback("⛔ Coureur bloqué","red");
     beepError.play();
     return;
   }
 
-  // Calcul du tour
+  // Calcul tour
   const qTours = query(collection(db,"resultats"), where("dossard","==",dossard));
   const snapTours = await getDocs(qTours);
   const tour = snapTours.size + 1;
 
-  // Enregistrement
+  // ✅ Enregistrement fiable
   await addDoc(collection(db,"resultats"),{
     dossard,
-    type: "PASSAGE",
-    tour: tour,
-    mode: mode,
-    timestamp: serverTimestamp()
+    type:"PASSAGE",
+    tour,
+    mode,
+    timestamp: serverTimestamp(),
+    timestamp_client: Date.now()
   });
 
   beepOk.play();
-  feedback(`✅ Arrivée enregistrée<br>Dossard ${dossard} – Tour ${tour}`,"lime");
+  feedback(`✅ Dossard ${dossard} - Tour ${tour}`, "lime");
 }
 
 /* ---------------------------------------------------------
-   📷 SCAN QR
+   📷 SCANNER QR
 --------------------------------------------------------- */
 const scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
-scanner.render(text=>{
+
+scanner.render(async text => {
+
   const d = text.split("-").pop().replace(/\D/g,"");
-  traiterArrivee(d,"SCAN");
-});
+  if(!d) return;
 
-/* ---------------------------------------------------------
-   🏁 ARRIVÉE MANUELLE
---------------------------------------------------------- */
-document.getElementById("btn-arrivee").onclick = ()=>{
-  const d = document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
-  traiterArrivee(d,"MANUEL");
-};
+  const now = Date.now();
 
-/* ---------------------------------------------------------
-   🏳️ DNF (5 min après passage)
---------------------------------------------------------- */
-document.getElementById("btn-dnf").onclick = async ()=>{
-  const d = document.getElementById("dossard-dnf").value.replace(/\D/g,"");
-
-  if(!(await canDoDNF(d))){
-    feedback("⏳ DNF possible 5 min après le dernier passage","orange");
+  // ✅ ANTI SPAM IMMÉDIAT (clé du problème)
+  if(lastScanLocal[d] && now - lastScanLocal[d] < 10 * 60 * 1000){
+    feedback("⏳ Déjà scanné récemment", "orange");
     beepError.play();
     return;
   }
 
-  const q = query(collection(db,"coureurs"), where("dossard","==",d));
-  const snap = await getDocs(q);
-  if(snap.empty) return feedback("❌ Dossard inconnu","red");
+  // 🔒 On bloque DIRECT
+  lastScanLocal[d] = now;
 
-  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNF" });
-  await addDoc(collection(db,"resultats"),{
-    dossard:d,
-    type:"DNF",
-    timestamp:serverTimestamp()
-  });
+  await traiterArrivee(d,"SCAN");
 
-  beepError.play();
-  feedback("🏳️ DNF enregistré : "+d,"orange");
-};
+});
 
 /* ---------------------------------------------------------
-   🚫 DNS (toujours autorisé)
---------------------------------------------------------- */
-document.getElementById("btn-dns").onclick = async ()=>{
-  const d = document.getElementById("dossard-dns").value.replace(/\D/g,"");
-
-  const q = query(collection(db,"coureurs"), where("dossard","==",d));
-  const snap = await getDocs(q);
-  if(snap.empty) return feedback("❌ Dossard inconnu","red");
-
-  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNS" });
-  await addDoc(collection(db,"resultats"),{
-    dossard:d,
-    type:"DNS",
-    timestamp:serverTimestamp()
-  });
-
-  beepError.play();
-  feedback("🚫 DNS enregistré : "+d,"orange");
-};
-
-/* ---------------------------------------------------------
-   FEEDBACK
+   🎨 FEEDBACK
 --------------------------------------------------------- */
 function feedback(msg,color){
   const f=document.getElementById("feedback");
   f.style.color=color;
   f.innerHTML=msg;
 }
+
 </script>
 
 </body>
