@@ -9,10 +9,10 @@
 
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
-<!-- 🔒 VERROUILLAGE -->
+<!-- 🔒 LOCK -->
 <div id="lock" style="position:fixed;inset:0;background:black;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
   <h2>🔒 Accès protégé</h2>
-  <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px">
+  <input id="pwd" type="password" placeholder="Mot de passe">
   <button onclick="checkPwd()">Entrer</button>
   <div id="err" style="color:red"></div>
 </div>
@@ -49,8 +49,23 @@ checkSession();
 <div id="reader" style="width:320px;margin:20px auto;"></div>
 <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
 
-<input id="arrivee-manuel" placeholder="Dossard">
-<button id="btn-arrivee">ARRIVÉE</button>
+<!-- ✅ ARRIVEE -->
+<div>
+  <input id="arrivee-manuel" placeholder="Dossard arrivée">
+  <button id="btn-arrivee">✅ ARRIVÉE</button>
+</div>
+
+<!-- ✅ DNF -->
+<div>
+  <input id="dossard-dnf" placeholder="Dossard DNF">
+  <button id="btn-dnf">DNF</button>
+</div>
+
+<!-- ✅ DNS -->
+<div>
+  <input id="dossard-dns" placeholder="Dossard DNS">
+  <button id="btn-dns">DNS</button>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
@@ -70,26 +85,22 @@ let startMs = null;
 onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
     startMs = snap.data().startMs;
-
-    // ✅ effet visuel
-    document.getElementById("reader").style.opacity = startMs ? "1" : "0.3";
   }
 });
 
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-// 🔒 anti double scan
+// 🔥 anti double scan
 let lastScan=null;
 let lastScanTime=0;
 let processing=false;
 
-/* ---------------- FUNCTIONS ---------------- */
-
-async function getLastScanTime(d){
+/* ---------------- LAST SCAN ---------------- */
+async function getLastScanTime(dossard){
   const q = query(
     collection(db,"resultats"),
-    where("dossard","==",d),
+    where("dossard","==",dossard),
     orderBy("timestamp","desc"),
     limit(1)
   );
@@ -98,17 +109,23 @@ async function getLastScanTime(d){
   return snap.docs[0].data().timestamp?.toDate()?.getTime() ?? null;
 }
 
+/* ---------------- RULES ---------------- */
 async function canDoPassage(d){
   const last = await getLastScanTime(d);
   if(!last) return true;
-  return Date.now() - last > 10*60*1000;
+  return Date.now() - last > 10 * 60 * 1000;
 }
 
-/* ---------------- MAIN ---------------- */
+async function canDoDNF(d){
+  const last = await getLastScanTime(d);
+  if(!last) return false;
+  return Date.now() - last > 5 * 60 * 1000;
+}
 
+/* ---------------- ARRIVEE ---------------- */
 async function traiterArrivee(dossard, mode){
 
-  // 🔥 blocage si course non lancée
+  // 🔴 blocage avant départ
   if(!startMs){
     feedback("⛔ Course non démarrée","red");
     beepError.play();
@@ -118,31 +135,32 @@ async function traiterArrivee(dossard, mode){
   localStorage.setItem("scanAuthTime", Date.now());
 
   if(!dossard){
-    feedback("❌ invalide","red");
+    feedback("❌ Dossard invalide","red");
     return;
   }
 
   if(!(await canDoPassage(dossard))){
-    feedback("⏳ trop rapide","orange");
+    feedback("⏳ Passage impossible","orange");
     return;
   }
 
   const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",dossard)));
+
   if(snap.empty){
-    feedback("❌ inconnu","red");
+    feedback("❌ Dossard inconnu","red");
     return;
   }
 
   const coureur = snap.docs[0].data();
 
   if(["DNS","DNF","ELIMINE"].includes(coureur.statut)){
-    feedback("⛔ interdit","red");
+    feedback("⛔ Interdit","red");
     return;
   }
 
   const toursSnap = await getDocs(query(collection(db,"resultats"), where("dossard","==",dossard)));
-  let tour=1;
 
+  let tour = 1;
   toursSnap.forEach(doc=>{
     if(doc.data().type==="PASSAGE") tour++;
   });
@@ -167,14 +185,14 @@ async function traiterArrivee(dossard, mode){
   feedback(`✅ Dossard ${dossard} - Tour ${tour}`,couleur);
 }
 
-/* ---------------- SCANNER ---------------- */
-
-const scanner = new Html5QrcodeScanner("reader",{fps:10,qrbox:220});
+/* ---------------- SCAN ---------------- */
+const scanner = new Html5QrcodeScanner("reader",{ fps:10, qrbox:220 });
 
 scanner.render(async (text)=>{
 
+  // ✅ laisse scanner visible mais bloque action
   if(!startMs){
-    feedback("⛔ Scanner bloqué","orange");
+    feedback("⛔ Course non démarrée","orange");
     return;
   }
 
@@ -195,15 +213,67 @@ scanner.render(async (text)=>{
   }
 });
 
-/* ---------------- MANUEL ---------------- */
-
-document.getElementById("btn-arrivee").onclick=()=>{
-  const d=document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
+/* ---------------- ARRIVEE MANUELLE ---------------- */
+document.getElementById("btn-arrivee").onclick = ()=>{
+  const d = document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
   traiterArrivee(d,"MANUEL");
 };
 
-/* ---------------- FEEDBACK ---------------- */
+/* ---------------- DNF ---------------- */
+document.getElementById("btn-dnf").onclick = async ()=>{
+  const d = document.getElementById("dossard-dnf").value.replace(/\D/g,"");
 
+  localStorage.setItem("scanAuthTime", Date.now());
+
+  if(!(await canDoDNF(d))){
+    feedback("⏳ attendre 5 min","orange");
+    return;
+  }
+
+  const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",d)));
+
+  if(snap.empty){
+    feedback("❌ inconnu","red");
+    return;
+  }
+
+  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNF" });
+
+  await addDoc(collection(db,"resultats"),{
+    dossard:d,
+    type:"DNF",
+    timestamp:serverTimestamp()
+  });
+
+  beepError.play();
+  feedback("🏳️ DNF "+d,"orange");
+};
+
+/* ---------------- DNS ---------------- */
+document.getElementById("btn-dns").onclick = async ()=>{
+  const d = document.getElementById("dossard-dns").value.replace(/\D/g,"");
+
+  localStorage.setItem("scanAuthTime", Date.now());
+
+  const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",d)));
+
+  if(snap.empty){
+    feedback("❌ inconnu","red");
+    return;
+  }
+
+  await updateDoc(doc(db,"coureurs",snap.docs[0].id),{ statut:"DNS" });
+
+  await addDoc(collection(db,"resultats"),{
+    dossard:d,
+    type:"DNS",
+    timestamp:serverTimestamp()
+  });
+
+  feedback("🚫 DNS "+d,"orange");
+};
+
+/* ---------------- FEEDBACK ---------------- */
 function feedback(msg,color){
   const f=document.getElementById("feedback");
   f.style.color=color;
@@ -213,4 +283,3 @@ function feedback(msg,color){
 
 </body>
 </html>
-``
