@@ -80,21 +80,54 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let startMs = null;
+let limites = {};
 
-// ✅ écouter le départ de course
+// ✅ écouter départ
 onSnapshot(doc(db,"course","depart"), snap=>{
   if(snap.exists()){
     startMs = snap.data().startMs;
   }
 });
 
+// ✅ écouter limites
+onSnapshot(doc(db,"course","limitesTours"), snap=>{
+  if(snap.exists()){
+    limites = snap.data();
+  }
+});
+
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-// 🔥 anti double scan local
+// 🔥 anti double
 let lastScan=null;
 let lastScanTime=0;
 let processing=false;
+
+/* ---------------- TOUR AUTORISÉ ---------------- */
+function getTourAutorise(){
+
+  if(!startMs) return 0;
+
+  const now = Date.now();
+  const diffMin = (now - startMs) / 60000;
+
+  let cumul = 0;
+
+  for(let i=1;i<=10;i++){
+
+    const limite = limites["t"+i];
+    if(!limite) break;
+
+    cumul += limite;
+
+    if(diffMin < cumul){
+      return i;
+    }
+  }
+
+  return 10;
+}
 
 /* ---------------- LAST SCAN ---------------- */
 async function getLastScanTime(dossard){
@@ -132,11 +165,6 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
-  if(!(await canDoPassage(dossard))){
-    feedback("⏳ Passage impossible (<10 min)","orange");
-    return;
-  }
-
   const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",dossard)));
 
   if(snap.empty){
@@ -147,18 +175,31 @@ async function traiterArrivee(dossard, mode){
   const docRef = snap.docs[0];
   const coureur = docRef.data();
 
-  // 🔴 blocage total si statut final
   if(["DNS","DNF","ELIMINE"].includes(coureur.statut)){
     feedback("⛔ Dossard bloqué ("+coureur.statut+")","red");
     return;
   }
 
-  const toursSnap = await getDocs(query(collection(db,"resultats"), where("dossard","==",dossard)));
-  let tour = 1;
+  if(!(await canDoPassage(dossard))){
+    feedback("⏳ Passage impossible (<10 min)","orange");
+    return;
+  }
 
+  const toursSnap = await getDocs(query(collection(db,"resultats"), where("dossard","==",dossard)));
+
+  let tour = 1;
   toursSnap.forEach(doc=>{
     if(doc.data().type==="PASSAGE") tour++;
   });
+
+  const tourAutorise = getTourAutorise();
+
+  // 🔴 BLOCAGE TOUR
+  if(tour > tourAutorise){
+    feedback(`⛔ Tour ${tour} non ouvert (actuel : ${tourAutorise})`,"red");
+    beepError.play();
+    return;
+  }
 
   await addDoc(collection(db,"resultats"),{
     dossard,
@@ -170,7 +211,6 @@ async function traiterArrivee(dossard, mode){
 
   beepOk.play();
 
-  // ✅ couleur H / F
   let couleur="lime";
   const sexe=(coureur.sexe||"").toUpperCase();
 
@@ -207,15 +247,14 @@ scanner.render(async (text)=>{
   }
 });
 
-/* ---------------- ARRIVEE MANUELLE ---------------- */
+/* ---------------- BOUTONS ---------------- */
 document.getElementById("btn-arrivee").onclick = ()=>{
-  const d = document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
+  const d=document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
   traiterArrivee(d,"MANUEL");
 };
 
-/* ---------------- DNF ---------------- */
 document.getElementById("btn-dnf").onclick = async ()=>{
-  const d = document.getElementById("dossard-dnf").value.replace(/\D/g,"");
+  const d=document.getElementById("dossard-dnf").value.replace(/\D/g,"");
 
   localStorage.setItem("scanAuthTime", Date.now());
 
@@ -246,9 +285,8 @@ document.getElementById("btn-dnf").onclick = async ()=>{
   feedback("🏳️ DNF enregistré : "+d,"orange");
 };
 
-/* ---------------- DNS ---------------- */
 document.getElementById("btn-dns").onclick = async ()=>{
-  const d = document.getElementById("dossard-dns").value.replace(/\D/g,"");
+  const d=document.getElementById("dossard-dns").value.replace(/\D/g,"");
 
   localStorage.setItem("scanAuthTime", Date.now());
 
