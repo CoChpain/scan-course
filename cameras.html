@@ -108,6 +108,8 @@ Caméra 3
 Caméra 4
 </div>
 
+<div id="chrono">00:00:00</div>
+
 </div>
 <center><a href="index.html" style="color:gray">⬅ Retour</a></center>
 
@@ -130,7 +132,7 @@ Caméra 4
 </div>
 
 <div class="camera">
-<iframe src="https://vdo.ninja/?view=ApolloRunDcam4&cleanoutput&transparent&autoplay"></iframe>
+<iframe src="https://cochpain.github.io/scan-course/resultats.html"></iframe>
 </div>
 
 </div>
@@ -183,12 +185,59 @@ Caméra 4
 
 <div class="camera">
 
-<iframe src="https://vdo.ninja/?view=ApolloRunDcam4&cleanoutput&transparent&autoplay"></iframe>
+<iframe src="https://cochpain.github.io/scan-course/resultats.html"></iframe>
 
 </div>
 
 </div>
+<script type="module">
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let startMs = null;
+let chronoInterval = null;
+
+function afficherChrono(){
+
+  const el = document.getElementById("chrono");
+
+  if(!startMs){
+    el.textContent = "00:00:00";
+    return;
+  }
+
+  if(chronoInterval) clearInterval(chronoInterval);
+
+  chronoInterval = setInterval(()=>{
+    const diff = Date.now() - startMs;
+
+    const s = Math.floor(diff/1000);
+    const h = String(Math.floor(s/3600)).padStart(2,"0");
+    const m = String(Math.floor((s%3600)/60)).padStart(2,"0");
+    const sec = String(s%60).padStart(2,"0");
+
+    el.textContent = h + ":" + m + ":" + sec;
+  },1000);
+}
+
+/* 🔥 écoute en temps réel du chrono */
+onSnapshot(doc(db,"course","depart"), snap=>{
+
+  if(snap.exists()){
+    startMs = snap.data().startMs ?? null;
+  } else {
+    startMs = null;
+  }
+
+  afficherChrono();
+});
+
+</script>
 
 
 <script>
