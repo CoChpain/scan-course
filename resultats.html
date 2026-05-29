@@ -326,7 +326,7 @@ window.afficherTour=function(tour){
         r.dns ? "red fade" :
         r.dnf ? "red fade" :
         r.horsDelai ? "red fade" :
-        (c.categorie==="F" ? "femme fade" : "fade");
+        (c.sexe==="F" ? "femme fade" : "fade");
 
       const labelTemps =
         r.dns ? "DNS" :
@@ -437,7 +437,7 @@ window.afficherGeneral=function(){
       const c=coureursMap[r.dossard]||{};
       const classe = ["DNF","DNS","ELIMINE"].includes(r.statut)
         ? "red fade"
-        : (c.categorie==="F"?"femme fade":"fade");
+        : (c.sexe==="F"?"femme fade":"fade");
 
       html+=`
         <tr class="${classe}">
