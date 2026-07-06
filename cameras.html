@@ -15,6 +15,14 @@ height:100vh;
 display:flex;
 flex-direction:column;
 }
+  
+#chrono{
+margin-left:auto;
+padding:15px 25px;
+font-size:24px;
+font-weight:bold;
+color:#00ff88;
+}
 
 /* barre onglets */
 
@@ -91,6 +99,10 @@ grid-template-columns:1fr;
 <div class="tab active" data-target="all">
 Toutes les caméras
 </div>
+  
+<div class="tab" data-target="live">
+Caméras + Résultats
+</div>
 
 <div class="tab" data-target="cam1">
 Caméra 1
@@ -139,7 +151,41 @@ Caméra 4
 
 </div>
 
+<!-- COURSE LIVE -->
 
+<div id="live" class="content">
+
+<div style="
+display:grid;
+grid-template-columns:40% 60%;
+gap:15px;
+height:100%;
+">
+
+<div style="
+display:grid;
+grid-template-rows:1fr 1fr;
+gap:15px;
+height:100%;
+">
+
+<div class="camera">
+<iframe/vdo.ninja/?view=ApolloRunAcam1&cleanoutput&transparent&autoplay
+</div>
+
+<div class="camera">
+<iframe src="https://vdo.ninja/?view=Apollonoutput&transparent&autoplay
+</div>
+
+</div>
+
+<div class="camera">
+https://cochpain.github.io/scan-course/resultats.html"></iframe>
+</div>
+
+</div>
+
+</div>
 <!-- cam1 -->
 
 <div id="cam1" class="content">
