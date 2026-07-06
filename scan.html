@@ -70,9 +70,17 @@ checkSession();
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
-  getFirestore, collection, query, where, getDocs,
-  addDoc, updateDoc, doc,
-  serverTimestamp, orderBy, limit, onSnapshot
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+  onSnapshot,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -129,24 +137,50 @@ function getTourAutorise(){
   return 10;
 }
 
-/* ---------------- LAST SCAN ---------------- */
-async function getLastScanTime(dossard){
-  const q = query(
-    collection(db,"resultats"),
-    where("dossard","==",dossard),
-    orderBy("timestamp","desc"),
-    limit(1)
-  );
-  const snap = await getDocs(q);
-  if(snap.empty) return null;
-  return snap.docs[0].data().timestamp?.toDate()?.getTime() ?? null;
-}
+/* ---------------- CONTROLE GLOBAL 10 MINUTES ---------------- */
 
-/* ---------------- RULES ---------------- */
-async function canDoPassage(d){
-  const last = await getLastScanTime(d);
-  if(!last) return true;
-  return Date.now() - last > 10 * 60 * 1000;
+async function reservePassage(dossard){
+
+  const ref = doc(db, "controlePassages", dossard);
+
+  try{
+
+    await runTransaction(db, async(transaction)=>{
+
+      const snap = await transaction.get(ref);
+      const now = Date.now();
+
+      if(snap.exists()){
+
+        const data = snap.data();
+
+        if(data.lastScan){
+
+          const last = data.lastScan.toMillis();
+
+          if((now - last) < 10 * 60 * 1000){
+            throw new Error("TOO_EARLY");
+          }
+        }
+      }
+
+      transaction.set(ref,{
+        lastScan: new Date()
+      });
+
+    });
+
+    return true;
+
+  }catch(error){
+
+    if(error.message === "TOO_EARLY"){
+      return false;
+    }
+
+    console.error(error);
+    throw error;
+  }
 }
 
 /* ---------------- ARRIVEE ---------------- */
@@ -180,10 +214,13 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
-  if(!(await canDoPassage(dossard))){
-    feedback("⏳ Passage impossible (<10 min)","orange");
-    return;
-  }
+ const autorise = await reservePassage(dossard);
+
+if(!autorise){
+  feedback("⏳ Dossard déjà scanné il y a moins de 10 min","orange");
+  beepError.play();
+  return;
+}
 
   const toursSnap = await getDocs(query(collection(db,"resultats"), where("dossard","==",dossard)));
 
