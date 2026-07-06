@@ -185,12 +185,16 @@ height:100%;
 
   <!-- RESULTATS A DROITE -->
 
-  <div class="camera">
-    <iframe
-    id="liveResults"
-    src="https://cochpain.github.io/scan-course/resultats.html">
-</iframe>
-  </div>
+<div class="camera" id="resultatsContainer" style="
+overflow-y:auto;
+height:100%;
+">
+
+  <iframe
+  src="https://cochpain.github.io/scan-course/resultats.html">
+  </iframe>
+
+</div>
 
 </div>
 
@@ -318,8 +322,8 @@ document.getElementById(tab.dataset.target).classList.add("active");
 
 <script>
 
-let scrollDirection = 1;
-let scrollPause = false;
+let dir = 1;
+let pause = false;
 
 setInterval(() => {
 
@@ -327,55 +331,37 @@ setInterval(() => {
 
   if(!liveTab.classList.contains("active")) return;
 
-  const iframe = document.getElementById("liveResults");
+  const container = document.getElementById("resultatsContainer");
 
-  if(!iframe) return;
+  if(!container) return;
 
-  try{
+  const maxScroll =
+    container.scrollHeight - container.clientHeight;
 
-    const doc = iframe.contentWindow.document;
+  if(maxScroll <= 0) return;
 
-    const maxScroll =
-      doc.documentElement.scrollHeight -
-      iframe.contentWindow.innerHeight;
+  if(pause) return;
 
-    if(maxScroll <= 0) return;
+  container.scrollTop += dir;
 
-    if(scrollPause) return;
+  if(container.scrollTop >= maxScroll){
 
-    const current = iframe.contentWindow.scrollY;
+    pause = true;
 
-    iframe.contentWindow.scrollTo(
-      0,
-      current + scrollDirection
-    );
+    setTimeout(() => {
+      dir = -1;
+      pause = false;
+    },3000);
+  }
 
-    if(current >= maxScroll - 5){
+  if(container.scrollTop <= 0 && dir < 0){
 
-      scrollPause = true;
+    pause = true;
 
-      setTimeout(()=>{
-        scrollDirection = -1;
-        scrollPause = false;
-      },3000);
-
-    }
-
-    if(current <= 5 && scrollDirection < 0){
-
-      scrollPause = true;
-
-      setTimeout(()=>{
-        scrollDirection = 1;
-        scrollPause = false;
-      },3000);
-
-    }
-
-  }catch(e){
-
-    // Ignore si navigateur bloque l'accès à l'iframe
-
+    setTimeout(() => {
+      dir = 1;
+      pause = false;
+    },3000);
   }
 
 },40);
