@@ -185,7 +185,10 @@ height:100%;
   <!-- RESULTATS A DROITE -->
 
   <div class="camera">
-    <iframe src="https://cochpain.github.io/scan-course/resultats.html"></iframe>
+    <iframe
+    id="liveResults"
+    src="https://cochpain.github.io/scan-course/resultats.html">
+</iframe>
   </div>
 
 </div>
@@ -312,6 +315,70 @@ document.getElementById(tab.dataset.target).classList.add("active");
 
 </script>
 
+<script>
 
+let scrollDirection = 1;
+let scrollPause = false;
+
+setInterval(() => {
+
+  const liveTab = document.getElementById("live");
+
+  if(!liveTab.classList.contains("active")) return;
+
+  const iframe = document.getElementById("liveResults");
+
+  if(!iframe) return;
+
+  try{
+
+    const doc = iframe.contentWindow.document;
+
+    const maxScroll =
+      doc.documentElement.scrollHeight -
+      iframe.contentWindow.innerHeight;
+
+    if(maxScroll <= 0) return;
+
+    if(scrollPause) return;
+
+    const current = iframe.contentWindow.scrollY;
+
+    iframe.contentWindow.scrollTo(
+      0,
+      current + scrollDirection
+    );
+
+    if(current >= maxScroll - 5){
+
+      scrollPause = true;
+
+      setTimeout(()=>{
+        scrollDirection = -1;
+        scrollPause = false;
+      },3000);
+
+    }
+
+    if(current <= 5 && scrollDirection < 0){
+
+      scrollPause = true;
+
+      setTimeout(()=>{
+        scrollDirection = 1;
+        scrollPause = false;
+      },3000);
+
+    }
+
+  }catch(e){
+
+    // Ignore si navigateur bloque l'accès à l'iframe
+
+  }
+
+},40);
+
+</script>
 </body>
 </html>
