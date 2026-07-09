@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ADMIN – APOLLO RUN</title>
   <style>
-    
     :root {
       --bg-primary: #000;
       --bg-secondary: #111;
@@ -202,7 +201,7 @@
       display: block;
     }
 
-    /* --- Verrouillage (style original conservé) --- */
+    /* --- Verrouillage (style original) --- */
     #lock {
       position: fixed;
       top: 0;
@@ -249,7 +248,6 @@
     }
   </style>
 </head>
-  
 
 <body>
   <!-- 🔐 VERROUILLAGE (style et structure ORIGINAUX) -->
@@ -267,64 +265,40 @@
   <!-- Onglets -->
   <div class="tabs">
     <button class="tab-btn active" onclick="openTab('chrono-tab', this)">⏱️ Chrono</button>
-    <button class="tab-btn" onclick="openTab('reset-coureurs-tab', this)">🗑️ Réinitialiser base coureurs</button>
-    <button class="tab-btn" onclick="openTab('reset-resultats-tab', this)">🗑️ Réinitialiser les résultats</button>
-    <button class="tab-btn" onclick="openTab('modifier-temps-tab', this)">✏️ Modifier un temps</button>
+    <button class="tab-btn" onclick="openTab('coureurs-tab', this)">👥 Gestion coureurs</button>
+    <button class="tab-btn" onclick="openTab('scans-tab', this)">📡 Gestion scans</button>
+    <button class="tab-btn" onclick="openTab('resultats-tab', this)">🏆 Résultats</button>
+    <button class="tab-btn" onclick="openTab('tours-tab', this)">🔄 Durée des tours</button>
   </div>
 
   <hr>
 
-  <!-- Contenu des onglets -->
+  <!-- Onglet Chrono -->
   <div id="chrono-tab" class="tab-content active">
-    <!-- ⏱️ CHRONO -->
     <h2>⏱️ Départ de la course</h2>
     <div class="action-buttons">
       <button id="btn-start" onclick="startChrono()" class="btn-success">🚀 Lancer le chrono</button>
       <button id="btn-reset" onclick="resetChrono()" class="btn-danger">🔁 Réinitialiser le chrono</button>
     </div>
     <div id="chrono-status" class="message">Chrono en attente…</div>
+  </div>
 
-    <hr>
+  <!-- Onglet Gestion coureurs -->
+  <div id="coureurs-tab" class="tab-content">
+    <h2>👥 Gestion des coureurs</h2>
 
-    <!-- 🔍 RECHERCHE COUREUR -->
-    <h2>🔍 Rechercher un coureur</h2>
+    <!-- Rechercher un coureur -->
+    <h3>🔍 Rechercher un coureur</h3>
     <div class="form-group">
       <input id="search-dossard" type="text" placeholder="Dossard">
       <button onclick="searchRunner()">Rechercher</button>
     </div>
     <div id="runner-info"></div>
-    <div id="scan-list"></div>
 
     <hr>
 
-    <!-- ➕ AJOUT / MODIFICATION SCAN -->
-    <h2>➕ Ajouter un scan manuellement</h2>
-    <div class="form-group">
-      <input id="add-dossard" type="text" placeholder="Dossard">
-      <input id="add-tour" type="number" placeholder="Tour" min="1">
-      <input id="add-time" type="text" placeholder="Temps (HH:MM:SS)" pattern="\d{2}:\d{2}:\d{2}">
-      <button onclick="addScan()">Ajouter</button>
-    </div>
-
-    <hr>
-
-    <!-- ⚙️ MODIFIER STATUT -->
-    <h2>⚙️ Modifier statut coureur</h2>
-    <div class="form-group">
-      <input id="status-dossard" type="text" placeholder="Dossard">
-      <select id="status-select">
-        <option value="OK">OK</option>
-        <option value="DNS">DNS</option>
-        <option value="DNF">DNF</option>
-        <option value="ELIMINE">Éliminé</option>
-      </select>
-      <button onclick="updateStatus()">Mettre à jour</button>
-    </div>
-
-    <hr>
-
-    <!-- ➕ AJOUT / MODIFICATION COUREUR -->
-    <h2>➕ Ajouter / Modifier un coureur</h2>
+    <!-- Ajouter / Modifier un coureur -->
+    <h3>➕ Ajouter / Modifier un coureur</h3>
     <div class="form-group">
       <input id="c-dossard" type="text" placeholder="Dossard">
       <input id="c-nom" type="text" placeholder="Nom">
@@ -339,37 +313,76 @@
 
     <hr>
 
-    <!-- 📋 TABLEAU DES COUREURS -->
-    <h2>
-      📋 Liste complète des coureurs
-      <button onclick="toggleCoureurs()" style="margin-left: 15px; padding: 5px 12px; font-size: 14px;">👁️ Afficher / Masquer</button>
-    </h2>
+    <!-- Modifier statut coureur -->
+    <h3>⚙️ Modifier statut coureur</h3>
+    <div class="form-group">
+      <input id="status-dossard" type="text" placeholder="Dossard">
+      <select id="status-select">
+        <option value="OK">OK</option>
+        <option value="DNS">DNS</option>
+        <option value="DNF">DNF</option>
+        <option value="ELIMINE">Éliminé</option>
+      </select>
+      <button onclick="updateStatus()">Mettre à jour</button>
+    </div>
+
+    <hr>
+
+    <!-- Liste complète des coureurs -->
+    <h3>📋 Liste complète des coureurs</h3>
+    <button onclick="toggleCoureurs()" style="margin-bottom: 10px; padding: 5px 12px;">👁️ Afficher / Masquer</button>
     <div id="table-coureurs" style="display: none;"></div>
     <div id="edit-runner-scans"></div>
   </div>
 
-  <!-- Onglet Réinitialiser coureurs -->
-  <div id="reset-coureurs-tab" class="tab-content">
-    <h2>🗑️ Réinitialiser la base coureurs</h2>
+  <!-- Onglet Gestion scans -->
+  <div id="scans-tab" class="tab-content">
+    <h2>📡 Gestion des scans</h2>
+
+    <!-- Ajouter un scan manuellement -->
+    <h3>➕ Ajouter un scan manuellement</h3>
+    <div class="form-group">
+      <input id="add-dossard" type="text" placeholder="Dossard">
+      <input id="add-tour" type="number" placeholder="Tour" min="1">
+      <input id="add-time" type="text" placeholder="Temps (HH:MM:SS)" pattern="\d{2}:\d{2}:\d{2}">
+      <button onclick="addScan()">Ajouter</button>
+    </div>
+    <div id="scan-add-status" class="message"></div>
+
+    <hr>
+
+    <!-- Scans du coureur sélectionné -->
+    <h3>⏱️ Scans du coureur</h3>
+    <div id="scan-list"></div>
+  </div>
+
+  <!-- Onglet Résultats -->
+  <div id="resultats-tab" class="tab-content">
+    <h2>🏆 Réinitialisation des données</h2>
+
+    <h3>🗑️ Réinitialiser la base coureurs</h3>
     <div class="action-buttons">
       <button onclick="resetCoureurs()" class="btn-danger">⚠️ Supprimer TOUS les coureurs</button>
     </div>
     <div id="reset-coureurs-status" class="message warning"></div>
-  </div>
 
-  <!-- Onglet Réinitialiser résultats -->
-  <div id="reset-resultats-tab" class="tab-content">
-    <h2>🗑️ Réinitialiser les résultats</h2>
+    <hr>
+
+    <h3>🗑️ Réinitialiser les résultats</h3>
     <div class="action-buttons">
       <button onclick="resetResultats()" class="btn-danger">⚠️ Supprimer TOUS les résultats</button>
     </div>
     <div id="reset-resultats-status" class="message warning"></div>
   </div>
 
-  <!-- Onglet Modifier un temps -->
-  <div id="modifier-temps-tab" class="tab-content">
-    <h2>✏️ Modifier un temps</h2>
-    <p>Utilisez la recherche de coureur pour modifier ses scans.</p>
+  <!-- Onglet Durée des tours -->
+  <div id="tours-tab" class="tab-content">
+    <h2>🔄 Durée des tours</h2>
+    <div id="tour-settings"></div>
+    <div class="action-buttons">
+      <button onclick="saveTourDurations()" class="btn-success">💾 Enregistrer les durées</button>
+    </div>
+    <div id="tour-save-status" class="message"></div>
   </div>
 
   <!-- Firebase et Scripts -->
@@ -380,7 +393,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import {
       getFirestore, collection, query, where, getDocs,
-      doc, updateDoc, deleteDoc, addDoc, onSnapshot, getDoc, setDoc
+      doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -392,6 +405,7 @@
     // ======================
     let startMs = null;
     let chronoInterval = null;
+    let currentRunnerDossard = null;
 
     // ======================
     // 🎨 Fonctions UI
@@ -409,15 +423,18 @@
     };
 
     // ======================
-    // 🔐 Vérification mot de passe (logique originale)
+    // 🔐 Vérification mot de passe
     // ======================
     window.checkPwd = function() {
       const good = "3sRunTravel2026";
       const val = document.getElementById("pwd").value;
       if (val === good) {
         document.getElementById("lock").style.display = "none";
+        document.getElementById("err").textContent = "";
       } else {
-        document.getElementById("err").innerHTML = "Mot de passe incorrect";
+        document.getElementById("err").textContent = "Mot de passe incorrect";
+        document.getElementById("pwd").value = "";
+        document.getElementById("pwd").focus();
       }
     };
 
@@ -434,157 +451,8 @@
       if (chronoInterval) clearInterval(chronoInterval);
       chronoInterval = setInterval(() => {
         const diff = Date.now() - startMs;
-        const s = Math.floor(diff / 1000);
-        const h = String(Math.floor(s / 3600)).padStart(2, "0");
-        const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-        const sec = String(s % 60).padStart(2, "0");
-        zone.innerHTML = `⏱ Temps écoulé : <b>${h}:${m}:${sec}</b>`;
+        zone.innerHTML = `⏱ Temps écoulé : <b>${formatTime(diff)}</b>`;
       }, 1000);
-    }
-
-    onSnapshot(doc(db, "course", "depart"), snap => {
-      if (snap.exists()) {
-        startMs = snap.data().startMs ?? null;
-      } else {
-        startMs = null;
-      }
-      afficherChrono();
-      const btnStart = document.getElementById("btn-start");
-      if (startMs) {
-        btnStart.disabled = true;
-        btnStart.style.opacity = "0.5";
-        btnStart.style.cursor = "not-allowed";
-      } else {
-        btnStart.disabled = false;
-        btnStart.style.opacity = "1";
-        btnStart.style.cursor = "pointer";
-      }
-    });
-
-    window.startChrono = async function() {
-      if (startMs) {
-        document.getElementById("chrono-status").innerHTML = "⚠️ Le chrono est déjà lancé.";
-        return;
-      }
-      if (!confirm("⚠️ Lancer le chrono ?")) return;
-      const now = Date.now();
-      await setDoc(doc(db, "course", "depart"), { startMs: now }, { merge: true });
-      startMs = now;
-      afficherChrono();
-      const btn = document.getElementById("btn-start");
-      btn.disabled = true;
-      btn.style.opacity = "0.5";
-      btn.style.cursor = "not-allowed";
-    };
-
-    window.resetChrono = async function() {
-      if (!confirm("⚠️ Réinitialiser le chrono ?")) return;
-      if (!confirm("⚠️ Tous les chronos repartiront de zéro.")) return;
-      if (!confirm("⚠️ Dernière confirmation.")) return;
-      await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
-      startMs = null;
-      afficherChrono();
-      const btn = document.getElementById("btn-start");
-      btn.disabled = false;
-      btn.style.opacity = "1";
-      btn.style.cursor = "pointer";
-    };
-
-    // ======================
-    // 🗑️ Réinitialisation
-    // ======================
-    window.resetCoureurs = async function() {
-      if (!confirm("⚠️ Supprimer TOUS les coureurs ?")) return;
-      if (!confirm("⚠️ Cette action est irréversible.")) return;
-      if (!confirm("⚠️ Dernière confirmation.")) return;
-      const snap = await getDocs(collection(db, "coureurs"));
-      let count = 0;
-      for (const docu of snap.docs) {
-        await deleteDoc(doc(db, "coureurs", docu.id));
-        count++;
-      }
-      document.getElementById("reset-coureurs-status").innerHTML = `🗑️ ${count} coureurs supprimés.`;
-    };
-
-    window.resetResultats = async function() {
-      if (!confirm("⚠️ Supprimer TOUS les résultats ?")) return;
-      if (!confirm("⚠️ Cette action est irréversible.")) return;
-      if (!confirm("⚠️ Dernière confirmation.")) return;
-      const snap = await getDocs(collection(db, "resultats"));
-      let count = 0;
-      for (const docu of snap.docs) {
-        await deleteDoc(doc(db, "resultats", docu.id));
-        count++;
-      }
-      document.getElementById("reset-resultats-status").innerHTML = `🗑️ ${count} résultats supprimés.`;
-    };
-
-    // ======================
-    // 🔍 Recherche coureur
-    // ======================
-    window.searchRunner = async function() {
-      const dossard = document.getElementById("search-dossard").value.trim();
-      if (!dossard) return;
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        document.getElementById("runner-info").innerHTML = "<p class='message error'>Coureur introuvable</p>";
-        document.getElementById("scan-list").innerHTML = "";
-        return;
-      }
-      const data = snap.docs[0].data();
-      document.getElementById("runner-info").innerHTML = `
-        <div class="message success">
-          <h3>${data.nom} ${data.prenom}</h3>
-          <p>Dossard : ${data.dossard}</p>
-          <p>Statut : ${data.statut}</p>
-        </div>
-      `;
-      loadScans(dossard);
-    };
-
-    // ======================
-    // 📄 Liste des scans
-    // ======================
-    async function loadScans(dossard) {
-      const q = query(collection(db, "resultats"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        document.getElementById("scan-list").innerHTML = "<p class='message'>Aucun scan trouvé pour ce coureur.</p>";
-        return;
-      }
-      let html = `
-        <h3>⏱️ Scans du coureur</h3>
-        <table>
-          <tr>
-            <th>Tour</th>
-            <th>Temps</th>
-            <th>Hors délai</th>
-            <th>Actions</th>
-          </tr>
-      `;
-      snap.forEach(docu => {
-        const r = docu.data();
-        const id = docu.id;
-        let temps = "--:--:--";
-        if (r.timestamp && startMs) {
-          const diff = r.timestamp.toDate().getTime() - startMs;
-          temps = formatTime(diff);
-        }
-        html += `
-          <tr>
-            <td>${r.tour ?? "-"}</td>
-            <td>${temps}</td>
-            <td>${r.horsDelai ? "Oui" : "Non"}</td>
-            <td>
-              <button onclick="editScan('${id}', ${r.tour ?? 0}, '${r.dossard}')">Modifier</button>
-              <button onclick="deleteScan('${id}')" class="btn-danger">Supprimer</button>
-            </td>
-          </tr>
-        `;
-      });
-      html += "</table>";
-      document.getElementById("scan-list").innerHTML = html;
     }
 
     function formatTime(ms) {
@@ -595,214 +463,461 @@
       return `${h}:${m}:${sec}`;
     }
 
-    // ======================
-    // ✏️ Modifier un scan
-    // ======================
-    window.editScan = async function(id, tour, oldDossard) {
-      const newTime = prompt("Temps écoulé (HH:MM:SS) ?");
-      if (!newTime) return;
-      const [h, m, s] = newTime.split(":").map(Number);
-      const ms = (h * 3600 + m * 60 + s) * 1000;
-      if (!startMs) {
-        alert("Chrono non défini, impossible de recalculer le timestamp.");
+    function updateChronoButtonState() {
+      const btnStart = document.getElementById("btn-start");
+      if (startMs) {
+        btnStart.disabled = true;
+        btnStart.style.opacity = "0.5";
+        btnStart.style.cursor = "not-allowed";
+      } else {
+        btnStart.disabled = false;
+        btnStart.style.opacity = "1";
+        btnStart.style.cursor = "pointer";
+      }
+    }
+
+    // Écouteur Firebase pour le chrono
+    onSnapshot(doc(db, "course", "depart"), snap => {
+      if (snap.exists()) {
+        startMs = snap.data().startMs ?? null;
+      } else {
+        startMs = null;
+      }
+      afficherChrono();
+      updateChronoButtonState();
+    });
+
+    window.startChrono = async function() {
+      if (startMs) {
+        document.getElementById("chrono-status").innerHTML = "⚠️ Le chrono est déjà lancé.";
         return;
       }
-      const timestamp = new Date(startMs + ms);
-      const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")")?.trim();
-      const dossardFinal = newDossard || oldDossard;
-      await updateDoc(doc(db, "resultats", id), {
-        timestamp: timestamp,
-        dossard: dossardFinal
-      });
-      alert("Scan modifié !");
-      searchRunner();
+      if (!confirm("⚠️ Lancer le chrono ? Cette action est irréversible.")) return;
+      try {
+        const now = Date.now();
+        await setDoc(doc(db, "course", "depart"), { startMs: now }, { merge: true });
+        startMs = now;
+        afficherChrono();
+        updateChronoButtonState();
+      } catch (error) {
+        document.getElementById("chrono-status").innerHTML = `❌ Erreur : ${error.message}`;
+      }
+    };
+
+    window.resetChrono = async function() {
+      if (!confirm("⚠️ Réinitialiser le chrono ? Tous les chronos repartiront de zéro.")) return;
+      if (!confirm("⚠️ Dernière confirmation.")) return;
+      try {
+        await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
+        startMs = null;
+        afficherChrono();
+        updateChronoButtonState();
+      } catch (error) {
+        document.getElementById("chrono-status").innerHTML = `❌ Erreur : ${error.message}`;
+      }
     };
 
     // ======================
-    // ❌ Supprimer un scan
+    // 👥 Gestion des coureurs
     // ======================
-    window.deleteScan = async function(id) {
-      await deleteDoc(doc(db, "resultats", id));
-      alert("Scan supprimé !");
-      searchRunner();
-    };
-
-    // ======================
-    // ➕ Ajouter un scan
-    // ======================
-    window.addScan = async function() {
-      const dossard = document.getElementById("add-dossard").value.trim();
-      const tour = Number(document.getElementById("add-tour").value);
-      const time = document.getElementById("add-time").value;
-      if (!dossard || !tour || !time) return alert("Champs incomplets");
-      const [h, m, s] = time.split(":").map(Number);
-      const ms = (h * 3600 + m * 60 + s) * 1000;
-      if (!startMs) {
-        alert("Chrono non défini, impossible de calculer le timestamp.");
+    window.searchRunner = async function() {
+      const dossard = document.getElementById("search-dossard").value.trim();
+      if (!dossard) {
+        document.getElementById("runner-info").innerHTML = "<p class='message error'>⚠️ Veuillez entrer un numéro de dossard.</p>";
         return;
       }
-      const timestamp = new Date(startMs + ms);
-      await addDoc(collection(db, "resultats"), {
-        dossard,
-        tour,
-        timestamp,
-        horsDelai: false
-      });
-      alert("Scan ajouté !");
-      searchRunner();
+      try {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          document.getElementById("runner-info").innerHTML = "<p class='message error'>❌ Coureur introuvable</p>";
+          document.getElementById("scan-list").innerHTML = "";
+          currentRunnerDossard = null;
+          return;
+        }
+        const data = snap.docs[0].data();
+        currentRunnerDossard = dossard;
+        document.getElementById("runner-info").innerHTML = `
+          <div class="message success">
+            <h3>${data.nom} ${data.prenom}</h3>
+            <p>Dossard : ${data.dossard}</p>
+            <p>Catégorie : ${data.categorie === "H" ? "Homme" : "Femme"}</p>
+            <p>Statut : ${data.statut}</p>
+          </div>
+        `;
+        // Charger les scans dans l'onglet "Gestion scans"
+        openTab('scans-tab', document.querySelector('.tab-btn[onclick*="scans-tab"]'));
+        loadScans(dossard);
+      } catch (error) {
+        document.getElementById("runner-info").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
+      }
     };
 
-    // ======================
-    // 🔄 Modifier statut
-    // ======================
-    window.updateStatus = async function() {
-      const dossard = document.getElementById("status-dossard").value.trim();
-      const statut = document.getElementById("status-select").value;
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-      if (snap.empty) return alert("Coureur introuvable");
-      const id = snap.docs[0].id;
-      await updateDoc(doc(db, "coureurs", id), { statut });
-      alert("Statut mis à jour !");
-      searchRunner();
-    };
-
-    // ======================
-    // ➕ Ajouter / Modifier un coureur
-    // ======================
     window.saveRunner = async function() {
       const dossard = document.getElementById("c-dossard").value.trim();
       const nom = document.getElementById("c-nom").value.trim();
       const prenom = document.getElementById("c-prenom").value.trim();
       const sexe = document.getElementById("c-sexe").value;
+      const statusDiv = document.getElementById("runner-save-status");
+
       if (!dossard || !nom || !prenom) {
-        document.getElementById("runner-save-status").innerHTML = "⚠️ Merci de remplir tous les champs.";
-        document.getElementById("runner-save-status").className = "message error";
+        statusDiv.innerHTML = "⚠️ Merci de remplir tous les champs.";
+        statusDiv.className = "message error";
         return;
       }
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        await addDoc(collection(db, "coureurs"), {
-          dossard, nom, prenom, categorie: sexe, statut: "OK"
-        });
-        document.getElementById("runner-save-status").innerHTML = "✅ Coureur ajouté avec succès.";
-        document.getElementById("runner-save-status").className = "message success";
-      } else {
-        const id = snap.docs[0].id;
-        await updateDoc(doc(db, "coureurs", id), { nom, prenom, categorie: sexe });
-        document.getElementById("runner-save-status").innerHTML = "✏️ Coureur mis à jour.";
-        document.getElementById("runner-save-status").className = "message success";
+
+      try {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          await addDoc(collection(db, "coureurs"), {
+            dossard, nom, prenom, categorie: sexe, statut: "OK"
+          });
+          statusDiv.innerHTML = "✅ Coureur ajouté avec succès.";
+          statusDiv.className = "message success";
+        } else {
+          const id = snap.docs[0].id;
+          await updateDoc(doc(db, "coureurs", id), { nom, prenom, categorie: sexe });
+          statusDiv.innerHTML = "✏️ Coureur mis à jour.";
+          statusDiv.className = "message success";
+        }
+        // Réinitialiser le formulaire
+        document.getElementById("c-dossard").value = "";
+        document.getElementById("c-nom").value = "";
+        document.getElementById("c-prenom").value = "";
+        // Recharger la liste des coureurs
+        loadAllRunners();
+      } catch (error) {
+        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+        statusDiv.className = "message error";
       }
-      document.getElementById("c-dossard").value = "";
-      document.getElementById("c-nom").value = "";
-      document.getElementById("c-prenom").value = "";
     };
 
-    // ======================
-    // 📋 Tableau complet des coureurs
-    // ======================
-    onSnapshot(collection(db, "coureurs"), snap => {
-      let liste = [];
-      snap.forEach(docu => {
-        const c = docu.data();
-        if (c.dossard) liste.push(c);
-      });
-      liste.sort((a, b) => Number(a.dossard) - Number(b.dossard));
-      let html = `
-        <table>
-          <tr>
-            <th>Dossard</th>
-            <th>Nom</th>
-            <th>Prénom</th>
-            <th>Sexe</th>
-            <th>Statut</th>
-            <th>Action</th>
-          </tr>
-      `;
-      liste.forEach(c => {
-        html += `
-          <tr>
-            <td>${c.dossard}</td>
-            <td>${c.nom}</td>
-            <td>${c.prenom}</td>
-            <td>${c.categorie === "H" ? "Homme" : "Femme"}</td>
-            <td>${c.statut}</td>
-            <td>
-              <button onclick="editRunner('${c.dossard}', '${c.nom}', '${c.prenom}', '${c.categorie}')">
-                Modifier
-              </button>
-            </td>
-          </tr>
-        `;
-      });
-      html += "</table>";
-      document.getElementById("table-coureurs").innerHTML = html;
-    });
+    window.updateStatus = async function() {
+      const dossard = document.getElementById("status-dossard").value.trim();
+      const statut = document.getElementById("status-select").value;
 
-    // ======================
-    // ✏️ Remplir le formulaire + afficher scans
-    // ======================
+      if (!dossard) {
+        alert("⚠️ Veuillez entrer un numéro de dossard.");
+        return;
+      }
+
+      try {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          alert("❌ Coureur introuvable");
+          return;
+        }
+        const id = snap.docs[0].id;
+        await updateDoc(doc(db, "coureurs", id), { statut });
+        alert("✅ Statut mis à jour !");
+        // Recharger la liste des coureurs
+        loadAllRunners();
+      } catch (error) {
+        alert(`❌ Erreur : ${error.message}`);
+      }
+    };
+
+    // Charger tous les coureurs pour le tableau
+    function loadAllRunners() {
+      onSnapshot(collection(db, "coureurs"), snap => {
+        try {
+          let liste = [];
+          snap.forEach(docu => {
+            const c = docu.data();
+            if (c.dossard) liste.push({ ...c, id: docu.id });
+          });
+          liste.sort((a, b) => Number(a.dossard) - Number(b.dossard));
+
+          let html = `
+            <table>
+              <tr>
+                <th>Dossard</th>
+                <th>Nom</th>
+                <th>Prénom</th>
+                <th>Sexe</th>
+                <th>Statut</th>
+                <th>Action</th>
+              </tr>
+          `;
+
+          liste.forEach(c => {
+            html += `
+              <tr>
+                <td>${c.dossard}</td>
+                <td>${c.nom}</td>
+                <td>${c.prenom}</td>
+                <td>${c.categorie === "H" ? "Homme" : "Femme"}</td>
+                <td>${c.statut}</td>
+                <td>
+                  <button onclick="editRunner('${c.dossard}', '${c.nom}', '${c.prenom}', '${c.categorie}')">
+                    Modifier
+                  </button>
+                </td>
+              </tr>
+            `;
+          });
+
+          html += "</table>";
+          document.getElementById("table-coureurs").innerHTML = html;
+        } catch (error) {
+          document.getElementById("table-coureurs").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
+        }
+      });
+    }
+
     window.editRunner = async function(dossard, nom, prenom, sexe) {
       document.getElementById("c-dossard").value = dossard;
       document.getElementById("c-nom").value = nom;
       document.getElementById("c-prenom").value = prenom;
       document.getElementById("c-sexe").value = sexe;
-      document.getElementById("runner-save-status").innerHTML = "✏️ Modification du coureur " + dossard;
+      document.getElementById("runner-save-status").innerHTML = `✏️ Modification du coureur ${dossard}`;
       document.getElementById("runner-save-status").className = "message warning";
-      const q = query(collection(db, "resultats"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        document.getElementById("edit-runner-scans").innerHTML = "<p class='message'>Aucun scan trouvé pour ce coureur.</p>";
-        return;
-      }
-      let html = `
-        <h3>⏱️ Scans du coureur</h3>
-        <table>
-          <tr>
-            <th>Tour</th>
-            <th>Temps</th>
-            <th>Action</th>
-          </tr>
-      `;
-      snap.forEach(docu => {
-        const r = docu.data();
-        const id = docu.id;
-        let temps = "--:--:--";
-        if (r.timestamp && startMs) {
-          const diff = r.timestamp.toDate().getTime() - startMs;
-          temps = formatTime(diff);
-        }
-        html += `
-          <tr>
-            <td>${r.tour ?? "-"}</td>
-            <td>${temps}</td>
-            <td>
-              <button onclick="editRunnerScan('${id}', ${r.tour ?? 0}, '${dossard}')">
-                Modifier
-              </button>
-            </td>
-          </tr>
-        `;
-      });
-      html += "</table>";
-      document.getElementById("edit-runner-scans").innerHTML = html;
+      // Basculer vers l'onglet "Gestion coureurs"
+      openTab('coureurs-tab', document.querySelector('.tab-btn[onclick*="coureurs-tab"]'));
     };
 
-    window.editRunnerScan = async function(id, tour, dossard) {
-      const newTime = prompt("Nouveau temps pour le tour " + tour + " (HH:MM:SS) :");
-      if (!newTime) return;
-      const [h, m, s] = newTime.split(":").map(Number);
-      const ms = (h * 3600 + m * 60 + s) * 1000;
-      if (!startMs) {
-        alert("Chrono non défini, impossible de recalculer le timestamp.");
+    // ======================
+    // 📡 Gestion des scans
+    // ======================
+    async function loadScans(dossard) {
+      try {
+        const q = query(collection(db, "resultats"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          document.getElementById("scan-list").innerHTML = "<p class='message'>Aucun scan trouvé pour ce coureur.</p>";
+          return;
+        }
+        let html = `
+          <table>
+            <tr>
+              <th>Tour</th>
+              <th>Temps</th>
+              <th>Hors délai</th>
+              <th>Actions</th>
+            </tr>
+        `;
+        snap.forEach(docu => {
+          const r = docu.data();
+          const id = docu.id;
+          let temps = "--:--:--";
+          if (r.timestamp && startMs) {
+            const diff = r.timestamp.toDate().getTime() - startMs;
+            temps = formatTime(diff);
+          }
+          html += `
+            <tr>
+              <td>${r.tour ?? "-"}</td>
+              <td>${temps}</td>
+              <td>${r.horsDelai ? "✅ Oui" : "❌ Non"}</td>
+              <td>
+                <button onclick="editScan('${id}', ${r.tour ?? 0}, '${r.dossard}')">Modifier</button>
+                <button onclick="deleteScan('${id}')" class="btn-danger">Supprimer</button>
+              </td>
+            </tr>
+          `;
+        });
+        html += "</table>";
+        document.getElementById("scan-list").innerHTML = html;
+      } catch (error) {
+        document.getElementById("scan-list").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
+      }
+    }
+
+    window.addScan = async function() {
+      const dossard = document.getElementById("add-dossard").value.trim();
+      const tour = Number(document.getElementById("add-tour").value);
+      const time = document.getElementById("add-time").value.trim();
+      const statusDiv = document.getElementById("scan-add-status");
+
+      if (!dossard || !tour || !time) {
+        statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
+        statusDiv.className = "message error";
         return;
       }
-      const timestamp = new Date(startMs + ms);
-      await updateDoc(doc(db, "resultats", id), { timestamp });
-      alert("Temps mis à jour !");
-      editRunner(dossard);
+
+      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+      if (!timeRegex.test(time)) {
+        statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS (ex: 01:23:45)";
+        statusDiv.className = "message error";
+        return;
+      }
+
+      if (!startMs) {
+        statusDiv.innerHTML = "❌ Chrono non défini. Impossible de calculer le timestamp.";
+        statusDiv.className = "message error";
+        return;
+      }
+
+      try {
+        const [h, m, s] = time.split(":").map(Number);
+        const ms = (h * 3600 + m * 60 + s) * 1000;
+        const timestamp = new Date(startMs + ms);
+        await addDoc(collection(db, "resultats"), {
+          dossard, tour, timestamp, horsDelai: false
+        });
+        statusDiv.innerHTML = "✅ Scan ajouté avec succès !";
+        statusDiv.className = "message success";
+        document.getElementById("add-dossard").value = "";
+        document.getElementById("add-tour").value = "";
+        document.getElementById("add-time").value = "";
+        // Recharger les scans pour ce coureur
+        if (currentRunnerDossard === dossard) {
+          loadScans(dossard);
+        }
+      } catch (error) {
+        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+        statusDiv.className = "message error";
+      }
     };
+
+    window.editScan = async function(id, tour, oldDossard) {
+      const newTime = prompt("Temps écoulé (HH:MM:SS) ?", formatTime(tour * 60 * 1000));
+      if (!newTime) return;
+
+      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+      if (!timeRegex.test(newTime)) {
+        alert("❌ Format invalide. Utilisez HH:MM:SS (ex: 01:23:45)");
+        return;
+      }
+
+      if (!startMs) {
+        alert("❌ Chrono non défini. Impossible de recalculer le timestamp.");
+        return;
+      }
+
+      try {
+        const [h, m, s] = newTime.split(":").map(Number);
+        const ms = (h * 3600 + m * 60 + s) * 1000;
+        const timestamp = new Date(startMs + ms);
+        const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")")?.trim();
+        const dossardFinal = newDossard || oldDossard;
+        await updateDoc(doc(db, "resultats", id), {
+          timestamp: timestamp,
+          dossard: dossardFinal
+        });
+        alert("✅ Scan modifié avec succès !");
+        // Recharger les scans pour ce coureur
+        loadScans(dossardFinal);
+      } catch (error) {
+        alert(`❌ Erreur : ${error.message}`);
+      }
+    };
+
+    window.deleteScan = async function(id) {
+      if (!confirm("⚠️ Supprimer ce scan ?")) return;
+      try {
+        await deleteDoc(doc(db, "resultats", id));
+        alert("✅ Scan supprimé !");
+        // Recharger les scans pour le coureur actuel
+        if (currentRunnerDossard) {
+          loadScans(currentRunnerDossard);
+        }
+      } catch (error) {
+        alert(`❌ Erreur : ${error.message}`);
+      }
+    };
+
+    // ======================
+    // 🏆 Réinitialisation des données
+    // ======================
+    window.resetCoureurs = async function() {
+      if (!confirm("⚠️ Supprimer TOUS les coureurs ?")) return;
+      if (!confirm("⚠️ Cette action est irréversible.")) return;
+      if (!confirm("⚠️ Dernière confirmation.")) return;
+      try {
+        const snap = await getDocs(collection(db, "coureurs"));
+        let count = 0;
+        for (const docu of snap.docs) {
+          await deleteDoc(doc(db, "coureurs", docu.id));
+          count++;
+        }
+        document.getElementById("reset-coureurs-status").innerHTML = `🗑️ ${count} coureurs supprimés.`;
+        document.getElementById("reset-coureurs-status").className = "message success";
+      } catch (error) {
+        document.getElementById("reset-coureurs-status").innerHTML = `❌ Erreur : ${error.message}`;
+        document.getElementById("reset-coureurs-status").className = "message error";
+      }
+    };
+
+    window.resetResultats = async function() {
+      if (!confirm("⚠️ Supprimer TOUS les résultats ?")) return;
+      if (!confirm("⚠️ Cette action est irréversible.")) return;
+      if (!confirm("⚠️ Dernière confirmation.")) return;
+      try {
+        const snap = await getDocs(collection(db, "resultats"));
+        let count = 0;
+        for (const docu of snap.docs) {
+          await deleteDoc(doc(db, "resultats", docu.id));
+          count++;
+        }
+        document.getElementById("reset-resultats-status").innerHTML = `🗑️ ${count} résultats supprimés.`;
+        document.getElementById("reset-resultats-status").className = "message success";
+      } catch (error) {
+        document.getElementById("reset-resultats-status").innerHTML = `❌ Erreur : ${error.message}`;
+        document.getElementById("reset-resultats-status").className = "message error";
+      }
+    };
+
+    // ======================
+    // 🔄 Durée des tours
+    // ======================
+    onSnapshot(doc(db, "course", "limitesTours"), snap => {
+      try {
+        if (!snap.exists()) {
+          document.getElementById("tour-settings").innerHTML = "<p class='message'>Aucune durée de tour configurée.</p>";
+          return;
+        }
+        const data = snap.data();
+        const tours = Object.keys(data).sort((a, b) => Number(a.replace("t", "")) - Number(b.replace("t", "")));
+        let html = `
+          <table>
+            <tr>
+              <th>Tour</th>
+              <th>Durée (minutes)</th>
+            </tr>
+        `;
+        tours.forEach(t => {
+          html += `
+            <tr>
+              <td>${t.toUpperCase()}</td>
+              <td><input id="tour-${t}" type="number" value="${data[t]}" style="width: 80px; text-align: center;"></td>
+            </tr>
+          `;
+        });
+        html += "</table>";
+        document.getElementById("tour-settings").innerHTML = html;
+      } catch (error) {
+        document.getElementById("tour-settings").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
+      }
+    });
+
+    window.saveTourDurations = async function() {
+      try {
+        const inputs = document.querySelectorAll("#tour-settings input");
+        const newData = {};
+        inputs.forEach(input => {
+          const key = input.id.replace("tour-", "");
+          newData[key] = Number(input.value);
+        });
+        await setDoc(doc(db, "course", "limitesTours"), newData, { merge: true });
+        document.getElementById("tour-save-status").innerHTML = "✅ Durées mises à jour !";
+        document.getElementById("tour-save-status").className = "message success";
+      } catch (error) {
+        document.getElementById("tour-save-status").innerHTML = `❌ Erreur : ${error.message}`;
+        document.getElementById("tour-save-status").className = "message error";
+      }
+    };
+
+    // ======================
+    // 🎯 Initialisation
+    // ======================
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("pwd").focus();
+      loadAllRunners();
+    });
   </script>
 </body>
 </html>
