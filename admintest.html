@@ -17,7 +17,7 @@
       --btn-bg-success: #00ff99;
       --btn-bg-danger: #ff4444;
       --btn-bg-warning: #ffaa00;
-      --btn-bg-dark-red: #8B0000; /* Rouge foncé pour DNF/DNS */
+      --btn-bg-dark-red: #8B0000;
     }
 
     * {
@@ -61,7 +61,6 @@
       text-decoration: underline;
     }
 
-    /* --- Formulaires --- */
     .form-group {
       display: flex;
       flex-wrap: wrap;
@@ -117,7 +116,6 @@
       background: var(--btn-bg-warning);
     }
 
-    /* --- Tableaux --- */
     table {
       width: 90%;
       max-width: 1000px;
@@ -144,7 +142,6 @@
       background: rgba(255, 255, 255, 0.1);
     }
 
-    /* --- Messages --- */
     .message {
       padding: 10px;
       margin: 10px 0;
@@ -167,7 +164,6 @@
       background: rgba(255, 170, 0, 0.1);
     }
 
-    /* --- Onglets --- */
     .tabs {
       display: flex;
       flex-wrap: wrap;
@@ -202,7 +198,6 @@
       display: block;
     }
 
-    /* --- Verrouillage (style original) --- */
     #lock {
       position: fixed;
       top: 0;
@@ -217,7 +212,6 @@
       z-index: 9999;
     }
 
-    /* --- Boutons d'action --- */
     .action-buttons {
       display: flex;
       flex-wrap: wrap;
@@ -226,7 +220,6 @@
       margin: 15px 0;
     }
 
-    /* --- Grille de boutons pour les dossards --- */
     .dossard-grid {
       display: grid;
       grid-template-columns: repeat(10, 1fr);
@@ -256,14 +249,12 @@
       background: #333;
     }
 
-    /* Bouton scanné récemment (10 min) */
     .dossard-btn.scanned-recently {
       background: var(--btn-bg-danger);
       color: white;
       cursor: not-allowed;
     }
 
-    /* Bouton DNF/DNS (rouge foncé + barré) */
     .dossard-btn.dnf-dns {
       background: var(--btn-bg-dark-red);
       color: white;
@@ -272,16 +263,14 @@
       text-decoration-thickness: 2px;
     }
 
-    /* Bouton tour non ouvert */
     .dossard-btn.tour-not-open {
-      background: #550000; /* Rouge très foncé */
+      background: #550000;
       color: #aaa;
       cursor: not-allowed;
       text-decoration: line-through;
       text-decoration-thickness: 2px;
     }
 
-    /* --- Section avec bordure --- */
     .section {
       border: 1px solid var(--border-color);
       border-radius: 8px;
@@ -295,7 +284,6 @@
       color: var(--btn-bg);
     }
 
-    /* --- Responsive --- */
     @media (max-width: 1200px) {
       .dossard-grid {
         grid-template-columns: repeat(5, 1fr);
@@ -330,7 +318,7 @@
 </head>
 
 <body>
-  <!-- 🔐 VERROUILLAGE (style et structure ORIGINAUX) -->
+  <!-- 🔐 VERROUILLAGE -->
   <div id="lock">
     <h2>🔒 Accès administrateur</h2>
     <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
@@ -367,7 +355,6 @@
   <div id="coureurs-tab" class="tab-content">
     <h2>👥 Gestion des coureurs</h2>
 
-    <!-- Rechercher un coureur -->
     <h3>🔍 Rechercher un coureur</h3>
     <div class="form-group">
       <input id="search-dossard" type="text" placeholder="Dossard">
@@ -377,7 +364,6 @@
 
     <hr>
 
-    <!-- Ajouter / Modifier un coureur -->
     <h3>➕ Ajouter / Modifier un coureur</h3>
     <div class="form-group">
       <input id="c-dossard" type="text" placeholder="Dossard">
@@ -393,7 +379,6 @@
 
     <hr>
 
-    <!-- Modifier statut coureur -->
     <h3>⚙️ Modifier statut coureur</h3>
     <div class="form-group">
       <input id="status-dossard" type="text" placeholder="Dossard">
@@ -408,18 +393,15 @@
 
     <hr>
 
-    <!-- Liste complète des coureurs -->
     <h3>📋 Liste complète des coureurs</h3>
     <button onclick="toggleCoureurs()" style="margin-bottom: 10px; padding: 5px 12px;">👁️ Afficher / Masquer</button>
     <div id="table-coureurs" style="display: none;"></div>
-    <div id="edit-runner-scans"></div>
   </div>
 
   <!-- Onglet Gestion scans -->
   <div id="scans-tab" class="tab-content">
     <h2>📡 Gestion des scans</h2>
 
-    <!-- 1. Ajout scan manuel (temps actuel) -->
     <div class="section">
       <div class="section-title">⏱️ Ajout scan manuel (temps actuel)</div>
       <div class="form-group">
@@ -429,14 +411,12 @@
       <div id="quick-scan-status" class="message"></div>
     </div>
 
-    <!-- 2. Scan manuel boutons -->
     <div class="section">
       <div class="section-title">🔢 Scan manuel (boutons 1 à 160)</div>
       <div id="dossard-buttons-grid" class="dossard-grid"></div>
       <div id="button-scan-status" class="message"></div>
     </div>
 
-    <!-- 3. Ajouter un scan manuellement (existant) -->
     <div class="section">
       <div class="section-title">✏️ Ajouter un scan manuellement</div>
       <div class="form-group">
@@ -448,7 +428,6 @@
       <div id="scan-add-status" class="message"></div>
     </div>
 
-    <!-- Scans du coureur sélectionné -->
     <div class="section">
       <div class="section-title">⏱️ Scans du coureur sélectionné</div>
       <div id="scan-list"></div>
@@ -484,7 +463,6 @@
     <div id="tour-save-status" class="message"></div>
   </div>
 
-  <!-- Firebase et Scripts -->
   <script type="module">
     // ======================
     // 🔥 Firebase Configuration
@@ -492,7 +470,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import {
       getFirestore, collection, query, where, getDocs,
-      doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp
+      doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp, getDoc
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -505,10 +483,11 @@
     let startMs = null;
     let chronoInterval = null;
     let currentRunnerDossard = null;
-    let lastScanTimes = {}; // { dossard: timestamp }
+    let lastScanTimes = {};
     let resultsUnsubscribe = null;
-    let limites = {}; // Durée des tours
-    let currentTour = 0; // Tour actuel
+    let limites = {};
+    let currentTour = 0;
+    let runnerStatuses = {};
 
     // ======================
     // 🎨 Fonctions UI
@@ -526,26 +505,24 @@
     };
 
     // ======================
-    // 🔐 Vérification mot de passe
+    // 🔐 Vérification mot de passe (CORRIGÉ)
     // ======================
-
-window.checkPwd = function() {
-  const good = "3sRunTravel2026";
-  const val = document.getElementById("pwd").value;
-  if (val === good) {
-    document.getElementById("lock").style.display = "none";
-    document.getElementById("err").textContent = "";
-    // Charger les données au démarrage
-    loadAllRunners();
-    setupRealtimeScanListener();
-    generateDossardButtons();
-  } else {
-    document.getElementById("err").textContent = "Mot de passe incorrect";
-    document.getElementById("pwd").value = "";
-    document.getElementById("pwd").focus();
-  }
-};
-    
+    window.checkPwd = function() {
+      const good = "3sRunTravel2026";
+      const val = document.getElementById("pwd").value;
+      if (val === good) {
+        document.getElementById("lock").style.display = "none";
+        document.getElementById("err").textContent = "";
+        // Charger les données après déverrouillage
+        loadAllRunners();
+        setupRealtimeScanListener();
+        generateDossardButtons();
+      } else {
+        document.getElementById("err").textContent = "Mot de passe incorrect";
+        document.getElementById("pwd").value = "";
+        document.getElementById("pwd").focus();
+      }
+    };
 
     // ======================
     // ⏱️ Gestion du chrono
@@ -561,7 +538,7 @@ window.checkPwd = function() {
       chronoInterval = setInterval(() => {
         const diff = Date.now() - startMs;
         zone.innerHTML = `⏱ Temps écoulé : <b>${formatTime(diff)}</b>`;
-        updateCurrentTour(diff); // Mettre à jour le tour actuel
+        updateCurrentTour(diff);
       }, 1000);
     }
 
@@ -573,18 +550,14 @@ window.checkPwd = function() {
       return `${h}:${m}:${sec}`;
     }
 
-    // Calculer le tour actuel en fonction du temps écoulé
     function updateCurrentTour(elapsedMs) {
-      const now = Date.now();
-      const diffMin = elapsedMs / 60000; // Temps écoulé en minutes
-
+      const diffMin = elapsedMs / 60000;
       let cumul = 0;
       let newTour = 0;
 
       for (let i = 1; i <= 10; i++) {
         const limite = limites["t" + i];
         if (!limite) break;
-
         cumul += limite;
         if (diffMin < cumul) {
           newTour = i;
@@ -592,13 +565,12 @@ window.checkPwd = function() {
         }
       }
 
-      // Si on a dépassé tous les tours, on reste sur le dernier
       if (newTour === 0 && Object.keys(limites).length > 0) {
         newTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
       }
 
       currentTour = newTour;
-      updateDossardButtonsState(); // Mettre à jour les boutons
+      updateDossardButtonsState();
     }
 
     function updateChronoButtonState() {
@@ -614,7 +586,6 @@ window.checkPwd = function() {
       }
     }
 
-    // Écouteur Firebase pour le chrono
     onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
         startMs = snap.data().startMs ?? null;
@@ -625,7 +596,6 @@ window.checkPwd = function() {
       updateChronoButtonState();
     });
 
-    // Écouteur Firebase pour les limites de tours
     onSnapshot(doc(db, "course", "limitesTours"), snap => {
       if (snap.exists()) {
         limites = snap.data();
@@ -694,7 +664,6 @@ window.checkPwd = function() {
             <p>Statut : ${data.statut}</p>
           </div>
         `;
-        // Basculer vers l'onglet "Gestion scans" et charger les scans
         openTab('scans-tab', document.querySelector('.tab-btn[onclick*="scans-tab"]'));
         loadScans(dossard);
       } catch (error) {
@@ -731,11 +700,9 @@ window.checkPwd = function() {
           statusDiv.innerHTML = "✏️ Coureur mis à jour.";
           statusDiv.className = "message success";
         }
-        // Réinitialiser le formulaire
         document.getElementById("c-dossard").value = "";
         document.getElementById("c-nom").value = "";
         document.getElementById("c-prenom").value = "";
-        // Recharger la liste des coureurs
         loadAllRunners();
       } catch (error) {
         statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
@@ -762,15 +729,13 @@ window.checkPwd = function() {
         const id = snap.docs[0].id;
         await updateDoc(doc(db, "coureurs", id), { statut });
         alert("✅ Statut mis à jour !");
-        // Recharger la liste des coureurs
         loadAllRunners();
-        updateDossardButtonsState(); // Mettre à jour les boutons (DNF/DNS)
+        updateDossardButtonsState();
       } catch (error) {
         alert(`❌ Erreur : ${error.message}`);
       }
     };
 
-    // Charger tous les coureurs pour le tableau
     function loadAllRunners() {
       onSnapshot(collection(db, "coureurs"), snap => {
         try {
@@ -825,18 +790,15 @@ window.checkPwd = function() {
       document.getElementById("c-sexe").value = sexe;
       document.getElementById("runner-save-status").innerHTML = `✏️ Modification du coureur ${dossard}`;
       document.getElementById("runner-save-status").className = "message warning";
-      // Basculer vers l'onglet "Gestion coureurs"
       openTab('coureurs-tab', document.querySelector('.tab-btn[onclick*="coureurs-tab"]'));
     };
 
     // ======================
     // 📡 Gestion des scans
     // ======================
-
-    // Écouteur temps réel pour les scans (synchronisation entre appareils)
     function setupRealtimeScanListener() {
       if (resultsUnsubscribe) {
-        resultsUnsubscribe(); // Désabonner l'ancien écouteur
+        resultsUnsubscribe();
       }
       resultsUnsubscribe = onSnapshot(collection(db, "resultats"), snap => {
         snap.docChanges().forEach(change => {
@@ -849,7 +811,6 @@ window.checkPwd = function() {
           } else if (change.type === "removed") {
             const data = change.doc.data();
             if (data.dossard) {
-              // Si c'était le dernier scan pour ce dossard, on le retire de lastScanTimes
               const q = query(collection(db, "resultats"), where("dossard", "==", data.dossard));
               getDocs(q).then(snap => {
                 if (snap.empty) {
@@ -863,10 +824,6 @@ window.checkPwd = function() {
       });
     }
 
-    // Charger les statuts des coureurs (DNF/DNS)
-    let runnerStatuses = {}; // { dossard: statut }
-
-    // Écouteur pour les statuts des coureurs
     onSnapshot(collection(db, "coureurs"), snap => {
       runnerStatuses = {};
       snap.forEach(docu => {
@@ -878,7 +835,6 @@ window.checkPwd = function() {
       updateDossardButtonsState();
     });
 
-    // Générer la grille de boutons 1 à 160
     function generateDossardButtons() {
       const grid = document.getElementById("dossard-buttons-grid");
       grid.innerHTML = "";
@@ -890,21 +846,18 @@ window.checkPwd = function() {
         btn.id = `dossard-btn-${i}`;
         grid.appendChild(btn);
       }
-      // Mettre à jour l'état des boutons
       updateDossardButtonsState();
     }
 
-    // Mettre à jour l'état des boutons
-    function updateDossardButtonsState() {
+    async function updateDossardButtonsState() {
       const now = Date.now();
       for (let i = 1; i <= 160; i++) {
         const btn = document.getElementById(`dossard-btn-${i}`);
         if (btn) {
-          // Réinitialiser les classes
           btn.disabled = false;
           btn.classList.remove("scanned-recently", "dnf-dns", "tour-not-open");
 
-          // 1. Vérifier si le coureur est DNF/DNS
+          // 1. Vérifier si le coureur est DNF/DNS/Éliminé
           if (runnerStatuses[i] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[i])) {
             btn.disabled = true;
             btn.classList.add("dnf-dns");
@@ -912,28 +865,25 @@ window.checkPwd = function() {
             continue;
           }
 
-          // 2. Vérifier si le tour suivant n'a pas débuté
-          if (currentTour === 0) {
-            // Chrono non lancé
+          // 2. Vérifier si le chrono n'est pas lancé
+          if (!startMs) {
             btn.disabled = true;
             btn.classList.add("tour-not-open");
             btn.title = "Chrono non lancé";
             continue;
           }
 
-          // Calculer le dernier tour scanné pour ce coureur
+          // 3. Calculer le dernier tour scanné pour ce coureur
           let lastScannedTour = 0;
-          if (lastScanTimes[i]) {
-            const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", i)));
-            resultsSnap.forEach(docu => {
-              const data = docu.data();
-              if (data.tour && data.tour > lastScannedTour) {
-                lastScannedTour = data.tour;
-              }
-            });
-          }
+          const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", i)));
+          resultsSnap.forEach(docu => {
+            const data = docu.data();
+            if (data.tour && data.tour > lastScannedTour) {
+              lastScannedTour = data.tour;
+            }
+          });
 
-          // 3. Vérifier si le tour suivant n'a pas débuté
+          // 4. Vérifier si le tour suivant n'a pas débuté
           if (lastScannedTour >= currentTour) {
             btn.disabled = true;
             btn.classList.add("tour-not-open");
@@ -941,7 +891,7 @@ window.checkPwd = function() {
             continue;
           }
 
-          // 4. Vérifier si le coureur a été scanné dans les 10 dernières minutes
+          // 5. Vérifier si le coureur a été scanné dans les 10 dernières minutes
           if (lastScanTimes[i] && (now - lastScanTimes[i]) < 10 * 60 * 1000) {
             btn.disabled = true;
             btn.classList.add("scanned-recently");
@@ -953,7 +903,6 @@ window.checkPwd = function() {
       }
     }
 
-    // 1. Ajout scan manuel (temps actuel)
     window.quickScan = async function() {
       const dossard = document.getElementById("quick-scan-dossard").value.trim();
       const statusDiv = document.getElementById("quick-scan-status");
@@ -970,7 +919,7 @@ window.checkPwd = function() {
         return;
       }
 
-      // Vérifier si le coureur est DNF/DNS
+      // Vérifier si le coureur est DNF/DNS/Éliminé
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]} - Impossible de scanner.`;
         statusDiv.className = "message error";
@@ -1003,14 +952,10 @@ window.checkPwd = function() {
         return;
       }
 
-      // Calculer le tour
       const nextTour = lastScannedTour + 1;
-
-      // Calculer le temps écoulé depuis le départ
       const elapsedTime = now - startMs;
       const formattedTime = formatTime(elapsedTime);
 
-      // Enregistrer le scan
       const timestamp = new Date();
       await addDoc(collection(db, "resultats"), {
         dossard,
@@ -1019,7 +964,6 @@ window.checkPwd = function() {
         horsDelai: false
       });
 
-      // Mettre à jour le dernier temps de scan
       lastScanTimes[dossard] = now;
       updateDossardButtonsState();
 
@@ -1027,13 +971,11 @@ window.checkPwd = function() {
       statusDiv.className = "message success";
       document.getElementById("quick-scan-dossard").value = "";
 
-      // Recharger les scans pour ce coureur
       if (currentRunnerDossard === dossard) {
         loadScans(dossard);
       }
     };
 
-    // 2. Scan manuel via boutons
     window.buttonScan = async function(dossard) {
       const statusDiv = document.getElementById("button-scan-status");
 
@@ -1043,7 +985,7 @@ window.checkPwd = function() {
         return;
       }
 
-      // Vérifier si le coureur est DNF/DNS
+      // Vérifier si le coureur est DNF/DNS/Éliminé
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]} - Impossible de scanner.`;
         statusDiv.className = "message error";
@@ -1076,14 +1018,10 @@ window.checkPwd = function() {
         return;
       }
 
-      // Calculer le tour
       const nextTour = lastScannedTour + 1;
-
-      // Calculer le temps écoulé depuis le départ
       const elapsedTime = now - startMs;
       const formattedTime = formatTime(elapsedTime);
 
-      // Enregistrer le scan
       const timestamp = new Date();
       await addDoc(collection(db, "resultats"), {
         dossard,
@@ -1092,23 +1030,17 @@ window.checkPwd = function() {
         horsDelai: false
       });
 
-      // Mettre à jour le dernier temps de scan
       lastScanTimes[dossard] = now;
       updateDossardButtonsState();
 
-      // Afficher le temps dans le message de confirmation
       statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
       statusDiv.className = "message success";
 
-      // Recharger les scans pour ce coureur
       currentRunnerDossard = dossard;
       loadScans(dossard);
-
-      // Faire défiler vers le message
       statusDiv.scrollIntoView({ behavior: "smooth" });
     };
 
-    // 3. Ajouter un scan manuellement (existant)
     window.addScan = async function() {
       const dossard = document.getElementById("add-dossard").value.trim();
       const tour = Number(document.getElementById("add-tour").value);
@@ -1134,31 +1066,20 @@ window.checkPwd = function() {
         return;
       }
 
-      // Vérifier si le coureur est DNF/DNS
+      // Vérifier si le coureur est DNF/DNS/Éliminé
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]} - Impossible de scanner.`;
         statusDiv.className = "message error";
         return;
       }
 
-      // Calculer le dernier tour scanné pour ce coureur
-      const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
-      let lastScannedTour = 0;
-      resultsSnap.forEach(docu => {
-        const data = docu.data();
-        if (data.tour && data.tour > lastScannedTour) {
-          lastScannedTour = data.tour;
-        }
-      });
-
-      // Vérifier si le tour suivant n'a pas débuté
+      // Vérifier si le tour est valide
       if (tour > currentTour) {
         statusDiv.innerHTML = `❌ Tour ${tour} non encore ouvert (actuel : ${currentTour}).`;
         statusDiv.className = "message error";
         return;
       }
 
-      // Vérifier si le coureur a été scanné dans les 10 dernières minutes
       const now = Date.now();
       if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
         const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
@@ -1175,7 +1096,6 @@ window.checkPwd = function() {
         dossard, tour, timestamp, horsDelai: false
       });
 
-      // Mettre à jour le dernier temps de scan
       lastScanTimes[dossard] = now;
       updateDossardButtonsState();
 
@@ -1184,13 +1104,12 @@ window.checkPwd = function() {
       document.getElementById("add-dossard").value = "";
       document.getElementById("add-tour").value = "";
       document.getElementById("add-time").value = "";
-      // Recharger les scans pour ce coureur
+
       if (currentRunnerDossard === dossard) {
         loadScans(dossard);
       }
     };
 
-    // Charger les scans d'un coureur
     async function loadScans(dossard) {
       try {
         const q = query(collection(db, "resultats"), where("dossard", "==", dossard));
@@ -1257,7 +1176,6 @@ window.checkPwd = function() {
         const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")")?.trim();
         const dossardFinal = newDossard || oldDossard;
 
-        // Supprimer l'ancien dernier temps de scan pour oldDossard si nécessaire
         if (oldDossard !== dossardFinal && lastScanTimes[oldDossard]) {
           const q = query(collection(db, "resultats"), where("dossard", "==", oldDossard));
           const snap = await getDocs(q);
@@ -1271,12 +1189,10 @@ window.checkPwd = function() {
           dossard: dossardFinal
         });
 
-        // Mettre à jour le dernier temps de scan
         lastScanTimes[dossardFinal] = Date.now();
         updateDossardButtonsState();
 
         alert("✅ Scan modifié avec succès !");
-        // Recharger les scans pour ce coureur
         loadScans(dossardFinal);
       } catch (error) {
         alert(`❌ Erreur : ${error.message}`);
@@ -1289,17 +1205,15 @@ window.checkPwd = function() {
         const docu = await getDoc(doc(db, "resultats", id));
         if (docu.exists()) {
           const data = docu.data();
-          // Supprimer le dernier temps de scan pour ce dossard si c'est le dernier
           const q = query(collection(db, "resultats"), where("dossard", "==", data.dossard));
           const snap = await getDocs(q);
-          if (snap.size === 1) { // C'était le dernier scan pour ce dossard
+          if (snap.size === 1) {
             delete lastScanTimes[data.dossard];
             updateDossardButtonsState();
           }
         }
         await deleteDoc(doc(db, "resultats", id));
         alert("✅ Scan supprimé !");
-        // Recharger les scans pour le coureur actuel
         if (currentRunnerDossard) {
           loadScans(currentRunnerDossard);
         }
@@ -1322,7 +1236,6 @@ window.checkPwd = function() {
           await deleteDoc(doc(db, "coureurs", docu.id));
           count++;
         }
-        // Réinitialiser les derniers temps de scan
         lastScanTimes = {};
         runnerStatuses = {};
         updateDossardButtonsState();
@@ -1339,7 +1252,6 @@ window.checkPwd = function() {
       if (!confirm("⚠️ Cette action est irréversible.")) return;
       if (!confirm("⚠️ Dernière confirmation.")) return;
       try {
-        // Supprimer tous les résultats
         const resultatsSnap = await getDocs(collection(db, "resultats"));
         let count = 0;
         for (const docu of resultatsSnap.docs) {
@@ -1347,13 +1259,11 @@ window.checkPwd = function() {
           count++;
         }
 
-        // Réinitialiser tous les statuts des coureurs à "OK"
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         for (const docu of coureursSnap.docs) {
           await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
         }
 
-        // Réinitialiser les derniers temps de scan
         lastScanTimes = {};
         updateDossardButtonsState();
 
@@ -1368,24 +1278,6 @@ window.checkPwd = function() {
     // ======================
     // 🔄 Durée des tours
     // ======================
-    window.saveTourDurations = async function() {
-      try {
-        const inputs = document.querySelectorAll("#tour-settings input");
-        const newData = {};
-        inputs.forEach(input => {
-          const key = input.id.replace("tour-", "");
-          newData[key] = Number(input.value);
-        });
-        await setDoc(doc(db, "course", "limitesTours"), newData, { merge: true });
-        document.getElementById("tour-save-status").innerHTML = "✅ Durées mises à jour !";
-        document.getElementById("tour-save-status").className = "message success";
-      } catch (error) {
-        document.getElementById("tour-save-status").innerHTML = `❌ Erreur : ${error.message}`;
-        document.getElementById("tour-save-status").className = "message error";
-      }
-    };
-
-    // Charger les durées des tours au démarrage
     onSnapshot(doc(db, "course", "limitesTours"), snap => {
       try {
         if (!snap.exists()) {
@@ -1415,6 +1307,23 @@ window.checkPwd = function() {
         document.getElementById("tour-settings").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
       }
     });
+
+    window.saveTourDurations = async function() {
+      try {
+        const inputs = document.querySelectorAll("#tour-settings input");
+        const newData = {};
+        inputs.forEach(input => {
+          const key = input.id.replace("tour-", "");
+          newData[key] = Number(input.value);
+        });
+        await setDoc(doc(db, "course", "limitesTours"), newData, { merge: true });
+        document.getElementById("tour-save-status").innerHTML = "✅ Durées mises à jour !";
+        document.getElementById("tour-save-status").className = "message success";
+      } catch (error) {
+        document.getElementById("tour-save-status").innerHTML = `❌ Erreur : ${error.message}`;
+        document.getElementById("tour-save-status").className = "message error";
+      }
+    };
 
     // ======================
     // 🎯 Initialisation
