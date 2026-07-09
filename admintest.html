@@ -464,7 +464,7 @@
   </div>
 
   <!-- Firebase et Scripts -->
-  <script type="module">
+ <script type="module">
     // ======================
     // 🔥 Firebase Configuration
     // ======================
@@ -485,6 +485,7 @@
     let chronoInterval = null;
     let currentRunnerDossard = null;
     let lastScanTimes = {}; // { dossard: timestamp }
+    let resultsUnsubscribe = null; // Pour désabonner l'écouteur Firebase
 
     // ======================
     // 🎨 Fonctions UI
@@ -512,7 +513,7 @@
         document.getElementById("err").textContent = "";
         // Charger les données au démarrage
         loadAllRunners();
-        loadLastScanTimes();
+        setupRealtimeScanListener(); // Écouteur temps réel pour les scans
         generateDossardButtons();
       } else {
         document.getElementById("err").textContent = "Mot de passe incorrect";
@@ -766,6 +767,36 @@
     // 📡 Gestion des scans
     // ======================
 
+    // Écouteur temps réel pour les scans (synchronisation entre appareils)
+    function setupRealtimeScanListener() {
+      if (resultsUnsubscribe) {
+        resultsUnsubscribe(); // Désabonner l'ancien écouteur
+      }
+      resultsUnsubscribe = onSnapshot(collection(db, "resultats"), snap => {
+        snap.docChanges().forEach(change => {
+          if (change.type === "added" || change.type === "modified") {
+            const data = change.doc.data();
+            if (data.dossard && data.timestamp) {
+              lastScanTimes[data.dossard] = data.timestamp.toDate().getTime();
+              updateDossardButtonsState();
+            }
+          } else if (change.type === "removed") {
+            const data = change.doc.data();
+            if (data.dossard) {
+              // Si c'était le dernier scan pour ce dossard, on le retire de lastScanTimes
+              const q = query(collection(db, "resultats"), where("dossard", "==", data.dossard));
+              getDocs(q).then(snap => {
+                if (snap.empty) {
+                  delete lastScanTimes[data.dossard];
+                  updateDossardButtonsState();
+                }
+              });
+            }
+          }
+        });
+      });
+    }
+
     // Charger les derniers temps de scan pour chaque coureur
     async function loadLastScanTimes() {
       try {
@@ -780,7 +811,6 @@
             }
           }
         });
-        // Mettre à jour l'état des boutons
         updateDossardButtonsState();
       } catch (error) {
         console.error("Erreur lors du chargement des derniers scans :", error);
@@ -812,7 +842,9 @@
           if (lastScanTimes[i] && (now - lastScanTimes[i]) < 10 * 60 * 1000) {
             btn.disabled = true;
             btn.classList.add("scanned-recently");
-            btn.title = `Dernier scan il y a ${Math.floor((now - lastScanTimes[i]) / 1000 / 60)} min`;
+            const remainingSeconds = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[i])) / 1000);
+            const remainingMinutes = Math.ceil(remainingSeconds / 60);
+            btn.title = `Dernier scan il y a ${Math.floor((now - lastScanTimes[i]) / 1000 / 60)} min. Attendez ${remainingMinutes} min.`;
           } else {
             btn.disabled = false;
             btn.classList.remove("scanned-recently");
@@ -852,13 +884,13 @@
         // Vérifier si le coureur a été scanné dans les 10 dernières minutes
         const now = Date.now();
         if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-          const remainingTime = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
-          statusDiv.innerHTML = `❌ Ce coureur a déjà été scanné. Attendez ${remainingTime} minute(s).`;
+          const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
+          statusDiv.innerHTML = `❌ Ce coureur a déjà été scanné. Attendez ${remainingMinutes} minute(s).`;
           statusDiv.className = "message error";
           return;
         }
 
-        // Calculer le tour (simplifié : on incrémente à chaque scan)
+        // Calculer le tour (nombre de scans existants pour ce coureur + 1)
         const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
         const nextTour = resultsSnap.size + 1;
 
@@ -912,8 +944,8 @@
         // Vérifier si le coureur a été scanné dans les 10 dernières minutes
         const now = Date.now();
         if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-          const remainingTime = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
-          statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné. Attendez ${remainingTime} minute(s).`;
+          const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
+          statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné. Attendez ${remainingMinutes} minute(s).`;
           statusDiv.className = "message error";
           return;
         }
@@ -986,8 +1018,8 @@
         // Vérifier si le coureur a été scanné dans les 10 dernières minutes
         const now = Date.now();
         if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-          const remainingTime = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
-          statusDiv.innerHTML = `❌ Ce coureur a déjà été scanné. Attendez ${remainingTime} minute(s).`;
+          const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
+          statusDiv.innerHTML = `❌ Ce coureur a déjà été scanné. Attendez ${remainingMinutes} minute(s).`;
           statusDiv.className = "message error";
           return;
         }
@@ -1086,6 +1118,15 @@
         const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")")?.trim();
         const dossardFinal = newDossard || oldDossard;
 
+        // Supprimer l'ancien dernier temps de scan pour oldDossard si nécessaire
+        if (oldDossard !== dossardFinal && lastScanTimes[oldDossard]) {
+          const q = query(collection(db, "resultats"), where("dossard", "==", oldDossard));
+          const snap = await getDocs(q);
+          if (snap.empty) {
+            delete lastScanTimes[oldDossard];
+          }
+        }
+
         await updateDoc(doc(db, "resultats", id), {
           timestamp: timestamp,
           dossard: dossardFinal
@@ -1109,8 +1150,10 @@
         const docu = await getDoc(doc(db, "resultats", id));
         if (docu.exists()) {
           const data = docu.data();
-          // Supprimer le dernier temps de scan pour ce coureur si c'est le dernier
-          if (lastScanTimes[data.dossard] === data.timestamp.toDate().getTime()) {
+          // Supprimer le dernier temps de scan pour ce dossard si c'est le dernier
+          const q = query(collection(db, "resultats"), where("dossard", "==", data.dossard));
+          const snap = await getDocs(q);
+          if (snap.size === 1) { // C'était le dernier scan pour ce dossard
             delete lastScanTimes[data.dossard];
             updateDossardButtonsState();
           }
