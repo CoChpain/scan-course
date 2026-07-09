@@ -528,22 +528,24 @@
     // ======================
     // 🔐 Vérification mot de passe
     // ======================
-    window.checkPwd = function() {
-      const good = "3sRunTravel2026";
-      const val = document.getElementById("pwd").value;
-      if (val === good) {
-        document.getElementById("lock").style.display = "none";
-        document.getElementById("err").textContent = "";
-        // Charger les données au démarrage
-        loadAllRunners();
-        setupRealtimeScanListener();
-        generateDossardButtons();
-      } else {
-        document.getElementById("err").textContent = "Mot de passe incorrect";
-        document.getElementById("pwd").value = "";
-        document.getElementById("pwd").focus();
-      }
-    };
+
+window.checkPwd = function() {
+  const good = "3sRunTravel2026";
+  const val = document.getElementById("pwd").value;
+  if (val === good) {
+    document.getElementById("lock").style.display = "none";
+    document.getElementById("err").textContent = "";
+    // Charger les données au démarrage
+    loadAllRunners();
+    setupRealtimeScanListener();
+    generateDossardButtons();
+  } else {
+    document.getElementById("err").textContent = "Mot de passe incorrect";
+    document.getElementById("pwd").value = "";
+    document.getElementById("pwd").focus();
+  }
+};
+    
 
     // ======================
     // ⏱️ Gestion du chrono
