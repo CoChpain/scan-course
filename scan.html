@@ -80,7 +80,8 @@ import {
   doc,
   serverTimestamp,
   onSnapshot,
-  runTransaction
+  runTransaction,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -111,6 +112,25 @@ const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_sh
 let lastScan=null;
 let lastScanTime=0;
 let processing=false;
+
+/* ---------------- VÉRIFICATION SCAN MANUEL (ADMIN) ---------------- */
+async function isManuallyScanned(dossard) {
+  try {
+    const ref = doc(db, "adminManualScans", dossard);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const data = snap.data();
+      const now = Date.now();
+      if (data.lastScan && (now - data.lastScan.toMillis()) < 10 * 60 * 1000) {
+        return true; // Déjà scanné manuellement dans les 10 dernières minutes
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error("Erreur vérification scan manuel :", error);
+    return false;
+  }
+}
 
 /* ---------------- TOUR AUTORISÉ ---------------- */
 function getTourAutorise(){
@@ -199,6 +219,14 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
+  // Vérifier si le dossard a été scanné manuellement dans l'admin dans les 10 dernières minutes
+  const isManualScan = await isManuallyScanned(dossard);
+  if (isManualScan) {
+    feedback("⏳ Dossard déjà scanné manuellement dans l'admin (attendre 10 min)","orange");
+    beepError.play();
+    return;
+  }
+
   const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",dossard)));
 
   if(snap.empty){
@@ -214,13 +242,13 @@ async function traiterArrivee(dossard, mode){
     return;
   }
 
- const autorise = await reservePassage(dossard);
+  const autorise = await reservePassage(dossard);
 
-if(!autorise){
-  feedback("⏳ Dossard déjà scanné il y a moins de 10 min","orange");
-  beepError.play();
-  return;
-}
+  if(!autorise){
+    feedback("⏳ Dossard déjà scanné il y a moins de 10 min","orange");
+    beepError.play();
+    return;
+  }
 
   const toursSnap = await getDocs(query(collection(db,"resultats"), where("dossard","==",dossard)));
 
@@ -295,6 +323,14 @@ document.getElementById("btn-dnf").onclick = async ()=>{
 
   localStorage.setItem("scanAuthTime", Date.now());
 
+  // Vérifier si le dossard a été scanné manuellement dans l'admin dans les 10 dernières minutes
+  const isManualScan = await isManuallyScanned(d);
+  if (isManualScan) {
+    feedback("⏳ Dossard déjà scanné manuellement dans l'admin (attendre 10 min)","orange");
+    beepError.play();
+    return;
+  }
+
   const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",d)));
 
   if(snap.empty){
@@ -326,6 +362,14 @@ document.getElementById("btn-dns").onclick = async ()=>{
   const d=document.getElementById("dossard-dns").value.replace(/\D/g,"");
 
   localStorage.setItem("scanAuthTime", Date.now());
+
+  // Vérifier si le dossard a été scanné manuellement dans l'admin dans les 10 dernières minutes
+  const isManualScan = await isManuallyScanned(d);
+  if (isManualScan) {
+    feedback("⏳ Dossard déjà scanné manuellement dans l'admin (attendre 10 min)","orange");
+    beepError.play();
+    return;
+  }
 
   const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",d)));
 
