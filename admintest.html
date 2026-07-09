@@ -464,7 +464,7 @@
   </div>
 
   <!-- Firebase et Scripts -->
- <script type="module">
+  <script type="module">
     // ======================
     // 🔥 Firebase Configuration
     // ======================
@@ -890,9 +890,13 @@
           return;
         }
 
-        // Calculer le tour (nombre de scans existants pour ce coureur + 1)
+        // Calculer le tour
         const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
         const nextTour = resultsSnap.size + 1;
+
+        // Calculer le temps écoulé depuis le départ
+        const elapsedTime = now - startMs;
+        const formattedTime = formatTime(elapsedTime);
 
         // Enregistrer le scan
         const timestamp = new Date();
@@ -907,7 +911,7 @@
         lastScanTimes[dossard] = now;
         updateDossardButtonsState();
 
-        statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) !`;
+        statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
         statusDiv.className = "message success";
         document.getElementById("quick-scan-dossard").value = "";
 
@@ -954,6 +958,10 @@
         const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
         const nextTour = resultsSnap.size + 1;
 
+        // Calculer le temps écoulé depuis le départ
+        const elapsedTime = now - startMs;
+        const formattedTime = formatTime(elapsedTime);
+
         // Enregistrer le scan
         const timestamp = new Date();
         await addDoc(collection(db, "resultats"), {
@@ -967,12 +975,16 @@
         lastScanTimes[dossard] = now;
         updateDossardButtonsState();
 
-        statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) !`;
+        // Afficher le temps dans le message de confirmation
+        statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
         statusDiv.className = "message success";
 
         // Recharger les scans pour ce coureur
         currentRunnerDossard = dossard;
         loadScans(dossard);
+
+        // Faire défiler vers le message
+        statusDiv.scrollIntoView({ behavior: "smooth" });
       } catch (error) {
         statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
         statusDiv.className = "message error";
@@ -1199,16 +1211,25 @@
       if (!confirm("⚠️ Cette action est irréversible.")) return;
       if (!confirm("⚠️ Dernière confirmation.")) return;
       try {
-        const snap = await getDocs(collection(db, "resultats"));
+        // Supprimer tous les résultats
+        const resultatsSnap = await getDocs(collection(db, "resultats"));
         let count = 0;
-        for (const docu of snap.docs) {
+        for (const docu of resultatsSnap.docs) {
           await deleteDoc(doc(db, "resultats", docu.id));
           count++;
         }
+
+        // Réinitialiser tous les statuts des coureurs à "OK"
+        const coureursSnap = await getDocs(collection(db, "coureurs"));
+        for (const docu of coureursSnap.docs) {
+          await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
+        }
+
         // Réinitialiser les derniers temps de scan
         lastScanTimes = {};
         updateDossardButtonsState();
-        document.getElementById("reset-resultats-status").innerHTML = `🗑️ ${count} résultats supprimés.`;
+
+        document.getElementById("reset-resultats-status").innerHTML = `🗑️ ${count} résultats supprimés et statuts réinitialisés.`;
         document.getElementById("reset-resultats-status").className = "message success";
       } catch (error) {
         document.getElementById("reset-resultats-status").innerHTML = `❌ Erreur : ${error.message}`;
