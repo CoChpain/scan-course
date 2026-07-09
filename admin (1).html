@@ -1,1 +1,806 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>ADMIN – APOLLO RUN</title><style>body{background:#000;color:#fff;font-family:Arial;text-align:center}.tabs{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:20px}.tab-btn{background:#111;color:#fff;border:1px solid #444;border-radius:8px;padding:12px 20px;cursor:pointer}.tab-btn.active{background:#0099ff}.tab-content{display:none}.tab-content.active{display:block}</style></head><body><h1>🛠️ ADMIN – Gestion de la course</h1><div class="tabs"><button class="tab-btn active" onclick="openTab('chrono',this)">⏱️ Chrono</button><button class="tab-btn" onclick="openTab('modifier',this)">✏️ Modifier un résultat</button><button class="tab-btn" onclick="openTab('resultats',this)">🧹 Réinitialiser les résultats</button><button class="tab-btn" onclick="openTab('coureurs',this)">🗑️ Base coureurs</button></div><div id="chrono" class="tab-content active"><h2>⏱️ Départ de la course</h2><button id="btn-start">🚀 Lancer le chrono</button><button id="btn-reset">🔁 Réinitialiser le chrono</button><div id="chrono-status"></div><h2>⏱️ Durée des tours</h2><div id="tour-settings"></div></div><div id="modifier" class="tab-content"><h2>🔍 Rechercher un coureur</h2><input id="search-dossard"><div id="runner-info"></div><div id="scan-list"></div><h2>➕ Ajouter un scan</h2><input id="add-dossard"><input id="add-tour"><input id="add-time"></div><div id="resultats" class="tab-content"><h2>🧹 Réinitialiser les résultats</h2><button onclick="resetResultats()">Supprimer tous les résultats</button><div id="reset-resultats-status"></div></div><div id="coureurs" class="tab-content"><h2>➕ Ajouter / Modifier un coureur</h2><div id="table-coureurs"></div><button onclick="resetCoureurs()">Supprimer tous les coureurs</button></div><script>function openTab(id,b){document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');b.classList.add('active');}</script></body></html>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADMIN – APOLLO RUN</title>
+  <style>
+    :root {
+      --bg-primary: #000;
+      --bg-secondary: #111;
+      --text-primary: #fff;
+      --text-error: #ff4444;
+      --text-success: #00ff99;
+      --text-warning: #ffaa00;
+      --border-color: #444;
+      --btn-bg: #00aaff;
+      --btn-bg-success: #00ff99;
+      --btn-bg-danger: #ff4444;
+      --btn-bg-warning: #ffaa00;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Segoe UI', Arial, sans-serif;
+      line-height: 1.6;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    h1, h2, h3 {
+      margin-bottom: 15px;
+      color: var(--text-primary);
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-top: 20px;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 30px;
+    }
+
+    a {
+      color: var(--btn-bg);
+      text-decoration: none;
+      display: inline-block;
+      margin-bottom: 20px;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* --- Formulaires --- */
+    .form-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+      justify-content: center;
+    }
+
+    input, select {
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-width: 120px;
+    }
+
+    input:focus, select:focus {
+      outline: 2px solid var(--btn-bg);
+    }
+
+    button {
+      padding: 10px 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: opacity 0.2s, background 0.2s;
+      background: var(--btn-bg);
+      color: var(--text-primary);
+    }
+
+    button:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    button.btn-success {
+      background: var(--btn-bg-success);
+      color: black;
+    }
+
+    button.btn-danger {
+      background: var(--btn-bg-danger);
+    }
+
+    button.btn-warning {
+      background: var(--btn-bg-warning);
+    }
+
+    /* --- Tableaux --- */
+    table {
+      width: 90%;
+      max-width: 1000px;
+      margin: 20px auto;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-secondary);
+      font-weight: bold;
+    }
+
+    tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    tr:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* --- Messages --- */
+    .message {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .error {
+      color: var(--text-error);
+      background: rgba(255, 0, 0, 0.1);
+    }
+
+    .success {
+      color: var(--text-success);
+      background: rgba(0, 255, 0, 0.1);
+    }
+
+    .warning {
+      color: var(--text-warning);
+      background: rgba(255, 170, 0, 0.1);
+    }
+
+    /* --- Onglets --- */
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .tab-btn {
+      padding: 12px 20px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .tab-btn:hover {
+      background: var(--border-color);
+    }
+
+    .tab-btn.active {
+      background: var(--btn-bg);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* --- Verrouillage (style original conservé) --- */
+    #lock {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    /* --- Boutons d'action --- */
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin: 15px 0;
+    }
+
+    /* --- Responsive --- */
+    @media (max-width: 768px) {
+      .form-group {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      input, select, button {
+        width: 100%;
+        max-width: 300px;
+      }
+
+      table {
+        width: 100%;
+        font-size: 0.9rem;
+      }
+
+      th, td {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 🔐 VERROUILLAGE (style et structure ORIGINAUX) -->
+  <div id="lock">
+    <h2>🔒 Accès administrateur</h2>
+    <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
+    <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px;">Entrer</button>
+    <div id="err" style="color:red;margin-top:10px;"></div>
+  </div>
+
+  <a href="index.html">⬅ Retour</a>
+
+  <h1>🛠️ ADMIN – Gestion de la course</h1>
+
+  <!-- Onglets -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="openTab('chrono-tab', this)">⏱️ Chrono</button>
+    <button class="tab-btn" onclick="openTab('reset-coureurs-tab', this)">🗑️ Réinitialiser base coureurs</button>
+    <button class="tab-btn" onclick="openTab('reset-resultats-tab', this)">🗑️ Réinitialiser les résultats</button>
+    <button class="tab-btn" onclick="openTab('modifier-temps-tab', this)">✏️ Modifier un temps</button>
+  </div>
+
+  <hr>
+
+  <!-- Contenu des onglets -->
+  <div id="chrono-tab" class="tab-content active">
+    <!-- ⏱️ CHRONO -->
+    <h2>⏱️ Départ de la course</h2>
+    <div class="action-buttons">
+      <button id="btn-start" onclick="startChrono()" class="btn-success">🚀 Lancer le chrono</button>
+      <button id="btn-reset" onclick="resetChrono()" class="btn-danger">🔁 Réinitialiser le chrono</button>
+    </div>
+    <div id="chrono-status" class="message">Chrono en attente…</div>
+
+    <hr>
+
+    <!-- 🔍 RECHERCHE COUREUR -->
+    <h2>🔍 Rechercher un coureur</h2>
+    <div class="form-group">
+      <input id="search-dossard" type="text" placeholder="Dossard">
+      <button onclick="searchRunner()">Rechercher</button>
+    </div>
+    <div id="runner-info"></div>
+    <div id="scan-list"></div>
+
+    <hr>
+
+    <!-- ➕ AJOUT / MODIFICATION SCAN -->
+    <h2>➕ Ajouter un scan manuellement</h2>
+    <div class="form-group">
+      <input id="add-dossard" type="text" placeholder="Dossard">
+      <input id="add-tour" type="number" placeholder="Tour" min="1">
+      <input id="add-time" type="text" placeholder="Temps (HH:MM:SS)" pattern="\d{2}:\d{2}:\d{2}">
+      <button onclick="addScan()">Ajouter</button>
+    </div>
+
+    <hr>
+
+    <!-- ⚙️ MODIFIER STATUT -->
+    <h2>⚙️ Modifier statut coureur</h2>
+    <div class="form-group">
+      <input id="status-dossard" type="text" placeholder="Dossard">
+      <select id="status-select">
+        <option value="OK">OK</option>
+        <option value="DNS">DNS</option>
+        <option value="DNF">DNF</option>
+        <option value="ELIMINE">Éliminé</option>
+      </select>
+      <button onclick="updateStatus()">Mettre à jour</button>
+    </div>
+
+    <hr>
+
+    <!-- ➕ AJOUT / MODIFICATION COUREUR -->
+    <h2>➕ Ajouter / Modifier un coureur</h2>
+    <div class="form-group">
+      <input id="c-dossard" type="text" placeholder="Dossard">
+      <input id="c-nom" type="text" placeholder="Nom">
+      <input id="c-prenom" type="text" placeholder="Prénom">
+      <select id="c-sexe">
+        <option value="H">Homme</option>
+        <option value="F">Femme</option>
+      </select>
+      <button onclick="saveRunner()">Enregistrer</button>
+    </div>
+    <div id="runner-save-status" class="message"></div>
+
+    <hr>
+
+    <!-- 📋 TABLEAU DES COUREURS -->
+    <h2>
+      📋 Liste complète des coureurs
+      <button onclick="toggleCoureurs()" style="margin-left: 15px; padding: 5px 12px; font-size: 14px;">👁️ Afficher / Masquer</button>
+    </h2>
+    <div id="table-coureurs" style="display: none;"></div>
+    <div id="edit-runner-scans"></div>
+  </div>
+
+  <!-- Onglet Réinitialiser coureurs -->
+  <div id="reset-coureurs-tab" class="tab-content">
+    <h2>🗑️ Réinitialiser la base coureurs</h2>
+    <div class="action-buttons">
+      <button onclick="resetCoureurs()" class="btn-danger">⚠️ Supprimer TOUS les coureurs</button>
+    </div>
+    <div id="reset-coureurs-status" class="message warning"></div>
+  </div>
+
+  <!-- Onglet Réinitialiser résultats -->
+  <div id="reset-resultats-tab" class="tab-content">
+    <h2>🗑️ Réinitialiser les résultats</h2>
+    <div class="action-buttons">
+      <button onclick="resetResultats()" class="btn-danger">⚠️ Supprimer TOUS les résultats</button>
+    </div>
+    <div id="reset-resultats-status" class="message warning"></div>
+  </div>
+
+  <!-- Onglet Modifier un temps -->
+  <div id="modifier-temps-tab" class="tab-content">
+    <h2>✏️ Modifier un temps</h2>
+    <p>Utilisez la recherche de coureur pour modifier ses scans.</p>
+  </div>
+
+  <!-- Firebase et Scripts -->
+  <script type="module">
+    // ======================
+    // 🔥 Firebase Configuration
+    // ======================
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import {
+      getFirestore, collection, query, where, getDocs,
+      doc, updateDoc, deleteDoc, addDoc, onSnapshot, getDoc, setDoc
+    } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    import { firebaseConfig } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ======================
+    // ⏳ Variables globales
+    // ======================
+    let startMs = null;
+    let chronoInterval = null;
+
+    // ======================
+    // 🎨 Fonctions UI
+    // ======================
+    window.openTab = function(tabId, btn) {
+      document.querySelectorAll(".tab-content").forEach(tab => tab.classList.remove("active"));
+      document.querySelectorAll(".tab-btn").forEach(button => button.classList.remove("active"));
+      document.getElementById(tabId).classList.add("active");
+      btn.classList.add("active");
+    };
+
+    window.toggleCoureurs = function() {
+      const div = document.getElementById("table-coureurs");
+      div.style.display = div.style.display === "none" ? "block" : "none";
+    };
+
+    // ======================
+    // 🔐 Vérification mot de passe (logique originale)
+    // ======================
+    window.checkPwd = function() {
+      const good = "3sRunTravel2026";
+      const val = document.getElementById("pwd").value;
+      if (val === good) {
+        document.getElementById("lock").style.display = "none";
+      } else {
+        document.getElementById("err").innerHTML = "Mot de passe incorrect";
+      }
+    };
+
+    // ======================
+    // ⏱️ Gestion du chrono
+    // ======================
+    function afficherChrono() {
+      const zone = document.getElementById("chrono-status");
+      if (!startMs) {
+        zone.innerHTML = "Chrono en attente…";
+        if (chronoInterval) clearInterval(chronoInterval);
+        return;
+      }
+      if (chronoInterval) clearInterval(chronoInterval);
+      chronoInterval = setInterval(() => {
+        const diff = Date.now() - startMs;
+        const s = Math.floor(diff / 1000);
+        const h = String(Math.floor(s / 3600)).padStart(2, "0");
+        const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+        const sec = String(s % 60).padStart(2, "0");
+        zone.innerHTML = `⏱ Temps écoulé : <b>${h}:${m}:${sec}</b>`;
+      }, 1000);
+    }
+
+    onSnapshot(doc(db, "course", "depart"), snap => {
+      if (snap.exists()) {
+        startMs = snap.data().startMs ?? null;
+      } else {
+        startMs = null;
+      }
+      afficherChrono();
+      const btnStart = document.getElementById("btn-start");
+      if (startMs) {
+        btnStart.disabled = true;
+        btnStart.style.opacity = "0.5";
+        btnStart.style.cursor = "not-allowed";
+      } else {
+        btnStart.disabled = false;
+        btnStart.style.opacity = "1";
+        btnStart.style.cursor = "pointer";
+      }
+    });
+
+    window.startChrono = async function() {
+      if (startMs) {
+        document.getElementById("chrono-status").innerHTML = "⚠️ Le chrono est déjà lancé.";
+        return;
+      }
+      if (!confirm("⚠️ Lancer le chrono ?")) return;
+      const now = Date.now();
+      await setDoc(doc(db, "course", "depart"), { startMs: now }, { merge: true });
+      startMs = now;
+      afficherChrono();
+      const btn = document.getElementById("btn-start");
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      btn.style.cursor = "not-allowed";
+    };
+
+    window.resetChrono = async function() {
+      if (!confirm("⚠️ Réinitialiser le chrono ?")) return;
+      if (!confirm("⚠️ Tous les chronos repartiront de zéro.")) return;
+      if (!confirm("⚠️ Dernière confirmation.")) return;
+      await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
+      startMs = null;
+      afficherChrono();
+      const btn = document.getElementById("btn-start");
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.style.cursor = "pointer";
+    };
+
+    // ======================
+    // 🗑️ Réinitialisation
+    // ======================
+    window.resetCoureurs = async function() {
+      if (!confirm("⚠️ Supprimer TOUS les coureurs ?")) return;
+      if (!confirm("⚠️ Cette action est irréversible.")) return;
+      if (!confirm("⚠️ Dernière confirmation.")) return;
+      const snap = await getDocs(collection(db, "coureurs"));
+      let count = 0;
+      for (const docu of snap.docs) {
+        await deleteDoc(doc(db, "coureurs", docu.id));
+        count++;
+      }
+      document.getElementById("reset-coureurs-status").innerHTML = `🗑️ ${count} coureurs supprimés.`;
+    };
+
+    window.resetResultats = async function() {
+      if (!confirm("⚠️ Supprimer TOUS les résultats ?")) return;
+      if (!confirm("⚠️ Cette action est irréversible.")) return;
+      if (!confirm("⚠️ Dernière confirmation.")) return;
+      const snap = await getDocs(collection(db, "resultats"));
+      let count = 0;
+      for (const docu of snap.docs) {
+        await deleteDoc(doc(db, "resultats", docu.id));
+        count++;
+      }
+      document.getElementById("reset-resultats-status").innerHTML = `🗑️ ${count} résultats supprimés.`;
+    };
+
+    // ======================
+    // 🔍 Recherche coureur
+    // ======================
+    window.searchRunner = async function() {
+      const dossard = document.getElementById("search-dossard").value.trim();
+      if (!dossard) return;
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        document.getElementById("runner-info").innerHTML = "<p class='message error'>Coureur introuvable</p>";
+        document.getElementById("scan-list").innerHTML = "";
+        return;
+      }
+      const data = snap.docs[0].data();
+      document.getElementById("runner-info").innerHTML = `
+        <div class="message success">
+          <h3>${data.nom} ${data.prenom}</h3>
+          <p>Dossard : ${data.dossard}</p>
+          <p>Statut : ${data.statut}</p>
+        </div>
+      `;
+      loadScans(dossard);
+    };
+
+    // ======================
+    // 📄 Liste des scans
+    // ======================
+    async function loadScans(dossard) {
+      const q = query(collection(db, "resultats"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        document.getElementById("scan-list").innerHTML = "<p class='message'>Aucun scan trouvé pour ce coureur.</p>";
+        return;
+      }
+      let html = `
+        <h3>⏱️ Scans du coureur</h3>
+        <table>
+          <tr>
+            <th>Tour</th>
+            <th>Temps</th>
+            <th>Hors délai</th>
+            <th>Actions</th>
+          </tr>
+      `;
+      snap.forEach(docu => {
+        const r = docu.data();
+        const id = docu.id;
+        let temps = "--:--:--";
+        if (r.timestamp && startMs) {
+          const diff = r.timestamp.toDate().getTime() - startMs;
+          temps = formatTime(diff);
+        }
+        html += `
+          <tr>
+            <td>${r.tour ?? "-"}</td>
+            <td>${temps}</td>
+            <td>${r.horsDelai ? "Oui" : "Non"}</td>
+            <td>
+              <button onclick="editScan('${id}', ${r.tour ?? 0}, '${r.dossard}')">Modifier</button>
+              <button onclick="deleteScan('${id}')" class="btn-danger">Supprimer</button>
+            </td>
+          </tr>
+        `;
+      });
+      html += "</table>";
+      document.getElementById("scan-list").innerHTML = html;
+    }
+
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      const h = String(Math.floor(s / 3600)).padStart(2, "0");
+      const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+      const sec = String(s % 60).padStart(2, "0");
+      return `${h}:${m}:${sec}`;
+    }
+
+    // ======================
+    // ✏️ Modifier un scan
+    // ======================
+    window.editScan = async function(id, tour, oldDossard) {
+      const newTime = prompt("Temps écoulé (HH:MM:SS) ?");
+      if (!newTime) return;
+      const [h, m, s] = newTime.split(":").map(Number);
+      const ms = (h * 3600 + m * 60 + s) * 1000;
+      if (!startMs) {
+        alert("Chrono non défini, impossible de recalculer le timestamp.");
+        return;
+      }
+      const timestamp = new Date(startMs + ms);
+      const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")")?.trim();
+      const dossardFinal = newDossard || oldDossard;
+      await updateDoc(doc(db, "resultats", id), {
+        timestamp: timestamp,
+        dossard: dossardFinal
+      });
+      alert("Scan modifié !");
+      searchRunner();
+    };
+
+    // ======================
+    // ❌ Supprimer un scan
+    // ======================
+    window.deleteScan = async function(id) {
+      await deleteDoc(doc(db, "resultats", id));
+      alert("Scan supprimé !");
+      searchRunner();
+    };
+
+    // ======================
+    // ➕ Ajouter un scan
+    // ======================
+    window.addScan = async function() {
+      const dossard = document.getElementById("add-dossard").value.trim();
+      const tour = Number(document.getElementById("add-tour").value);
+      const time = document.getElementById("add-time").value;
+      if (!dossard || !tour || !time) return alert("Champs incomplets");
+      const [h, m, s] = time.split(":").map(Number);
+      const ms = (h * 3600 + m * 60 + s) * 1000;
+      if (!startMs) {
+        alert("Chrono non défini, impossible de calculer le timestamp.");
+        return;
+      }
+      const timestamp = new Date(startMs + ms);
+      await addDoc(collection(db, "resultats"), {
+        dossard,
+        tour,
+        timestamp,
+        horsDelai: false
+      });
+      alert("Scan ajouté !");
+      searchRunner();
+    };
+
+    // ======================
+    // 🔄 Modifier statut
+    // ======================
+    window.updateStatus = async function() {
+      const dossard = document.getElementById("status-dossard").value.trim();
+      const statut = document.getElementById("status-select").value;
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (snap.empty) return alert("Coureur introuvable");
+      const id = snap.docs[0].id;
+      await updateDoc(doc(db, "coureurs", id), { statut });
+      alert("Statut mis à jour !");
+      searchRunner();
+    };
+
+    // ======================
+    // ➕ Ajouter / Modifier un coureur
+    // ======================
+    window.saveRunner = async function() {
+      const dossard = document.getElementById("c-dossard").value.trim();
+      const nom = document.getElementById("c-nom").value.trim();
+      const prenom = document.getElementById("c-prenom").value.trim();
+      const sexe = document.getElementById("c-sexe").value;
+      if (!dossard || !nom || !prenom) {
+        document.getElementById("runner-save-status").innerHTML = "⚠️ Merci de remplir tous les champs.";
+        document.getElementById("runner-save-status").className = "message error";
+        return;
+      }
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        await addDoc(collection(db, "coureurs"), {
+          dossard, nom, prenom, categorie: sexe, statut: "OK"
+        });
+        document.getElementById("runner-save-status").innerHTML = "✅ Coureur ajouté avec succès.";
+        document.getElementById("runner-save-status").className = "message success";
+      } else {
+        const id = snap.docs[0].id;
+        await updateDoc(doc(db, "coureurs", id), { nom, prenom, categorie: sexe });
+        document.getElementById("runner-save-status").innerHTML = "✏️ Coureur mis à jour.";
+        document.getElementById("runner-save-status").className = "message success";
+      }
+      document.getElementById("c-dossard").value = "";
+      document.getElementById("c-nom").value = "";
+      document.getElementById("c-prenom").value = "";
+    };
+
+    // ======================
+    // 📋 Tableau complet des coureurs
+    // ======================
+    onSnapshot(collection(db, "coureurs"), snap => {
+      let liste = [];
+      snap.forEach(docu => {
+        const c = docu.data();
+        if (c.dossard) liste.push(c);
+      });
+      liste.sort((a, b) => Number(a.dossard) - Number(b.dossard));
+      let html = `
+        <table>
+          <tr>
+            <th>Dossard</th>
+            <th>Nom</th>
+            <th>Prénom</th>
+            <th>Sexe</th>
+            <th>Statut</th>
+            <th>Action</th>
+          </tr>
+      `;
+      liste.forEach(c => {
+        html += `
+          <tr>
+            <td>${c.dossard}</td>
+            <td>${c.nom}</td>
+            <td>${c.prenom}</td>
+            <td>${c.categorie === "H" ? "Homme" : "Femme"}</td>
+            <td>${c.statut}</td>
+            <td>
+              <button onclick="editRunner('${c.dossard}', '${c.nom}', '${c.prenom}', '${c.categorie}')">
+                Modifier
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      html += "</table>";
+      document.getElementById("table-coureurs").innerHTML = html;
+    });
+
+    // ======================
+    // ✏️ Remplir le formulaire + afficher scans
+    // ======================
+    window.editRunner = async function(dossard, nom, prenom, sexe) {
+      document.getElementById("c-dossard").value = dossard;
+      document.getElementById("c-nom").value = nom;
+      document.getElementById("c-prenom").value = prenom;
+      document.getElementById("c-sexe").value = sexe;
+      document.getElementById("runner-save-status").innerHTML = "✏️ Modification du coureur " + dossard;
+      document.getElementById("runner-save-status").className = "message warning";
+      const q = query(collection(db, "resultats"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        document.getElementById("edit-runner-scans").innerHTML = "<p class='message'>Aucun scan trouvé pour ce coureur.</p>";
+        return;
+      }
+      let html = `
+        <h3>⏱️ Scans du coureur</h3>
+        <table>
+          <tr>
+            <th>Tour</th>
+            <th>Temps</th>
+            <th>Action</th>
+          </tr>
+      `;
+      snap.forEach(docu => {
+        const r = docu.data();
+        const id = docu.id;
+        let temps = "--:--:--";
+        if (r.timestamp && startMs) {
+          const diff = r.timestamp.toDate().getTime() - startMs;
+          temps = formatTime(diff);
+        }
+        html += `
+          <tr>
+            <td>${r.tour ?? "-"}</td>
+            <td>${temps}</td>
+            <td>
+              <button onclick="editRunnerScan('${id}', ${r.tour ?? 0}, '${dossard}')">
+                Modifier
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      html += "</table>";
+      document.getElementById("edit-runner-scans").innerHTML = html;
+    };
+
+    window.editRunnerScan = async function(id, tour, dossard) {
+      const newTime = prompt("Nouveau temps pour le tour " + tour + " (HH:MM:SS) :");
+      if (!newTime) return;
+      const [h, m, s] = newTime.split(":").map(Number);
+      const ms = (h * 3600 + m * 60 + s) * 1000;
+      if (!startMs) {
+        alert("Chrono non défini, impossible de recalculer le timestamp.");
+        return;
+      }
+      const timestamp = new Date(startMs + ms);
+      await updateDoc(doc(db, "resultats", id), { timestamp });
+      alert("Temps mis à jour !");
+      editRunner(dossard);
+    };
+  </script>
+</body>
+</html>
