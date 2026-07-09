@@ -926,70 +926,56 @@
     };
 
     // 2. Scan manuel via boutons
-    window.buttonScan = async function(dossard) {
-      const statusDiv = document.getElementById("button-scan-status");
+   window.buttonScan = async function(dossard) {
+  const statusDiv = document.getElementById("button-scan-status");
 
-      if (!startMs) {
-        statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de scanner.";
-        statusDiv.className = "message error";
-        return;
-      }
+  if (!startMs) {
+    statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de scanner.";
+    statusDiv.className = "message error";
+    return;
+  }
 
-      // Vérifier si le coureur existe
-      try {
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          statusDiv.innerHTML = `❌ Coureur ${dossard} introuvable.`;
-          statusDiv.className = "message error";
-          return;
-        }
+  // Vérifier si le coureur a été scanné dans les 10 dernières minutes
+  const now = Date.now();
+  if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
+    const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
+    statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné. Attendez ${remainingMinutes} minute(s).`;
+    statusDiv.className = "message error";
+    return;
+  }
 
-        // Vérifier si le coureur a été scanné dans les 10 dernières minutes
-        const now = Date.now();
-        if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-          const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
-          statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné. Attendez ${remainingMinutes} minute(s).`;
-          statusDiv.className = "message error";
-          return;
-        }
+  // Calculer le tour
+  const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
+  const nextTour = resultsSnap.size + 1;
 
-        // Calculer le tour
-        const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
-        const nextTour = resultsSnap.size + 1;
+  // Calculer le temps écoulé depuis le départ
+  const elapsedTime = now - startMs;
+  const formattedTime = formatTime(elapsedTime);
 
-        // Calculer le temps écoulé depuis le départ
-        const elapsedTime = now - startMs;
-        const formattedTime = formatTime(elapsedTime);
+  // Enregistrer le scan (même si le coureur n'existe pas encore)
+  const timestamp = new Date();
+  await addDoc(collection(db, "resultats"), {
+    dossard,
+    tour: nextTour,
+    timestamp,
+    horsDelai: false
+  });
 
-        // Enregistrer le scan
-        const timestamp = new Date();
-        await addDoc(collection(db, "resultats"), {
-          dossard,
-          tour: nextTour,
-          timestamp,
-          horsDelai: false
-        });
+  // Mettre à jour le dernier temps de scan
+  lastScanTimes[dossard] = now;
+  updateDossardButtonsState();
 
-        // Mettre à jour le dernier temps de scan
-        lastScanTimes[dossard] = now;
-        updateDossardButtonsState();
+  // Afficher le temps dans le message de confirmation
+  statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
+  statusDiv.className = "message success";
 
-        // Afficher le temps dans le message de confirmation
-        statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
-        statusDiv.className = "message success";
+  // Recharger les scans pour ce coureur
+  currentRunnerDossard = dossard;
+  loadScans(dossard);
 
-        // Recharger les scans pour ce coureur
-        currentRunnerDossard = dossard;
-        loadScans(dossard);
-
-        // Faire défiler vers le message
-        statusDiv.scrollIntoView({ behavior: "smooth" });
-      } catch (error) {
-        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
-        statusDiv.className = "message error";
-      }
-    };
+  // Faire défiler vers le message
+  statusDiv.scrollIntoView({ behavior: "smooth" });
+};
 
     // 3. Ajouter un scan manuellement (existant)
     window.addScan = async function() {
