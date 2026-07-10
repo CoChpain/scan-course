@@ -177,7 +177,7 @@ async function traiterArrivee(dossard, mode) {
   let nextTour = 1;
   toursSnap.forEach(doc => {
     const data = doc.data();
-    if (data.tour >= nextTour) nextTour = data.tour + 1;
+    if (data.tour && data.tour >= nextTour) nextTour = data.tour + 1;
   });
 
   // Vérifications
@@ -256,8 +256,12 @@ document.getElementById("btn-dnf").onclick = async () => {
     return;
   }
   await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
+  // NE PAS enregistrer de tour pour les DNF
   await addDoc(collection(db, "resultats"), {
-    dossard: d, tour: currentTour, timestamp: serverTimestamp(), type: "DNF", source: "MANUEL"
+    dossard: d,
+    timestamp: serverTimestamp(),
+    type: "DNF",
+    source: "MANUEL"
   });
   beepError.play();
   feedback("🏳️ DNF: " + d, "orange");
@@ -279,8 +283,12 @@ document.getElementById("btn-dns").onclick = async () => {
     return;
   }
   await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
+  // NE PAS enregistrer de tour pour les DNS
   await addDoc(collection(db, "resultats"), {
-    dossard: d, tour: currentTour, timestamp: serverTimestamp(), type: "DNS", source: "MANUEL"
+    dossard: d,
+    timestamp: serverTimestamp(),
+    type: "DNS",
+    source: "MANUEL"
   });
   beepError.play();
   feedback("🚫 DNS: " + d, "orange");
