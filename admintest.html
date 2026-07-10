@@ -1,3 +1,8 @@
+Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles zones pour **DNF** et **DNS** dans la section "Ajout scan manuel (temps actuel)" :
+
+---
+
+```html
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -153,27 +158,18 @@
     }
     .dossard-btn:hover:not(:disabled) { background: var(--border-color); }
     .dossard-btn:disabled { opacity: 1; cursor: not-allowed; }
-    .dossard-btn.scanned-recently {
-      background: var(--btn-bg-danger) !important;
+
+    /* 🔴 CLASSES UNIFIÉES POUR LES BOUTONS SCANNÉS */
+    .dossard-btn.scanned {
+      background: #ff4444 !important;
       color: white !important;
       cursor: not-allowed !important;
     }
-    .dossard-btn.dnf-dns {
-      background: var(--btn-bg-dark-red) !important;
-      color: white !important;
-      cursor: not-allowed !important;
+    .dossard-btn.banned {
       text-decoration: line-through;
       text-decoration-thickness: 2px;
     }
-    .dossard-btn.in-time {
-      background: var(--btn-bg-danger) !important;
-      color: white !important;
-      cursor: not-allowed !important;
-    }
-    .dossard-btn.tour-not-open {
-      opacity: 0.5;
-      cursor: not-allowed !important;
-    }
+
     .section {
       border: 1px solid var(--border-color);
       border-radius: 8px;
@@ -266,19 +262,30 @@
 
   <div id="scans-tab" class="tab-content">
     <h2>📡 Gestion des scans</h2>
+
     <div class="section">
       <div class="section-title">⏱️ Ajout scan manuel (temps actuel)</div>
       <div class="form-group">
         <input id="quick-scan-dossard" type="text" placeholder="Dossard">
         <button onclick="quickScan()" class="btn-success">📡 Scanner maintenant</button>
       </div>
+      <div class="form-group">
+        <input id="quick-dnf-dossard" type="text" placeholder="Dossard DNF">
+        <button onclick="quickDnfScan()" class="btn-warning">🏳️ DNF</button>
+      </div>
+      <div class="form-group">
+        <input id="quick-dns-dossard" type="text" placeholder="Dossard DNS">
+        <button onclick="quickDnsScan()" class="btn-danger">🚫 DNS</button>
+      </div>
       <div id="quick-scan-status" class="message"></div>
     </div>
+
     <div class="section">
       <div class="section-title">🔢 Scan manuel (boutons 1 à 160)</div>
       <div id="dossard-buttons-grid" class="dossard-grid"></div>
       <div id="button-scan-status" class="message"></div>
     </div>
+
     <div class="section">
       <div class="section-title">✏️ Ajouter un scan manuellement</div>
       <div class="form-group">
@@ -463,23 +470,9 @@
       // Si le tour change, enregistrer le temps de début du nouveau tour
       if (newTour !== currentTour) {
         lastTourStartTime = Date.now();
-        currentTour = newTour;
-
-        // Réinitialiser les boutons "dans les délais" après 3 minutes
-        setTimeout(() => {
-          for (let i = 1; i <= 160; i++) {
-            const btn = document.getElementById(`dossard-btn-${i}`);
-            if (btn && btn.classList.contains("in-time")) {
-              btn.classList.remove("in-time");
-              btn.disabled = false;
-              btn.title = `Prêt pour le scan (tour ${currentTour})`;
-            }
-          }
-        }, 3 * 60 * 1000); // 3 minutes
-      } else {
-        currentTour = newTour;
       }
 
+      currentTour = newTour;
       if (!isUpdatingButtons) {
         isUpdatingButtons = true;
         setTimeout(() => {
@@ -716,25 +709,18 @@
       if (resultsUnsubscribe) {
         resultsUnsubscribe();
       }
-
-      // Écoute les changements dans "resultats"
       resultsUnsubscribe = onSnapshot(collection(db, "resultats"), snap => {
         snap.docChanges().forEach(change => {
           if (change.type === "added" || change.type === "modified") {
             const data = change.doc.data();
-            if (data.dossard) {
-              lastScanTimes[data.dossard] = data.timestamp?.toDate().getTime() || Date.now();
+            if (data.dossard && data.timestamp) {
+              lastScanTimes[data.dossard] = data.timestamp.toDate().getTime();
               updateDossardButton(data.dossard);
             }
           }
         });
-        // Force une mise à jour complète des boutons à chaque changement
-        if (!isUpdatingButtons) {
-          setTimeout(() => updateDossardButtonsState(), 100);
-        }
       });
 
-      // Écoute les changements dans "coureurs" (statuts DNS/DNF/ELIMINE)
       onSnapshot(collection(db, "coureurs"), snap => {
         runnerStatuses = {};
         snap.forEach(docu => {
@@ -743,10 +729,7 @@
             runnerStatuses[data.dossard] = data.statut;
           }
         });
-        // Force une mise à jour complète des boutons
-        if (!isUpdatingButtons) {
-          setTimeout(() => updateDossardButtonsState(), 100);
-        }
+        updateDossardButtonsState();
       });
     }
 
@@ -769,80 +752,75 @@
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
+      const now = Date.now();
 
+      // Réinitialisation
       btn.disabled = false;
-      btn.classList.remove("scanned-recently", "dnf-dns", "tour-not-open", "in-time");
+      btn.classList.remove("scanned", "banned");
 
-      // 1. Bloqué si DNS/DNF/ELIMINE → Rouge foncé + barré
+      // 1. Bloqué si DNS/DNF/ELIMINE
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         btn.disabled = true;
-        btn.classList.add("dnf-dns");
+        btn.classList.add("scanned", "banned");
         btn.title = `Coureur ${runnerStatuses[dossard]} - Bloqué jusqu'à la fin`;
         return;
       }
 
-      // 2. Chrono non lancé → Désactivé
+      // 2. Chrono non lancé
       if (!startMs) {
         btn.disabled = true;
-        btn.classList.add("tour-not-open");
         btn.title = "Chrono non lancé";
         return;
       }
 
-      // 3. Calcul du dernier tour scanné
-      let lastScannedTour = 0;
-      const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
-      resultsSnap.forEach(docu => {
-        const data = docu.data();
-        if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
-      });
+      // 3. Vérifier si scanné dans le tour actuel
+      const resultsSnap = await getDocs(query(
+        collection(db, "resultats"),
+        where("dossard", "==", dossard),
+        where("tour", "==", currentTour)
+      ));
 
-      // 4. Tour suivant non ouvert → Désactivé
-      if (lastScannedTour >= currentTour) {
+      if (!resultsSnap.empty) {
+        const result = resultsSnap.docs[0].data();
         btn.disabled = true;
-        btn.classList.add("tour-not-open");
-        btn.title = `Tour ${lastScannedTour + 1} non ouvert (actuel: ${currentTour})`;
+        btn.classList.add("scanned");
+        if (result.horsDelai) {
+          btn.classList.add("banned");
+          btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
+        } else {
+          btn.title = `Scanné dans le tour ${currentTour}`;
+        }
         return;
       }
 
-      // 5. Délai de 3 min après début du tour → Rouge clair
-      if (lastScanTimes[dossard] && lastTourStartTime) {
-        const timeSinceTourStart = Date.now() - lastTourStartTime;
+      // 4. Vérifier si scanné au tour précédent (délai 3min)
+      const allResults = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
+      let lastScannedTour = 0;
+      allResults.forEach(docu => {
+        const data = docu.data();
+        if (data.tour > lastScannedTour) lastScannedTour = data.tour;
+      });
+
+      if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
+        const timeSinceTourStart = now - lastTourStartTime;
         if (timeSinceTourStart < 3 * 60 * 1000) {
           btn.disabled = true;
-          btn.classList.add("scanned-recently");
+          btn.classList.add("scanned");
           const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
-          btn.title = `Attendez ${remainingSeconds}s (délai 3min)`;
+          btn.title = `Attendez ${remainingSeconds}s (délai 3min après début du tour)`;
           return;
         }
       }
 
-      // 6. Vérifier si le coureur est dans les délais pour le tour actuel
-      if (currentTour > 0) {
-        const tourResults = await getDocs(query(
-          collection(db, "resultats"),
-          where("dossard", "==", dossard),
-          where("tour", "==", currentTour)
-        ));
-        if (!tourResults.empty) {
-          const data = tourResults.docs[0].data();
-          if (data.horsDelai) {
-            btn.disabled = true;
-            btn.classList.add("dnf-dns");
-            btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
-            return;
-          } else {
-            // Si le coureur a été scanné dans les délais pour le tour actuel → Rouge
-            btn.classList.add("in-time");
-            btn.title = `Scanné dans les délais pour le tour ${currentTour}`;
-            return;
-          }
-        }
+      // 5. Tour suivant non ouvert
+      if (lastScannedTour >= currentTour) {
+        btn.disabled = true;
+        btn.title = `Tour ${lastScannedTour + 1} non encore ouvert (actuel: ${currentTour})`;
+        return;
       }
 
-      // 7. Par défaut : bouton activé (pas de couleur spéciale)
+      // 6. Sinon → bouton actif
       btn.disabled = false;
-      btn.title = `Prêt pour le scan (tour ${currentTour})`;
     }
 
     async function updateDossardButtonsState() {
@@ -931,6 +909,86 @@
       statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
       statusDiv.className = "message success";
       document.getElementById("quick-scan-dossard").value = "";
+    };
+
+    // 🆕 NOUVELLE FONCTION POUR DNF
+    window.quickDnfScan = async function() {
+      const dossard = document.getElementById("quick-dnf-dossard").value.trim();
+      const statusDiv = document.getElementById("quick-scan-status");
+      if (!dossard) {
+        statusDiv.innerHTML = "⚠️ Veuillez entrer un numéro de dossard.";
+        statusDiv.className = "message error";
+        return;
+      }
+      try {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          statusDiv.innerHTML = "❌ Coureur introuvable";
+          statusDiv.className = "message error";
+          return;
+        }
+        const docRef = snap.docs[0];
+        const coureur = docRef.data();
+        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+          statusDiv.className = "message error";
+          return;
+        }
+        await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
+        await addDoc(collection(db, "resultats"), {
+          dossard, tour: currentTour, timestamp: new Date(), horsDelai: false, source: "admintest", type: "DNF"
+        });
+        runnerStatuses[dossard] = "DNF";
+        lastScanTimes[dossard] = Date.now();
+        updateDossardButton(dossard);
+        statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF !`;
+        statusDiv.className = "message success";
+        document.getElementById("quick-dnf-dossard").value = "";
+      } catch (error) {
+        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+        statusDiv.className = "message error";
+      }
+    };
+
+    // 🆕 NOUVELLE FONCTION POUR DNS
+    window.quickDnsScan = async function() {
+      const dossard = document.getElementById("quick-dns-dossard").value.trim();
+      const statusDiv = document.getElementById("quick-scan-status");
+      if (!dossard) {
+        statusDiv.innerHTML = "⚠️ Veuillez entrer un numéro de dossard.";
+        statusDiv.className = "message error";
+        return;
+      }
+      try {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          statusDiv.innerHTML = "❌ Coureur introuvable";
+          statusDiv.className = "message error";
+          return;
+        }
+        const docRef = snap.docs[0];
+        const coureur = docRef.data();
+        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+          statusDiv.className = "message error";
+          return;
+        }
+        await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
+        await addDoc(collection(db, "resultats"), {
+          dossard, tour: currentTour, timestamp: new Date(), horsDelai: false, source: "admintest", type: "DNS"
+        });
+        runnerStatuses[dossard] = "DNS";
+        lastScanTimes[dossard] = Date.now();
+        updateDossardButton(dossard);
+        statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS !`;
+        statusDiv.className = "message success";
+        document.getElementById("quick-dns-dossard").value = "";
+      } catch (error) {
+        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+        statusDiv.className = "message error";
+      }
     };
 
     window.buttonScan = async function(dossard) {
@@ -1187,3 +1245,4 @@
   </script>
 </body>
 </html>
+```
