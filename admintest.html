@@ -90,12 +90,13 @@
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      background: var(--btn-bg);
+      background: var(--bg-secondary);
       color: var(--text-primary);
+      border: 1px solid var(--border-color);
     }
 
     button:hover:not(:disabled) {
-      opacity: 0.9;
+      background: var(--border-color);
     }
 
     button:disabled {
@@ -247,14 +248,14 @@
       cursor: not-allowed;
     }
 
-    /* Rouge clair pour les scans récents (10 min) */
+    /* Rouge clair pour les scans récents (3 min après le début du tour suivant) */
     .dossard-btn.scanned-recently {
       background: var(--btn-bg-danger) !important;
       color: white !important;
       cursor: not-allowed !important;
     }
 
-    /* Rouge foncé + barré pour DNF/DNS */
+    /* Rouge foncé + barré pour DNF/DNS/Éliminé */
     .dossard-btn.dnf-dns {
       background: var(--btn-bg-dark-red) !important;
       color: white !important;
@@ -485,6 +486,7 @@
     let currentTour = 0;
     let runnerStatuses = {};
     let isUpdatingButtons = false;
+    let lastTourStartTime = null;
 
     // ======================
     // 🎨 Fonctions UI
@@ -505,7 +507,6 @@
     // 🔐 Vérification mot de passe
     // ======================
     window.checkPwd = function() {
-      // Remplacez par votre mot de passe sécurisé
       const good = "ApolloRun2026!";
       const val = document.getElementById("pwd").value;
       if (val === good) {
@@ -566,6 +567,11 @@
         newTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
       }
 
+      // Si le tour change, enregistrer le temps de début du nouveau tour
+      if (newTour !== currentTour) {
+        lastTourStartTime = Date.now();
+      }
+
       currentTour = newTour;
       if (!isUpdatingButtons) {
         isUpdatingButtons = true;
@@ -619,6 +625,7 @@
         const now = Date.now();
         await setDoc(doc(db, "course", "depart"), { startMs: now }, { merge: true });
         startMs = now;
+        lastTourStartTime = now; // Initialiser le temps de début du premier tour
         afficherChrono();
         updateChronoButtonState();
       } catch (error) {
@@ -632,6 +639,7 @@
       try {
         await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
         startMs = null;
+        lastTourStartTime = null;
         afficherChrono();
         updateChronoButtonState();
       } catch (error) {
@@ -889,14 +897,21 @@
         return;
       }
 
-      // 5. Vérifier si le coureur a été scanné dans les 10 dernières minutes
-      if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-        btn.disabled = true;
-        btn.classList.add("scanned-recently");
-        const remainingSeconds = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000);
-        const remainingMinutes = Math.ceil(remainingSeconds / 60);
-        btn.title = `Dernier scan il y a ${Math.floor((now - lastScanTimes[dossard]) / 1000 / 60)} min. Attendez ${remainingMinutes} min.`;
+      // 5. Vérifier si le coureur a été scanné dans les 3 dernières minutes après le début du tour suivant
+      if (lastScanTimes[dossard] && lastTourStartTime) {
+        const timeSinceTourStart = now - lastTourStartTime;
+        if (timeSinceTourStart < 3 * 60 * 1000) {
+          btn.disabled = true;
+          btn.classList.add("scanned-recently");
+          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
+          btn.title = `Attendez ${remainingSeconds} secondes avant de scanner à nouveau.`;
+          return;
+        }
       }
+
+      // Si aucune condition n'est remplie, le bouton est actif et sans couleur spéciale
+      btn.disabled = false;
+      btn.classList.remove("scanned-recently", "dnf-dns", "tour-not-open");
     }
 
     // Met à jour tous les boutons (appelé au démarrage ou après un changement global)
@@ -951,13 +966,16 @@
         return;
       }
 
-      // Vérifier si le coureur a été scanné dans les 10 dernières minutes
+      // Vérifier si le coureur a été scanné dans les 3 dernières minutes après le début du tour suivant
       const now = Date.now();
-      if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-        const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
-        statusDiv.innerHTML = `❌ Ce coureur a déjà été scanné. Attendez ${remainingMinutes} minute(s).`;
-        statusDiv.className = "message error";
-        return;
+      if (lastScanTimes[dossard] && lastTourStartTime) {
+        const timeSinceTourStart = now - lastTourStartTime;
+        if (timeSinceTourStart < 3 * 60 * 1000) {
+          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
+          statusDiv.innerHTML = `❌ Attendez ${remainingSeconds} secondes avant de scanner à nouveau.`;
+          statusDiv.className = "message error";
+          return;
+        }
       }
 
       const nextTour = lastScannedTour + 1;
@@ -1016,13 +1034,16 @@
         return;
       }
 
-      // Vérifier si le coureur a été scanné dans les 10 dernières minutes
+      // Vérifier si le coureur a été scanné dans les 3 dernières minutes après le début du tour suivant
       const now = Date.now();
-      if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-        const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
-        statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné. Attendez ${remainingMinutes} minute(s).`;
-        statusDiv.className = "message error";
-        return;
+      if (lastScanTimes[dossard] && lastTourStartTime) {
+        const timeSinceTourStart = now - lastTourStartTime;
+        if (timeSinceTourStart < 3 * 60 * 1000) {
+          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
+          statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné. Attendez ${remainingSeconds} secondes.`;
+          statusDiv.className = "message error";
+          return;
+        }
       }
 
       const nextTour = lastScannedTour + 1;
@@ -1087,11 +1108,14 @@
       }
 
       const now = Date.now();
-      if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
-        const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
-        statusDiv.innerHTML = `❌ Ce coureur a déjà été scanné. Attendez ${remainingMinutes} minute(s).`;
-        statusDiv.className = "message error";
-        return;
+      if (lastScanTimes[dossard] && lastTourStartTime) {
+        const timeSinceTourStart = now - lastTourStartTime;
+        if (timeSinceTourStart < 3 * 60 * 1000) {
+          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
+          statusDiv.innerHTML = `❌ Attendez ${remainingSeconds} secondes avant de scanner à nouveau.`;
+          statusDiv.className = "message error";
+          return;
+        }
       }
 
       const [h, m, s] = time.split(":").map(Number);
