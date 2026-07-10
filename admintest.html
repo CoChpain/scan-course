@@ -165,6 +165,15 @@
       text-decoration: line-through;
       text-decoration-thickness: 2px;
     }
+    .dossard-btn.in-time {
+      background: var(--btn-bg-danger) !important;
+      color: white !important;
+      cursor: not-allowed !important;
+    }
+    .dossard-btn.tour-not-open {
+      opacity: 0.5;
+      cursor: not-allowed !important;
+    }
     .section {
       border: 1px solid var(--border-color);
       border-radius: 8px;
@@ -454,9 +463,23 @@
       // Si le tour change, enregistrer le temps de début du nouveau tour
       if (newTour !== currentTour) {
         lastTourStartTime = Date.now();
+        currentTour = newTour;
+
+        // Réinitialiser les boutons "dans les délais" après 3 minutes
+        setTimeout(() => {
+          for (let i = 1; i <= 160; i++) {
+            const btn = document.getElementById(`dossard-btn-${i}`);
+            if (btn && btn.classList.contains("in-time")) {
+              btn.classList.remove("in-time");
+              btn.disabled = false;
+              btn.title = `Prêt pour le scan (tour ${currentTour})`;
+            }
+          }
+        }, 3 * 60 * 1000); // 3 minutes
+      } else {
+        currentTour = newTour;
       }
 
-      currentTour = newTour;
       if (!isUpdatingButtons) {
         isUpdatingButtons = true;
         setTimeout(() => {
@@ -693,18 +716,25 @@
       if (resultsUnsubscribe) {
         resultsUnsubscribe();
       }
+
+      // Écoute les changements dans "resultats"
       resultsUnsubscribe = onSnapshot(collection(db, "resultats"), snap => {
         snap.docChanges().forEach(change => {
           if (change.type === "added" || change.type === "modified") {
             const data = change.doc.data();
-            if (data.dossard && data.timestamp) {
-              lastScanTimes[data.dossard] = data.timestamp.toDate().getTime();
+            if (data.dossard) {
+              lastScanTimes[data.dossard] = data.timestamp?.toDate().getTime() || Date.now();
               updateDossardButton(data.dossard);
             }
           }
         });
+        // Force une mise à jour complète des boutons à chaque changement
+        if (!isUpdatingButtons) {
+          setTimeout(() => updateDossardButtonsState(), 100);
+        }
       });
 
+      // Écoute les changements dans "coureurs" (statuts DNS/DNF/ELIMINE)
       onSnapshot(collection(db, "coureurs"), snap => {
         runnerStatuses = {};
         snap.forEach(docu => {
@@ -713,7 +743,10 @@
             runnerStatuses[data.dossard] = data.statut;
           }
         });
-        updateDossardButtonsState();
+        // Force une mise à jour complète des boutons
+        if (!isUpdatingButtons) {
+          setTimeout(() => updateDossardButtonsState(), 100);
+        }
       });
     }
 
@@ -736,12 +769,11 @@
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
-      const now = Date.now();
 
       btn.disabled = false;
-      btn.classList.remove("scanned-recently", "dnf-dns", "tour-not-open");
+      btn.classList.remove("scanned-recently", "dnf-dns", "tour-not-open", "in-time");
 
-      // 1. Bloqué si DNS/DNF/ELIMINE
+      // 1. Bloqué si DNS/DNF/ELIMINE → Rouge foncé + barré
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         btn.disabled = true;
         btn.classList.add("dnf-dns");
@@ -749,7 +781,7 @@
         return;
       }
 
-      // 2. Chrono non lancé
+      // 2. Chrono non lancé → Désactivé
       if (!startMs) {
         btn.disabled = true;
         btn.classList.add("tour-not-open");
@@ -765,7 +797,7 @@
         if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
       });
 
-      // 4. Tour suivant non ouvert
+      // 4. Tour suivant non ouvert → Désactivé
       if (lastScannedTour >= currentTour) {
         btn.disabled = true;
         btn.classList.add("tour-not-open");
@@ -773,9 +805,9 @@
         return;
       }
 
-      // 5. Délai de 3 min après début du tour
+      // 5. Délai de 3 min après début du tour → Rouge clair
       if (lastScanTimes[dossard] && lastTourStartTime) {
-        const timeSinceTourStart = now - lastTourStartTime;
+        const timeSinceTourStart = Date.now() - lastTourStartTime;
         if (timeSinceTourStart < 3 * 60 * 1000) {
           btn.disabled = true;
           btn.classList.add("scanned-recently");
@@ -785,22 +817,32 @@
         }
       }
 
-      // 6. Hors délai pour le tour en cours
+      // 6. Vérifier si le coureur est dans les délais pour le tour actuel
       if (currentTour > 0) {
         const tourResults = await getDocs(query(
           collection(db, "resultats"),
           where("dossard", "==", dossard),
           where("tour", "==", currentTour)
         ));
-        if (!tourResults.empty && tourResults.docs[0].data().horsDelai) {
-          btn.disabled = true;
-          btn.classList.add("dnf-dns");
-          btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
-          return;
+        if (!tourResults.empty) {
+          const data = tourResults.docs[0].data();
+          if (data.horsDelai) {
+            btn.disabled = true;
+            btn.classList.add("dnf-dns");
+            btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
+            return;
+          } else {
+            // Si le coureur a été scanné dans les délais pour le tour actuel → Rouge
+            btn.classList.add("in-time");
+            btn.title = `Scanné dans les délais pour le tour ${currentTour}`;
+            return;
+          }
         }
       }
 
+      // 7. Par défaut : bouton activé (pas de couleur spéciale)
       btn.disabled = false;
+      btn.title = `Prêt pour le scan (tour ${currentTour})`;
     }
 
     async function updateDossardButtonsState() {
