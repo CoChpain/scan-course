@@ -372,16 +372,27 @@
       if (val === good) {
         document.getElementById("lock").style.display = "none";
         document.getElementById("err").textContent = "";
+        
         // Initialiser les variables
         runnerStatuses = {};
         lastScanTimes = {};
         buttonsInitialized = false;
         currentTour = 0;
-        // Charger les données
-        loadAllRunners();
-        setupRealtimeListeners();
-        generateDossardButtons();
-        initLimites();
+        
+        // Charger les données dans l'ordre correct
+        initLimites().then(() => {
+          loadAllRunners();
+          setupRealtimeListeners();
+          
+          // Attendre que runnerStatuses soit chargé avant de générer les boutons
+          const waitForStatuses = setInterval(() => {
+            // On considère que c'est chargé si on a au moins un coureur OU si le chrono n'est pas lancé
+            if (Object.keys(runnerStatuses).length > 0 || !startMs) {
+              clearInterval(waitForStatuses);
+              generateDossardButtons();
+            }
+          }, 100);
+        });
       } else {
         document.getElementById("err").textContent = "Mot de passe incorrect";
         document.getElementById("pwd").value = "";
@@ -509,8 +520,9 @@
       }
       afficherChrono();
       updateChronoButtonState();
+      
       // Mettre à jour les boutons si le chrono est lancé ou arrêté
-      if (!isUpdatingButtons) {
+      if (!isUpdatingButtons && buttonsInitialized) {
         isUpdatingButtons = true;
         setTimeout(() => {
           updateDossardButtonsState();
@@ -543,6 +555,7 @@
         currentTour = 1;
         afficherChrono();
         updateChronoButtonState();
+        
         // Mettre à jour les boutons après le démarrage
         setTimeout(() => updateDossardButtonsState(), 200);
       } catch (error) {
@@ -560,6 +573,7 @@
         currentTour = 0;
         afficherChrono();
         updateChronoButtonState();
+        
         // Réinitialiser tous les boutons
         setTimeout(() => updateDossardButtonsState(), 200);
       } catch (error) {
@@ -675,46 +689,19 @@
     function loadAllRunners() {
       onSnapshot(collection(db, "coureurs"), snap => {
         try {
-          let liste = [];
+          runnerStatuses = {}; // Réinitialiser
           snap.forEach(docu => {
             const c = docu.data();
-            if (c.dossard) liste.push({ ...c, id: docu.id });
+            if (c.dossard) {
+              runnerStatuses[c.dossard] = c.statut;
+            }
           });
-          liste.sort((a, b) => Number(a.dossard) - Number(b.dossard));
-
-          let html = `
-            <table>
-              <tr>
-                <th>Dossard</th>
-                <th>Nom</th>
-                <th>Prénom</th>
-                <th>Sexe</th>
-                <th>Statut</th>
-                <th>Action</th>
-              </tr>
-          `;
-
-          liste.forEach(c => {
-            html += `
-              <tr>
-                <td>${c.dossard}</td>
-                <td>${c.nom}</td>
-                <td>${c.prenom}</td>
-                <td>${c.categorie === "H" ? "Homme" : "Femme"}</td>
-                <td>${c.statut}</td>
-                <td>
-                  <button onclick="editRunner('${c.dossard}', '${c.nom}', '${c.prenom}', '${c.categorie}')">
-                    Modifier
-                  </button>
-                </td>
-              </tr>
-            `;
-          });
-
-          html += "</table>";
-          document.getElementById("table-coureurs").innerHTML = html;
+          // Si les boutons sont déjà générés, les mettre à jour
+          if (buttonsInitialized) {
+            updateDossardButtonsState();
+          }
         } catch (error) {
-          document.getElementById("table-coureurs").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
+          console.error("Erreur loadAllRunners:", error);
         }
       });
     }
@@ -747,24 +734,6 @@
           }
         });
       });
-
-      onSnapshot(collection(db, "coureurs"), snap => {
-        runnerStatuses = {};
-        snap.forEach(docu => {
-          const data = docu.data();
-          if (data.dossard) {
-            runnerStatuses[data.dossard] = data.statut;
-          }
-        });
-        // Mettre à jour tous les boutons si les statuts ont changé
-        if (!isUpdatingButtons && buttonsInitialized) {
-          isUpdatingButtons = true;
-          setTimeout(() => {
-            updateDossardButtonsState();
-            isUpdatingButtons = false;
-          }, 100);
-        }
-      });
     }
 
     function generateDossardButtons() {
@@ -781,101 +750,103 @@
         grid.appendChild(btn);
       }
       buttonsInitialized = true;
-      // Initialiser les boutons avec les statuts actuels
-      updateDossardButtonsState();
+      
+      // Attendre un court instant pour s'assurer que runnerStatuses est chargé
+      setTimeout(() => {
+        updateDossardButtonsState();
+      }, 200);
     }
 
-    // 🔥 FONCTION CORRIGÉE - C'est ici que tout se joue !
+    // 🔥 FONCTION ULTRA-CORRIGÉE
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
 
-      // Réinitialisation complète
-      btn.disabled = false;
-      btn.classList.remove("scanned", "banned");
+      try {
+        // Réinitialisation complète
+        btn.disabled = false;
+        btn.classList.remove("scanned", "banned");
 
-      // 1. Vérifier d'abord le statut du coureur (priorité absolue)
-      if (runnerStatuses[dossard]) {
-        if (["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+        // 1. Vérifier d'abord le statut du coureur (priorité absolue)
+        if (runnerStatuses[dossard]) {
+          if (["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+            btn.disabled = true;
+            btn.classList.add("scanned", "banned");
+            btn.title = `Coureur ${runnerStatuses[dossard]} - Bloqué`;
+            return;
+          }
+        }
+        // Si statut inconnu, on considère comme OK (ne devrait pas arriver)
+
+        // 2. Chrono non lancé → Désactivé mais pas rouge
+        if (!startMs) {
           btn.disabled = true;
-          btn.classList.add("scanned", "banned");
-          btn.title = `Coureur ${runnerStatuses[dossard]} - Bloqué jusqu'à la fin`;
+          btn.title = "Chrono non lancé";
           return;
         }
-      }
 
-      // 2. Chrono non lancé → Désactivé mais pas rouge
-      if (!startMs) {
-        btn.disabled = true;
-        btn.title = "Chrono non lancé";
-        return;
-      }
+        // 3. Vérifier si scanné dans le tour actuel
+        const currentTourResults = await getDocs(query(
+          collection(db, "resultats"),
+          where("dossard", "==", dossard),
+          where("tour", "==", currentTour)
+        ));
 
-      // 3. Vérifier si le coureur a été scanné DANS LE TOUR ACTUEL
-      const currentTourResults = await getDocs(query(
-        collection(db, "resultats"),
-        where("dossard", "==", dossard),
-        where("tour", "==", currentTour)
-      ));
-
-      if (!currentTourResults.empty) {
-        const result = currentTourResults.docs[0].data();
-        btn.disabled = true;
-        btn.classList.add("scanned");
-        if (result.horsDelai) {
-          btn.classList.add("banned");
-          btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
-          // Marquer comme ELIMINE si pas déjà fait
-          if (!["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-            const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-              await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
-              runnerStatuses[dossard] = "ELIMINE";
-            }
-          }
-        } else {
-          btn.title = `Scanné dans le tour ${currentTour}`;
-        }
-        return;
-      }
-
-      // 4. Vérifier si le coureur a été scanné au tour précédent (délai de 3 minutes)
-      const allResults = await getDocs(query(
-        collection(db, "resultats"),
-        where("dossard", "==", dossard)
-      ));
-
-      let lastScannedTour = 0;
-      allResults.forEach(docu => {
-        const data = docu.data();
-        if (data.tour && data.tour > lastScannedTour) {
-          lastScannedTour = data.tour;
-        }
-      });
-
-      // Si le coureur a été scanné au tour précédent ET qu'on est dans les 3 premières minutes du tour actuel
-      if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
-        const timeSinceTourStart = Date.now() - lastTourStartTime;
-        if (timeSinceTourStart < 3 * 60 * 1000) {
+        if (!currentTourResults.empty) {
+          const result = currentTourResults.docs[0].data();
           btn.disabled = true;
           btn.classList.add("scanned");
-          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
-          btn.title = `Attendez ${remainingSeconds}s (délai 3min après début du tour)`;
+          if (result.horsDelai) {
+            btn.classList.add("banned");
+            btn.title = `Hors délai tour ${currentTour}`;
+            // Marquer comme ELIMINE si pas déjà fait
+            if (!["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+              const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
+                runnerStatuses[dossard] = "ELIMINE";
+              }
+            }
+          } else {
+            btn.title = `Scanné tour ${currentTour}`;
+          }
           return;
         }
-      }
 
-      // 5. Vérifier si le coureur a été scanné dans un tour antérieur (mais pas le précédent)
-      if (lastScannedTour > 0 && lastScannedTour < currentTour - 1) {
+        // 4. Vérifier délai de 3min après début du tour
+        const allResults = await getDocs(query(
+          collection(db, "resultats"),
+          where("dossard", "==", dossard)
+        ));
+
+        let lastScannedTour = 0;
+        allResults.forEach(docu => {
+          if (docu.data().tour > lastScannedTour) {
+            lastScannedTour = docu.data().tour;
+          }
+        });
+
+        if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
+          const timeSinceStart = Date.now() - lastTourStartTime;
+          if (timeSinceStart < 180000) { // 3 minutes
+            btn.disabled = true;
+            btn.classList.add("scanned");
+            btn.title = `Attendez ${Math.ceil((180000 - timeSinceStart)/1000)}s`;
+            return;
+          }
+        }
+
+        // 5. Cas normal
         btn.disabled = false;
-        btn.title = `Prêt pour le scan (tour ${currentTour})`;
-        return;
+        btn.title = `Prêt pour tour ${currentTour}`;
+      } catch (error) {
+        console.error(`Erreur updateDossardButton pour ${dossard}:`, error);
+        // En cas d'erreur, laisser le bouton dans un état sûr
+        btn.disabled = !startMs;
+        btn.title = !startMs ? "Chrono non lancé" : `Prêt pour tour ${currentTour}`;
+        btn.classList.remove("scanned", "banned");
       }
-
-      // 6. Cas par défaut : bouton actif (pas encore scanné ou premier tour)
-      btn.disabled = false;
-      btn.title = `Prêt pour le scan (tour ${currentTour})`;
     }
 
     async function updateDossardButtonsState() {
@@ -944,8 +915,8 @@
       }
 
       const now = Date.now();
-      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 3 * 60 * 1000) {
-        const remainingSeconds = Math.ceil((3 * 60 * 1000 - (now - lastTourStartTime)) / 1000);
+      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 180000) {
+        const remainingSeconds = Math.ceil((180000 - (now - lastTourStartTime)) / 1000);
         statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
         statusDiv.className = "message error";
         return;
@@ -1110,8 +1081,8 @@
       }
 
       const now = Date.now();
-      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 3 * 60 * 1000) {
-        const remainingSeconds = Math.ceil((3 * 60 * 1000 - (now - lastTourStartTime)) / 1000);
+      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 180000) {
+        const remainingSeconds = Math.ceil((180000 - (now - lastTourStartTime)) / 1000);
         statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
         statusDiv.className = "message error";
         return;
@@ -1172,8 +1143,8 @@
       }
 
       const now = Date.now();
-      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 3 * 60 * 1000) {
-        const remainingSeconds = Math.ceil((3 * 60 * 1000 - (now - lastTourStartTime)) / 1000);
+      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 180000) {
+        const remainingSeconds = Math.ceil((180000 - (now - lastTourStartTime)) / 1000);
         statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
         statusDiv.className = "message error";
         return;
@@ -1232,7 +1203,7 @@
           const btn = document.getElementById(`dossard-btn-${i}`);
           if (btn) {
             btn.classList.remove("scanned", "banned");
-            btn.disabled = !startMs; // Désactivé si chrono non lancé
+            btn.disabled = !startMs;
           }
         }
         document.getElementById("reset-resultats-status").innerHTML = "🗑️ Résultats supprimés.";
