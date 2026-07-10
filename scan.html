@@ -139,7 +139,6 @@ onSnapshot(doc(db, "course", "depart"), snap => {
 onSnapshot(doc(db, "course", "limitesTours"), snap => {
   if (snap.exists()) { limites = snap.data(); updateCurrentTour(); }
   else {
-    // Initialiser avec les valeurs par défaut
     setDoc(doc(db, "course", "limitesTours"), limites);
   }
 });
@@ -160,13 +159,17 @@ async function traiterArrivee(dossard, mode) {
   localStorage.setItem("scanAuthTime", Date.now());
   if (!dossard) { feedback("❌ Dossard invalide", "red"); return; }
 
-  // Vérifier existence
+  // Vérifier existence et statut
   const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", dossard)));
   if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
   const docRef = snap.docs[0];
   const coureur = docRef.data();
+
+  // Bloquer si déjà éliminé
   if (["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
-    feedback(`⛔ Bloqué (${coureur.statut})`, "red"); beepError.play(); return;
+    feedback(`⛔ Coureur ${coureur.statut} - Impossible de scanner`, "red");
+    beepError.play();
+    return;
   }
 
   // Calcul prochain tour
@@ -180,21 +183,28 @@ async function traiterArrivee(dossard, mode) {
   // Vérifications
   if (nextTour > currentTour) {
     feedback(`⛔ Tour ${nextTour} non ouvert (actuel: ${currentTour})`, "red");
-    beepError.play(); return;
+    beepError.play();
+    return;
   }
   if (await isAlreadyScannedInTour(dossard, nextTour)) {
-    feedback(`⛔ Déjà scanné pour le tour ${nextTour}`, "orange"); beepError.play(); return;
+    feedback(`⛔ Déjà scanné pour le tour ${nextTour}`, "orange");
+    beepError.play();
+    return;
   }
   if (await isHorsDelai(dossard, nextTour)) {
     await addDoc(collection(db, "resultats"), {
       dossard, tour: nextTour, timestamp: serverTimestamp(), horsDelai: true, source: mode
     });
     await updateDoc(doc(db, "coureurs", docRef.id), { statut: "ELIMINE" });
-    beepError.play(); feedback(`🚨 Hors délai - ELIMINÉ (Tour ${nextTour})`, "red"); return;
+    beepError.play();
+    feedback(`🚨 Hors délai - ELIMINÉ (Tour ${nextTour})`, "red");
+    return;
   }
   if (lastTourStartTime && (Date.now() - lastTourStartTime) < 3 * 60 * 1000) {
     const remaining = Math.ceil((3 * 60 * 1000 - (Date.now() - lastTourStartTime)) / 1000);
-    feedback(`⏳ Attendez ${remaining}s (délai 3min)`, "orange"); beepError.play(); return;
+    feedback(`⏳ Attendez ${remaining}s (délai 3min après début du tour)`, "orange");
+    beepError.play();
+    return;
   }
 
   // Enregistrement
@@ -231,35 +241,49 @@ document.getElementById("btn-arrivee").onclick = () => {
 };
 
 document.getElementById("btn-dnf").onclick = async () => {
+  if (!startMs) {
+    feedback("⛔ Impossible de marquer un DNF avant le départ d'un tour", "red");
+    beepError.play();
+    return;
+  }
   const d = document.getElementById("dossard-dnf").value.replace(/\D/g, "");
   localStorage.setItem("scanAuthTime", Date.now());
   const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", d)));
   if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
   const docRef = snap.docs[0];
   if (["DNF", "DNS", "ELIMINE"].includes(docRef.data().statut)) {
-    feedback("⛔ Déjà " + docRef.data().statut, "red"); return;
+    feedback("⛔ Déjà " + docRef.data().statut, "red");
+    return;
   }
   await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
   await addDoc(collection(db, "resultats"), {
-    dossard: d, type: "DNF", timestamp: serverTimestamp()
+    dossard: d, tour: currentTour, timestamp: serverTimestamp(), type: "DNF", source: "MANUEL"
   });
-  beepError.play(); feedback("🏳️ DNF: " + d, "orange");
+  beepError.play();
+  feedback("🏳️ DNF: " + d, "orange");
 };
 
 document.getElementById("btn-dns").onclick = async () => {
+  if (!startMs) {
+    feedback("⛔ Impossible de marquer un DNS avant le départ d'un tour", "red");
+    beepError.play();
+    return;
+  }
   const d = document.getElementById("dossard-dns").value.replace(/\D/g, "");
   localStorage.setItem("scanAuthTime", Date.now());
   const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", d)));
   if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
   const docRef = snap.docs[0];
   if (["DNF", "DNS", "ELIMINE"].includes(docRef.data().statut)) {
-    feedback("⛔ Déjà " + docRef.data().statut, "red"); return;
+    feedback("⛔ Déjà " + docRef.data().statut, "red");
+    return;
   }
   await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
   await addDoc(collection(db, "resultats"), {
-    dossard: d, type: "DNS", timestamp: serverTimestamp()
+    dossard: d, tour: currentTour, timestamp: serverTimestamp(), type: "DNS", source: "MANUEL"
   });
-  beepError.play(); feedback("🚫 DNS: " + d, "orange");
+  beepError.play();
+  feedback("🚫 DNS: " + d, "orange");
 };
 
 // ======================
