@@ -376,6 +376,7 @@
         runnerStatuses = {};
         lastScanTimes = {};
         buttonsInitialized = false;
+        currentTour = 0;
         // Charger les données
         loadAllRunners();
         setupRealtimeListeners();
@@ -479,17 +480,11 @@
             }
           }
         }, 3 * 60 * 1000); // 3 minutes
+
+        // Mettre à jour immédiatement tous les boutons
+        updateDossardButtonsState();
       } else {
         currentTour = newTour;
-      }
-
-      // Mettre à jour les boutons si le chrono est lancé
-      if (startMs && !isUpdatingButtons) {
-        isUpdatingButtons = true;
-        setTimeout(() => {
-          updateDossardButtonsState();
-          isUpdatingButtons = false;
-        }, 50);
       }
     }
 
@@ -790,6 +785,7 @@
       updateDossardButtonsState();
     }
 
+    // 🔥 FONCTION CORRIGÉE - C'est ici que tout se joue !
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
@@ -798,12 +794,14 @@
       btn.disabled = false;
       btn.classList.remove("scanned", "banned");
 
-      // 1. Bloqué si DNS/DNF/ELIMINE → Rouge foncé + barré
-      if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-        btn.disabled = true;
-        btn.classList.add("scanned", "banned");
-        btn.title = `Coureur ${runnerStatuses[dossard]} - Bloqué jusqu'à la fin`;
-        return;
+      // 1. Vérifier d'abord le statut du coureur (priorité absolue)
+      if (runnerStatuses[dossard]) {
+        if (["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+          btn.disabled = true;
+          btn.classList.add("scanned", "banned");
+          btn.title = `Coureur ${runnerStatuses[dossard]} - Bloqué jusqu'à la fin`;
+          return;
+        }
       }
 
       // 2. Chrono non lancé → Désactivé mais pas rouge
@@ -813,7 +811,7 @@
         return;
       }
 
-      // 3. Vérifier si scanné DANS LE TOUR ACTUEL
+      // 3. Vérifier si le coureur a été scanné DANS LE TOUR ACTUEL
       const currentTourResults = await getDocs(query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -828,7 +826,7 @@
           btn.classList.add("banned");
           btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
           // Marquer comme ELIMINE si pas déjà fait
-          if (runnerStatuses[dossard] !== "ELIMINE") {
+          if (!["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
             const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
             const snap = await getDocs(q);
             if (!snap.empty) {
@@ -842,26 +840,40 @@
         return;
       }
 
-      // 4. Vérifier délai de 3min après début du tour
-      const allResults = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
+      // 4. Vérifier si le coureur a été scanné au tour précédent (délai de 3 minutes)
+      const allResults = await getDocs(query(
+        collection(db, "resultats"),
+        where("dossard", "==", dossard)
+      ));
+
       let lastScannedTour = 0;
       allResults.forEach(docu => {
         const data = docu.data();
-        if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
+        if (data.tour && data.tour > lastScannedTour) {
+          lastScannedTour = data.tour;
+        }
       });
 
+      // Si le coureur a été scanné au tour précédent ET qu'on est dans les 3 premières minutes du tour actuel
       if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
         const timeSinceTourStart = Date.now() - lastTourStartTime;
         if (timeSinceTourStart < 3 * 60 * 1000) {
           btn.disabled = true;
           btn.classList.add("scanned");
           const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
-          btn.title = `Attendez ${remainingSeconds}s (délai 3min)`;
+          btn.title = `Attendez ${remainingSeconds}s (délai 3min après début du tour)`;
           return;
         }
       }
 
-      // 5. Par défaut → Bouton actif
+      // 5. Vérifier si le coureur a été scanné dans un tour antérieur (mais pas le précédent)
+      if (lastScannedTour > 0 && lastScannedTour < currentTour - 1) {
+        btn.disabled = false;
+        btn.title = `Prêt pour le scan (tour ${currentTour})`;
+        return;
+      }
+
+      // 6. Cas par défaut : bouton actif (pas encore scanné ou premier tour)
       btn.disabled = false;
       btn.title = `Prêt pour le scan (tour ${currentTour})`;
     }
@@ -920,7 +932,7 @@
         });
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
-        if (!snap.empty && runnerStatuses[dossard] !== "ELIMINE") {
+        if (!snap.empty && !["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
           await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
           runnerStatuses[dossard] = "ELIMINE";
         }
@@ -1086,7 +1098,7 @@
         });
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
-        if (!snap.empty && runnerStatuses[dossard] !== "ELIMINE") {
+        if (!snap.empty && !["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
           await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
           runnerStatuses[dossard] = "ELIMINE";
         }
