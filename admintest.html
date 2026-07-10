@@ -364,37 +364,67 @@
     // ======================
     // 🔐 Vérification mot de passe
     // ======================
-    window.checkPwd = function() {
-      const good = "ApolloRun2026!";
-      const val = document.getElementById("pwd").value;
-      if (val === good) {
-        document.getElementById("lock").style.display = "none";
-        document.getElementById("err").textContent = "";
+   window.checkPwd = function() {
+  const good = "ApolloRun2026!";
+  const val = document.getElementById("pwd").value;
+  if (val === good) {
+    document.getElementById("lock").style.display = "none";
+    document.getElementById("err").textContent = "";
 
-        // Initialiser les variables
-        runnerStatuses = {};
-        buttonsInitialized = false;
-        currentTour = 0;
+    // Initialiser les variables
+    runnerStatuses = {};
+    buttonsInitialized = false;
+    currentTour = 0;
 
-        // Charger les données dans l'ordre correct
-        initLimites().then(() => {
-          loadAllRunners();
-          setupRealtimeListeners();
+    // Charger les données dans l'ordre correct
+    initLimites().then(async () => {
+      // Attendre que limites soit chargé
+      await new Promise(resolve => {
+        const checkLimites = setInterval(() => {
+          if (Object.keys(limites).length > 0) {
+            clearInterval(checkLimites);
+            resolve();
+          }
+        }, 100);
+      });
 
-          // Attendre que runnerStatuses soit chargé avant de générer les boutons
-          const waitForStatuses = setInterval(() => {
-            if (Object.keys(runnerStatuses).length > 0 || !startMs) {
-              clearInterval(waitForStatuses);
-              generateDossardButtons();
-            }
-          }, 100);
-        });
-      } else {
-        document.getElementById("err").textContent = "Mot de passe incorrect";
-        document.getElementById("pwd").value = "";
-        document.getElementById("pwd").focus();
+      // Charger startMs depuis Firebase
+      const departDoc = await getDoc(doc(db, "course", "depart"));
+      if (departDoc.exists()) {
+        startMs = departDoc.data().startMs;
       }
-    };
+
+      // Calculer currentTour et lastTourStartTime en fonction de startMs
+      if (startMs) {
+        const elapsedMs = Date.now() - startMs;
+        updateCurrentTour(elapsedMs);
+        // Forcer la mise à jour de lastTourStartTime si currentTour > 0
+        if (currentTour > 0) {
+          let cumulMs = 0;
+          for (let i = 1; i < currentTour; i++) {
+            cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
+          }
+          lastTourStartTime = startMs + cumulMs;
+        }
+      }
+
+      loadAllRunners();
+      setupRealtimeListeners();
+
+      // Attendre que runnerStatuses soit chargé avant de générer les boutons
+      const waitForStatuses = setInterval(() => {
+        if (Object.keys(runnerStatuses).length > 0 || !startMs) {
+          clearInterval(waitForStatuses);
+          generateDossardButtons();
+        }
+      }, 100);
+    });
+  } else {
+    document.getElementById("err").textContent = "Mot de passe incorrect";
+    document.getElementById("pwd").value = "";
+    document.getElementById("pwd").focus();
+  }
+};
 
     // ======================
     // 📊 Fonctions utilitaires
@@ -452,38 +482,41 @@
       return `${h}:${m}:${sec}`;
     }
 
-    function updateCurrentTour(elapsedMs) {
-      const diffMin = elapsedMs / 60000;
-      let cumul = 0;
-      let newTour = 0;
+   function updateCurrentTour(elapsedMs) {
+  const diffMin = elapsedMs / 60000;
+  let cumul = 0;
+  let newTour = 0;
 
-      for (let i = 1; i <= 10; i++) {
-        const limite = limites["t" + i];
-        if (!limite) break;
-        cumul += limite;
-        if (diffMin < cumul) {
-          newTour = i;
-          break;
-        }
-      }
-
-      if (newTour === 0 && Object.keys(limites).length > 0) {
-        newTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
-      }
-
-      // Si le tour change
-      if (newTour !== currentTour) {
-        lastTourStartTime = Date.now();
-        currentTour = newTour;
-
-        // Après 3 minutes, recalculer l'état de TOUS les boutons
-        setTimeout(() => {
-          updateDossardButtonsState();
-        }, 180000); // 3 minutes
-      } else {
-        currentTour = newTour;
-      }
+  for (let i = 1; i <= 10; i++) {
+    const limite = limites["t" + i];
+    if (!limite) break;
+    cumul += limite;
+    if (diffMin < cumul) {
+      newTour = i;
+      break;
     }
+  }
+
+  if (newTour === 0 && Object.keys(limites).length > 0) {
+    newTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
+  }
+
+  // Si le tour change OU si c'est la première fois qu'on détecte le tour actuel
+  if (newTour !== currentTour || !lastTourStartTime) {
+    // Calculer lastTourStartTime en fonction du tour
+    let cumulMs = 0;
+    for (let i = 1; i < newTour; i++) {
+      cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
+    }
+    lastTourStartTime = startMs + cumulMs;
+    currentTour = newTour;
+
+    // Après 3 minutes, recalculer l'état de TOUS les boutons
+    setTimeout(() => {
+      updateDossardButtonsState();
+    }, 180000); // 3 minutes
+  }
+}
 
     function updateChronoButtonState() {
       const btnStart = document.getElementById("btn-start");
@@ -517,15 +550,15 @@
       }
     });
 
-    onSnapshot(doc(db, "course", "limitesTours"), snap => {
-      if (snap.exists()) {
-        limites = snap.data();
-        if (startMs) {
-          const elapsedMs = Date.now() - startMs;
-          updateCurrentTour(elapsedMs);
-        }
-      }
-    });
+   onSnapshot(doc(db, "course", "limitesTours"), snap => {
+  if (snap.exists()) {
+    limites = snap.data();
+    if (startMs) {
+      const elapsedMs = Date.now() - startMs;
+      updateCurrentTour(elapsedMs);
+    }
+  }
+});
 
     window.startChrono = async function() {
       if (startMs) {
