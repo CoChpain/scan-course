@@ -1,308 +1,1727 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
-  <meta charset="UTF-8">
-  <title>SCAN COURSE</title>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+<meta charset="UTF-8">
+<title>SCAN COURSE</title>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+
+body{
+background:#000;
+color:white;
+font-family:Arial;
+text-align:center;
+}
+
+button{
+padding:12px 20px;
+font-size:18px;
+margin:8px;
+cursor:pointer;
+}
+
+input{
+padding:12px;
+font-size:18px;
+width:220px;
+}
+
+#feedback{
+font-size:28px;
+font-weight:bold;
+margin-top:20px;
+}
+
+</style>
+
 </head>
 
-<body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
-<div id="lock" style="position:fixed;inset:0;background:black;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
-  <h2>🔒 Accès protégé</h2>
-  <input id="pwd" type="password" placeholder="Mot de passe">
-  <button onclick="checkPwd()">Entrer</button>
-  <div id="err" style="color:red"></div>
+<body>
+
+
+<div id="lock"
+style="
+position:fixed;
+inset:0;
+background:black;
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+z-index:9999;
+">
+
+<h2>🔒 Accès protégé</h2>
+
+<input 
+id="pwd"
+type="password"
+placeholder="Mot de passe">
+
+
+<button onclick="checkPwd()">
+Entrer
+</button>
+
+<div id="err" style="color:red"></div>
+
 </div>
 
-<script>
-const SESSION_DURATION = 30 * 60 * 1000;
 
-function checkPwd(){
-  if(document.getElementById("pwd").value==="3sRunTravel2026"){
-    localStorage.setItem("scanAuthTime", Date.now());
-    unlock();
-  } else {
-    document.getElementById("err").innerText="Mot de passe incorrect";
-  }
-}
-
-function unlock(){
-  document.getElementById("lock").style.display="none";
-}
-
-function checkSession(){
-  const saved = localStorage.getItem("scanAuthTime");
-  if(!saved) return;
-  if(Date.now() - saved < SESSION_DURATION){
-    unlock();
-  }
-}
-checkSession();
-</script>
 
 <h1>🏁 ARRIVÉES COURSE</h1>
 
-<div id="reader" style="width:320px;margin:20px auto;"></div>
-<div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
 
-<div>
-  <input id="arrivee-manuel" placeholder="Dossard arrivée">
-  <button id="btn-arrivee">✅ ARRIVÉE</button>
+<div id="reader"
+style="width:320px;margin:20px auto;">
 </div>
 
-<div>
-  <input id="dossard-dnf" placeholder="Dossard DNF">
-  <button id="btn-dnf">DNF</button>
-</div>
+
+<div id="feedback"></div>
+
+
 
 <div>
-  <input id="dossard-dns" placeholder="Dossard DNS">
-  <button id="btn-dns">DNS</button>
+
+<input 
+id="arrivee-manuel"
+placeholder="Dossard arrivée">
+
+<button id="btn-arrivee">
+✅ ARRIVÉE
+</button>
+
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import {
-  getFirestore, collection, query, where, getDocs,
-  addDoc, updateDoc, doc, serverTimestamp, onSnapshot, getDoc
-} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+<div>
 
-// Variables globales
-let startMs = null;
-let limites = { t1: 40, t2: 37, t3: 34, t4: 31, t5: 28, t6: 25, t7: 22, t8: 19, t9: 16, t10: 13 };
-let currentTour = 0;
-let lastTourStartTime = null;
-let runnerStatuses = {};
+<input 
+id="dossard-dnf"
+placeholder="Dossard DNF">
 
-// Sons
-const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
-const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+<button id="btn-dnf">
+🏳️ DNF
+</button>
 
-// Anti-double scan
-let lastScan = null;
-let lastScanTime = 0;
-let processing = false;
+</div>
 
-// ======================
-// 📊 Fonctions utilitaires
-// ======================
-function updateCurrentTour() {
-  if (!startMs) { currentTour = 0; lastTourStartTime = null; return; }
-  const now = Date.now();
-  const diffMin = (now - startMs) / 60000;
-  let cumul = 0;
-  for (let i = 1; i <= 10; i++) {
-    const limite = limites[`t${i}`];
-    if (!limite) break;
-    cumul += limite;
-    if (diffMin < cumul) {
-      if (i !== currentTour) lastTourStartTime = now;
-      currentTour = i;
-      return;
-    }
-  }
-  currentTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
-  if (currentTour !== 0) lastTourStartTime = now;
+
+
+<div>
+
+<input 
+id="dossard-dns"
+placeholder="Dossard DNS">
+
+<button id="btn-dns">
+🚫 DNS
+</button>
+
+</div>
+
+
+
+
+<script>
+
+const SESSION_DURATION =
+30*60*1000;
+
+
+function checkPwd(){
+
+if(
+document.getElementById("pwd").value
+==="3sRunTravel2026"
+){
+
+localStorage.setItem(
+"scanAuthTime",
+Date.now()
+);
+
+unlock();
+
+}
+else{
+
+document.getElementById("err").innerText=
+"Mot de passe incorrect";
+
 }
 
-async function isHorsDelai(dossard, tour) {
-  if (!startMs || tour < 1 || tour > 10) return false;
-  let cumulMin = 0;
-  for (let i = 1; i <= tour; i++) {
-    cumulMin += (limites[`t${i}`] || 0);
-  }
-  return (Date.now() - startMs) > (cumulMin * 60 * 1000);
 }
 
-async function isAlreadyScannedInTour(dossard, tour) {
-  const snap = await getDocs(query(
-    collection(db, "resultats"),
-    where("dossard", "==", dossard),
-    where("tour", "==", tour)
-  ));
-  return !snap.empty;
+
+
+function unlock(){
+
+document.getElementById("lock")
+.style.display="none";
+
 }
 
-// ======================
-// 🔥 Écouteurs Firebase
-// ======================
-onSnapshot(doc(db, "course", "depart"), snap => {
-  if (snap.exists()) { startMs = snap.data().startMs; updateCurrentTour(); }
-  else { startMs = null; currentTour = 0; lastTourStartTime = null; }
-});
 
-onSnapshot(doc(db, "course", "limitesTours"), snap => {
-  if (snap.exists()) { limites = snap.data(); updateCurrentTour(); }
-  else {
-    setDoc(doc(db, "course", "limitesTours"), limites);
-  }
-});
 
-onSnapshot(collection(db, "coureurs"), snap => {
-  runnerStatuses = {};
-  snap.forEach(docu => {
-    const data = docu.data();
-    if (data.dossard) runnerStatuses[data.dossard] = data.statut;
-  });
-});
+function checkSession(){
 
-// ======================
-// 🏁 Traitement des arrivées
-// ======================
-async function traiterArrivee(dossard, mode) {
-  if (!startMs) { feedback("⛔ Course non démarrée", "red"); beepError.play(); return; }
-  localStorage.setItem("scanAuthTime", Date.now());
-  if (!dossard) { feedback("❌ Dossard invalide", "red"); return; }
+const saved=
+localStorage.getItem("scanAuthTime");
 
-  // Vérifier existence et statut
-  const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", dossard)));
-  if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
-  const docRef = snap.docs[0];
-  const coureur = docRef.data();
 
-  // Bloquer si déjà éliminé
-  if (["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
-    feedback(`⛔ Coureur ${coureur.statut} - Impossible de scanner`, "red");
-    beepError.play();
-    return;
-  }
+if(saved &&
+Date.now()-saved < SESSION_DURATION){
 
-  // Calcul prochain tour
-  const toursSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
-  let nextTour = 1;
-  toursSnap.forEach(doc => {
-    const data = doc.data();
-    if (data.tour && data.tour >= nextTour) nextTour = data.tour + 1;
-  });
+unlock();
 
-  // Vérifications
-  if (nextTour > currentTour) {
-    feedback(`⛔ Tour ${nextTour} non ouvert (actuel: ${currentTour})`, "red");
-    beepError.play();
-    return;
-  }
-  if (await isAlreadyScannedInTour(dossard, nextTour)) {
-    feedback(`⛔ Déjà scanné pour le tour ${nextTour}`, "orange");
-    beepError.play();
-    return;
-  }
-  if (await isHorsDelai(dossard, nextTour)) {
-    await addDoc(collection(db, "resultats"), {
-      dossard, tour: nextTour, timestamp: serverTimestamp(), horsDelai: true, source: mode
-    });
-    await updateDoc(doc(db, "coureurs", docRef.id), { statut: "ELIMINE" });
-    beepError.play();
-    feedback(`🚨 Hors délai - ELIMINÉ (Tour ${nextTour})`, "red");
-    return;
-  }
-  if (lastTourStartTime && (Date.now() - lastTourStartTime) < 3 * 60 * 1000) {
-    const remaining = Math.ceil((3 * 60 * 1000 - (Date.now() - lastTourStartTime)) / 1000);
-    feedback(`⏳ Attendez ${remaining}s (délai 3min après début du tour)`, "orange");
-    beepError.play();
-    return;
-  }
-
-  // Enregistrement
-  await addDoc(collection(db, "resultats"), {
-    dossard, tour: nextTour, timestamp: serverTimestamp(), horsDelai: false, source: mode
-  });
-  beepOk.play();
-  let couleur = "lime";
-  if ((coureur.categorie || coureur.sexe || "").toUpperCase() === "F") couleur = "violet";
-  else if ((coureur.categorie || coureur.sexe || "").toUpperCase() === "H") couleur = "cyan";
-  feedback(`✅ Dossard ${dossard} - Tour ${nextTour}`, couleur);
 }
 
-// ======================
-// 📷 Scanner QR Code
-// ======================
-const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 220 });
-scanner.render(async (text) => {
-  if (!startMs) { feedback("⛔ Course non démarrée", "orange"); return; }
-  const d = text.split("-").pop().replace(/\D/g, "");
-  const now = Date.now();
-  if (d === lastScan && now - lastScanTime < 3000) return;
-  if (processing) return;
-  lastScan = d; lastScanTime = now; processing = true;
-  try { await traiterArrivee(d, "SCAN"); } finally { setTimeout(() => processing = false, 1500); }
-});
-
-// ======================
-// 🔘 Boutons manuels
-// ======================
-document.getElementById("btn-arrivee").onclick = () => {
-  const d = document.getElementById("arrivee-manuel").value.replace(/\D/g, "");
-  traiterArrivee(d, "MANUEL");
-};
-
-document.getElementById("btn-dnf").onclick = async () => {
-  if (!startMs) {
-    feedback("⛔ Impossible de marquer un DNF avant le départ d'un tour", "red");
-    beepError.play();
-    return;
-  }
-  const d = document.getElementById("dossard-dnf").value.replace(/\D/g, "");
-  localStorage.setItem("scanAuthTime", Date.now());
-  const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", d)));
-  if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
-  const docRef = snap.docs[0];
-  if (["DNF", "DNS", "ELIMINE"].includes(docRef.data().statut)) {
-    feedback("⛔ Déjà " + docRef.data().statut, "red");
-    return;
-  }
-  await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
-  // NE PAS enregistrer de tour pour les DNF
-  await addDoc(collection(db, "resultats"), {
-    dossard: d,
-    timestamp: serverTimestamp(),
-    type: "DNF",
-    source: "MANUEL"
-  });
-  beepError.play();
-  feedback("🏳️ DNF: " + d, "orange");
-};
-
-document.getElementById("btn-dns").onclick = async () => {
-  if (!startMs) {
-    feedback("⛔ Impossible de marquer un DNS avant le départ d'un tour", "red");
-    beepError.play();
-    return;
-  }
-  const d = document.getElementById("dossard-dns").value.replace(/\D/g, "");
-  localStorage.setItem("scanAuthTime", Date.now());
-  const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", d)));
-  if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
-  const docRef = snap.docs[0];
-  if (["DNF", "DNS", "ELIMINE"].includes(docRef.data().statut)) {
-    feedback("⛔ Déjà " + docRef.data().statut, "red");
-    return;
-  }
-  await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
-  // NE PAS enregistrer de tour pour les DNS
-  await addDoc(collection(db, "resultats"), {
-    dossard: d,
-    timestamp: serverTimestamp(),
-    type: "DNS",
-    source: "MANUEL"
-  });
-  beepError.play();
-  feedback("🚫 DNS: " + d, "orange");
-};
-
-// ======================
-// 💬 Feedback
-// ======================
-function feedback(msg, color) {
-  const f = document.getElementById("feedback");
-  f.style.color = color;
-  f.innerHTML = msg;
 }
+
+
+checkSession();
+
+
 </script>
 
-</body>
-</html>
+
+
+
+
+<script type="module">
+
+
+import {
+initializeApp
+}
+from
+"https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+
+
+import {
+
+getFirestore,
+collection,
+query,
+where,
+getDocs,
+addDoc,
+updateDoc,
+doc,
+serverTimestamp,
+onSnapshot,
+getDoc,
+setDoc
+
+}
+from
+"https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+
+import {
+firebaseConfig
+}
+from "./firebase-config.js";
+
+
+
+const app =
+initializeApp(firebaseConfig);
+
+
+const db =
+getFirestore(app);
+
+
+
+
+
+// ======================
+// VARIABLES
+// ======================
+
+
+let startMs=null;
+
+
+let limites={
+
+t1:40,
+t2:37,
+t3:34,
+t4:31,
+t5:28,
+t6:25,
+t7:22,
+t8:19,
+t9:16,
+t10:13
+
+};
+
+
+let currentTour=0;
+
+
+let lastTourStartTime=null;
+
+
+let runnerStatuses={};
+
+
+
+
+const beepOk =
+new Audio(
+"https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"
+);
+
+
+const beepError =
+new Audio(
+"https://actions.google.com/sounds/v1/alarms/beep_short.ogg"
+);
+
+
+
+
+let lastScan=null;
+
+let lastScanTime=0;
+
+let processing=false;
+
+
+
+
+
+// ======================
+// TOUR ACTUEL
+// ======================
+
+
+function updateCurrentTour(){
+
+
+if(!startMs){
+
+currentTour=0;
+
+lastTourStartTime=null;
+
+return;
+
+}
+
+
+
+const elapsedMs=
+Date.now()-startMs;
+
+
+const diffMin=
+elapsedMs/60000;
+
+
+
+let cumul=0;
+
+let newTour=0;
+
+
+
+for(let i=1;i<=10;i++){
+
+
+const limite=
+limites["t"+i];
+
+
+if(!limite)
+break;
+
+
+cumul+=limite;
+
+
+
+if(diffMin<cumul){
+
+newTour=i;
+
+break;
+
+}
+
+}
+
+
+
+
+if(newTour===0){
+
+newTour=
+Math.max(
+...Object.keys(limites)
+.map(
+k=>parseInt(
+k.replace("t","")
+)
+)
+);
+
+}
+
+
+
+
+if(newTour!==currentTour){
+
+
+let cumulMs=0;
+
+
+
+for(let i=1;i<newTour;i++){
+
+cumulMs+=
+(limites["t"+i]||0)
+*60000;
+
+}
+
+
+
+lastTourStartTime =
+startMs+cumulMs;
+
+
+
+currentTour=newTour;
+
+
+}
+
+
+
+}
+
+
+
+
+
+
+// ======================
+// HORS DELAI
+// ======================
+
+
+async function isHorsDelai(
+dossard,
+tour
+){
+
+
+if(
+!startMs ||
+tour<1 ||
+tour>10
+)
+return false;
+
+
+
+let cumul=0;
+
+
+for(let i=1;i<=tour;i++){
+
+cumul+=
+limites["t"+i]||0;
+
+}
+
+
+
+return (
+Date.now()-startMs >
+cumul*60000
+);
+
+
+}
+
+
+
+
+// ======================
+// VERROU COMMUN ADMIN/SCAN
+// ======================
+
+
+async function isScanLocked(
+dossard,
+tour
+){
+
+
+const lockRef =
+doc(
+db,
+"scansLocks",
+`${dossard}_t${tour}`
+);
+
+
+
+const snap =
+await getDoc(lockRef);
+
+
+
+return snap.exists();
+
+
+}
+
+
+
+
+
+// ======================
+// FIREBASE LISTENERS
+// ======================
+
+
+
+onSnapshot(
+doc(db,"course","depart"),
+snap=>{
+
+
+if(snap.exists()){
+
+
+startMs =
+snap.data().startMs;
+
+
+updateCurrentTour();
+
+
+}
+else{
+
+
+startMs=null;
+
+currentTour=0;
+
+lastTourStartTime=null;
+
+
+}
+
+
+});
+
+
+
+
+onSnapshot(
+doc(db,"course","limitesTours"),
+snap=>{
+
+
+if(snap.exists()){
+
+limites=snap.data();
+
+updateCurrentTour();
+
+}
+
+
+});
+
+
+
+
+
+onSnapshot(
+collection(db,"coureurs"),
+snap=>{
+
+
+runnerStatuses={};
+
+
+
+snap.forEach(d=>{
+
+
+const data=d.data();
+
+
+if(data.dossard){
+
+runnerStatuses[data.dossard]
+=data.statut;
+
+}
+
+
+
+});
+
+
+});
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+<meta charset="UTF-8">
+<title>SCAN COURSE</title>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+
+body{
+background:#000;
+color:white;
+font-family:Arial;
+text-align:center;
+}
+
+button{
+padding:12px 20px;
+font-size:18px;
+margin:8px;
+cursor:pointer;
+}
+
+input{
+padding:12px;
+font-size:18px;
+width:220px;
+}
+
+#feedback{
+font-size:28px;
+font-weight:bold;
+margin-top:20px;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div id="lock"
+style="
+position:fixed;
+inset:0;
+background:black;
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+z-index:9999;
+">
+
+<h2>🔒 Accès protégé</h2>
+
+<input 
+id="pwd"
+type="password"
+placeholder="Mot de passe">
+
+
+<button onclick="checkPwd()">
+Entrer
+</button>
+
+<div id="err" style="color:red"></div>
+
+</div>
+
+
+
+<h1>🏁 ARRIVÉES COURSE</h1>
+
+
+<div id="reader"
+style="width:320px;margin:20px auto;">
+</div>
+
+
+<div id="feedback"></div>
+
+
+
+<div>
+
+<input 
+id="arrivee-manuel"
+placeholder="Dossard arrivée">
+
+<button id="btn-arrivee">
+✅ ARRIVÉE
+</button>
+
+</div>
+
+
+<div>
+
+<input 
+id="dossard-dnf"
+placeholder="Dossard DNF">
+
+<button id="btn-dnf">
+🏳️ DNF
+</button>
+
+</div>
+
+
+
+<div>
+
+<input 
+id="dossard-dns"
+placeholder="Dossard DNS">
+
+<button id="btn-dns">
+🚫 DNS
+</button>
+
+</div>
+
+
+
+
+<script>
+
+const SESSION_DURATION =
+30*60*1000;
+
+
+function checkPwd(){
+
+if(
+document.getElementById("pwd").value
+==="3sRunTravel2026"
+){
+
+localStorage.setItem(
+"scanAuthTime",
+Date.now()
+);
+
+unlock();
+
+}
+else{
+
+document.getElementById("err").innerText=
+"Mot de passe incorrect";
+
+}
+
+}
+
+
+
+function unlock(){
+
+document.getElementById("lock")
+.style.display="none";
+
+}
+
+
+
+function checkSession(){
+
+const saved=
+localStorage.getItem("scanAuthTime");
+
+
+if(saved &&
+Date.now()-saved < SESSION_DURATION){
+
+unlock();
+
+}
+
+}
+
+
+checkSession();
+
+
+</script>
+
+
+
+
+
+<script type="module">
+
+
+import {
+initializeApp
+}
+from
+"https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+
+
+import {
+
+getFirestore,
+collection,
+query,
+where,
+getDocs,
+addDoc,
+updateDoc,
+doc,
+serverTimestamp,
+onSnapshot,
+getDoc,
+setDoc
+
+}
+from
+"https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+
+import {
+firebaseConfig
+}
+from "./firebase-config.js";
+
+
+
+const app =
+initializeApp(firebaseConfig);
+
+
+const db =
+getFirestore(app);
+
+
+
+
+
+// ======================
+// VARIABLES
+// ======================
+
+
+let startMs=null;
+
+
+let limites={
+
+t1:40,
+t2:37,
+t3:34,
+t4:31,
+t5:28,
+t6:25,
+t7:22,
+t8:19,
+t9:16,
+t10:13
+
+};
+
+
+let currentTour=0;
+
+
+let lastTourStartTime=null;
+
+
+let runnerStatuses={};
+
+
+
+
+const beepOk =
+new Audio(
+"https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"
+);
+
+
+const beepError =
+new Audio(
+"https://actions.google.com/sounds/v1/alarms/beep_short.ogg"
+);
+
+
+
+
+let lastScan=null;
+
+let lastScanTime=0;
+
+let processing=false;
+
+
+
+
+
+// ======================
+// TOUR ACTUEL
+// ======================
+
+
+function updateCurrentTour(){
+
+
+if(!startMs){
+
+currentTour=0;
+
+lastTourStartTime=null;
+
+return;
+
+}
+
+
+
+const elapsedMs=
+Date.now()-startMs;
+
+
+const diffMin=
+elapsedMs/60000;
+
+
+
+let cumul=0;
+
+let newTour=0;
+
+
+
+for(let i=1;i<=10;i++){
+
+
+const limite=
+limites["t"+i];
+
+
+if(!limite)
+break;
+
+
+cumul+=limite;
+
+
+
+if(diffMin<cumul){
+
+newTour=i;
+
+break;
+
+}
+
+}
+
+
+
+
+if(newTour===0){
+
+newTour=
+Math.max(
+...Object.keys(limites)
+.map(
+k=>parseInt(
+k.replace("t","")
+)
+)
+);
+
+}
+
+
+
+
+if(newTour!==currentTour){
+
+
+let cumulMs=0;
+
+
+
+for(let i=1;i<newTour;i++){
+
+cumulMs+=
+(limites["t"+i]||0)
+*60000;
+
+}
+
+
+
+lastTourStartTime =
+startMs+cumulMs;
+
+
+
+currentTour=newTour;
+
+
+}
+
+
+
+}
+
+
+
+
+
+
+// ======================
+// HORS DELAI
+// ======================
+
+
+async function isHorsDelai(
+dossard,
+tour
+){
+
+
+if(
+!startMs ||
+tour<1 ||
+tour>10
+)
+return false;
+
+
+
+let cumul=0;
+
+
+for(let i=1;i<=tour;i++){
+
+cumul+=
+limites["t"+i]||0;
+
+}
+
+
+
+return (
+Date.now()-startMs >
+cumul*60000
+);
+
+
+}
+
+
+
+
+// ======================
+// VERROU COMMUN ADMIN/SCAN
+// ======================
+
+
+async function isScanLocked(
+dossard,
+tour
+){
+
+
+const lockRef =
+doc(
+db,
+"scansLocks",
+`${dossard}_t${tour}`
+);
+
+
+
+const snap =
+await getDoc(lockRef);
+
+
+
+return snap.exists();
+
+
+}
+
+
+
+
+
+// ======================
+// FIREBASE LISTENERS
+// ======================
+
+
+
+onSnapshot(
+doc(db,"course","depart"),
+snap=>{
+
+
+if(snap.exists()){
+
+
+startMs =
+snap.data().startMs;
+
+
+updateCurrentTour();
+
+
+}
+else{
+
+
+startMs=null;
+
+currentTour=0;
+
+lastTourStartTime=null;
+
+
+}
+
+
+});
+
+
+
+
+onSnapshot(
+doc(db,"course","limitesTours"),
+snap=>{
+
+
+if(snap.exists()){
+
+limites=snap.data();
+
+updateCurrentTour();
+
+}
+
+
+});
+
+
+
+
+
+onSnapshot(
+collection(db,"coureurs"),
+snap=>{
+
+
+runnerStatuses={};
+
+
+
+snap.forEach(d=>{
+
+
+const data=d.data();
+
+
+if(data.dossard){
+
+runnerStatuses[data.dossard]
+=data.statut;
+
+}
+
+
+
+});
+
+
+});
+// ======================
+// 📷 SCANNER QR CODE
+// ======================
+
+
+const scanner =
+new Html5QrcodeScanner(
+"reader",
+{
+fps:10,
+qrbox:220
+}
+);
+
+
+
+scanner.render(
+
+async(text)=>{
+
+
+if(!startMs){
+
+feedback(
+"⛔ Course non démarrée",
+"orange"
+);
+
+return;
+
+}
+
+
+
+const dossard =
+text
+.split("-")
+.pop()
+.replace(/\D/g,"");
+
+
+
+const now =
+Date.now();
+
+
+
+// anti répétition QR
+if(
+dossard===lastScan &&
+now-lastScanTime<3000
+){
+
+return;
+
+}
+
+
+
+if(processing){
+
+return;
+
+}
+
+
+
+lastScan=dossard;
+
+lastScanTime=now;
+
+processing=true;
+
+
+
+try{
+
+
+await traiterArrivee(
+dossard,
+"SCAN"
+);
+
+
+
+}
+
+finally{
+
+
+setTimeout(()=>{
+
+processing=false;
+
+},1500);
+
+
+
+}
+
+
+
+}
+
+);
+
+
+
+
+
+
+// ======================
+// 🔘 ARRIVÉE MANUELLE
+// ======================
+
+
+document
+.getElementById("btn-arrivee")
+.onclick=()=>{
+
+
+const dossard =
+document
+.getElementById("arrivee-manuel")
+.value
+.replace(/\D/g,"");
+
+
+
+traiterArrivee(
+dossard,
+"MANUEL"
+);
+
+
+};
+
+
+
+
+
+
+
+
+// ======================
+// 🏳️ DNF
+// ======================
+
+
+document
+.getElementById("btn-dnf")
+.onclick=
+async()=>{
+
+
+if(!startMs){
+
+feedback(
+"⛔ Impossible DNF avant départ",
+"red"
+);
+
+beepError.play();
+
+return;
+
+}
+
+
+
+const dossard =
+document
+.getElementById("dossard-dnf")
+.value
+.replace(/\D/g,"");
+
+
+
+if(!dossard){
+
+feedback(
+"❌ Dossard invalide",
+"red"
+);
+
+return;
+
+}
+
+
+
+
+const snap =
+await getDocs(
+query(
+collection(db,"coureurs"),
+where("dossard","==",dossard)
+)
+);
+
+
+
+if(snap.empty){
+
+feedback(
+"❌ Dossard inconnu",
+"red"
+);
+
+return;
+
+}
+
+
+
+const coureurDoc =
+snap.docs[0];
+
+
+const coureur =
+coureurDoc.data();
+
+
+
+
+
+if(
+[
+"DNF",
+"DNS",
+"ELIMINE"
+]
+.includes(coureur.statut)
+){
+
+
+feedback(
+`⛔ Déjà ${coureur.statut}`,
+"red"
+);
+
+return;
+
+
+}
+
+
+
+
+
+
+// verrou DNF
+
+const lock =
+doc(
+db,
+"scansLocks",
+`${dossard}_DNF`
+);
+
+
+
+await setDoc(
+lock,
+{
+
+dossard,
+
+type:"DNF",
+
+createdAt:serverTimestamp()
+
+}
+);
+
+
+
+
+
+await updateDoc(
+doc(
+db,
+"coureurs",
+coureurDoc.id
+),
+{
+
+statut:"DNF"
+
+}
+);
+
+
+
+runnerStatuses[dossard]="DNF";
+
+
+
+
+
+await addDoc(
+collection(db,"resultats"),
+{
+
+dossard,
+
+timestamp:serverTimestamp(),
+
+type:"DNF",
+
+source:"MANUEL"
+
+}
+);
+
+
+
+
+
+beepError.play();
+
+
+feedback(
+`🏳️ DNF ${dossard}`,
+"orange"
+);
+
+
+
+};
+
+
+
+
+
+
+
+
+// ======================
+// 🚫 DNS
+// ======================
+
+
+document
+.getElementById("btn-dns")
+.onclick=
+async()=>{
+
+
+if(!startMs){
+
+feedback(
+"⛔ Impossible DNS avant départ",
+"red"
+);
+
+beepError.play();
+
+return;
+
+}
+
+
+
+const dossard =
+document
+.getElementById("dossard-dns")
+.value
+.replace(/\D/g,"");
+
+
+
+if(!dossard){
+
+feedback(
+"❌ Dossard invalide",
+"red"
+);
+
+return;
+
+}
+
+
+
+
+const snap =
+await getDocs(
+query(
+collection(db,"coureurs"),
+where("dossard","==",dossard)
+)
+);
+
+
+
+if(snap.empty){
+
+feedback(
+"❌ Dossard inconnu",
+"red"
+);
+
+return;
+
+}
+
+
+
+const coureurDoc =
+snap.docs[0];
+
+
+const coureur =
+coureurDoc.data();
+
+
+
+
+
+if(
+[
+"DNF",
+"DNS",
+"ELIMINE"
+]
+.includes(coureur.statut)
+){
+
+
+feedback(
+`⛔ Déjà ${coureur.statut}`,
+"red"
+);
+
+return;
+
+}
+
+
+
+
+
+
+// verrou DNS
+
+await setDoc(
+
+doc(
+db,
+"scansLocks",
+`${dossard}_DNS`
+),
+
+{
+
+dossard,
+
+type:"DNS",
+
+createdAt:serverTimestamp()
+
+}
+
+);
+
+
+
+
+
+
+
+await updateDoc(
+
+doc(
+db,
+"coureurs",
+coureurDoc.id
+),
+
+{
+
+statut:"DNS"
+
+}
+
+);
+
+
+
+runnerStatuses[dossard]="DNS";
+
+
+
+
+
+
+await addDoc(
+
+collection(db,"resultats"),
+
+{
+
+dossard,
+
+timestamp:serverTimestamp(),
+
+type:"DNS",
+
+source:"MANUEL"
+
+}
+
+);
+
+
+
+
+
+beepError.play();
+
+
+
+feedback(
+`🚫 DNS ${dossard}`,
+"orange"
+);
+
+
+
+};
+
+
+
+
+
+
+
+// ======================
+// 💬 FEEDBACK
+// ======================
+
+
+function feedback(
+message,
+color
+){
+
+const zone =
+document.getElementById("feedback");
+
+
+zone.innerHTML =
+message;
+
+
+zone.style.color =
+color;
+
+
+}
