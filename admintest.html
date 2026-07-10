@@ -340,6 +340,7 @@
     let lastTourStartTime = null;
     let buttonsInitialized = false;
     let resultsUnsubscribe = null;
+    let scanLocks = {}; // Verrou pour éviter les doublons
 
     // Durées par défaut (en minutes)
     const DEFAULT_TOUR_DUREES = {
@@ -376,6 +377,7 @@
         runnerStatuses = {};
         buttonsInitialized = false;
         currentTour = 0;
+        scanLocks = {};
 
         // Charger les données dans l'ordre correct
         initLimites().then(async () => {
@@ -777,135 +779,146 @@
     }
 
     // Fonction centralisée pour effectuer un scan
-   async function performScan(dossard, statusDiv = null) {
-  // 1. Vérifications basiques
-  if (!startMs) {
-    if (statusDiv) {
-      statusDiv.innerHTML = "❌ Chrono non lancé.";
-      statusDiv.className = "message error";
-    }
-    return false;
-  }
-
-  if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-    if (statusDiv) {
-      statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]}`;
-      statusDiv.className = "message error";
-    }
-    return false;
-  }
-
-  // 2. VÉRIFIER EN PREMIER LIEU SI LE COUREUR A DÉJÀ ÉTÉ SCANNÉ DANS LE TOUR ACTUEL (currentTour)
-  //    (C'est la clé pour éviter les doublons entre bouton et champ manuel)
-  const alreadyScannedInCurrentTour = await isAlreadyScannedInTour(dossard, currentTour);
-  if (alreadyScannedInCurrentTour) {
-    if (statusDiv) {
-      statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${currentTour}.`;
-      statusDiv.className = "message error";
-    }
-    // Mettre à jour l'affichage du bouton pour refléter l'état réel
-    updateDossardButton(dossard);
-    return false;
-  }
-
-  // 3. Vérifier si le coureur a déjà été scanné dans le tour SUIVANT (nextTour)
-  //    (Cas où currentTour a changé entre le clic sur le bouton et le scan manuel)
-  const resultsSnap = await getDocs(query(
-    collection(db, "resultats"),
-    where("dossard", "==", dossard)
-  ));
-
-  let lastScannedTour = 0;
-  resultsSnap.forEach(docu => {
-    const data = docu.data();
-    if (data.tour && data.tour > lastScannedTour) {
-      lastScannedTour = data.tour;
-    }
-  });
-
-  const nextTour = lastScannedTour + 1;
-
-  // 4. Vérifier si nextTour est déjà ouvert
-  if (nextTour > currentTour) {
-    if (statusDiv) {
-      statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
-      statusDiv.className = "message error";
-    }
-    return false;
-  }
-
-  // 5. Vérifier le délai de 3 minutes si dernier scan = tour précédent
-  if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
-    const timeSinceStart = Date.now() - lastTourStartTime;
-    if (timeSinceStart < 180000) { // 3 minutes
-      const remainingSeconds = Math.ceil((180000 - timeSinceStart) / 1000);
-      if (statusDiv) {
-        statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
-        statusDiv.className = "message error";
+    async function performScan(dossard, statusDiv = null) {
+      // Vérifier si ce dossard est déjà en cours de traitement
+      if (scanLocks[dossard]) {
+        if (statusDiv) {
+          statusDiv.innerHTML = "⏳ Scan en cours pour ce dossard, veuillez patienter...";
+          statusDiv.className = "message warning";
+        }
+        return false;
       }
-      return false;
-    }
-  }
 
-  // 6. Vérifier une SECONDE FOIS si le coureur a été scanné dans currentTour ou nextTour
-  //    (Pour éviter les conflits si un autre scan a été ajouté entre-temps)
-  const doubleCheckCurrent = await isAlreadyScannedInTour(dossard, currentTour);
-  const doubleCheckNext = await isAlreadyScannedInTour(dossard, nextTour);
-  if (doubleCheckCurrent || doubleCheckNext) {
-    if (statusDiv) {
-      statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${doubleCheckCurrent ? currentTour : nextTour}.`;
-      statusDiv.className = "message error";
-    }
-    updateDossardButton(dossard);
-    return false;
-  }
+      // Verrouiller ce dossard pendant le traitement
+      scanLocks[dossard] = true;
 
-  // 7. Vérifier hors délai
-  const horsDelai = await isHorsDelai(dossard, nextTour);
-  if (horsDelai) {
-    await addDoc(collection(db, "resultats"), {
-      dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
-    });
-    const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-    const snap = await getDocs(q);
-    if (!snap.empty && !["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-      await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
-      runnerStatuses[dossard] = "ELIMINE";
-    }
-    updateDossardButton(dossard);
-    if (statusDiv) {
-      statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
-      statusDiv.className = "message warning";
-    }
-    return true;
-  }
+      try {
+        // 1. Vérifications basiques
+        if (!startMs) {
+          if (statusDiv) {
+            statusDiv.innerHTML = "❌ Chrono non lancé.";
+            statusDiv.className = "message error";
+          }
+          return false;
+        }
 
-  // 8. Tout est OK, enregistrer le scan
-  const now = Date.now();
-  const elapsedTime = now - startMs;
-  const formattedTime = formatTime(elapsedTime);
+        if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+          if (statusDiv) {
+            statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]}`;
+            statusDiv.className = "message error";
+          }
+          return false;
+        }
 
-  // Vérification finale avant enregistrement
-  const finalCheck = await isAlreadyScannedInTour(dossard, nextTour);
-  if (finalCheck) {
-    if (statusDiv) {
-      statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
-      statusDiv.className = "message error";
+        // 2. VÉRIFIER EN TEMPS RÉEL si le coureur a déjà été scanné dans le tour ACTUEL
+        const alreadyScannedInCurrentTour = await isAlreadyScannedInTour(dossard, currentTour);
+        if (alreadyScannedInCurrentTour) {
+          if (statusDiv) {
+            statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${currentTour}.`;
+            statusDiv.className = "message error";
+          }
+          updateDossardButton(dossard);
+          return false;
+        }
+
+        // 3. Récupérer TOUS les scans existants pour ce coureur
+        const resultsSnap = await getDocs(query(
+          collection(db, "resultats"),
+          where("dossard", "==", dossard)
+        ));
+
+        let lastScannedTour = 0;
+        resultsSnap.forEach(docu => {
+          const data = docu.data();
+          if (data.tour && data.tour > lastScannedTour) {
+            lastScannedTour = data.tour;
+          }
+        });
+
+        // 4. Déterminer le prochain tour à scanner
+        const nextTour = lastScannedTour + 1;
+
+        // 5. Vérifier si ce tour est déjà ouvert
+        if (nextTour > currentTour) {
+          if (statusDiv) {
+            statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
+            statusDiv.className = "message error";
+          }
+          return false;
+        }
+
+        // 6. Vérifier le délai de 3 minutes si dernier scan = tour précédent
+        if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
+          const timeSinceStart = Date.now() - lastTourStartTime;
+          if (timeSinceStart < 180000) { // 3 minutes
+            const remainingSeconds = Math.ceil((180000 - timeSinceStart) / 1000);
+            if (statusDiv) {
+              statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
+              statusDiv.className = "message error";
+            }
+            return false;
+          }
+        }
+
+        // 7. Vérification finale : est-ce que ce tour a déjà été scanné ?
+        const finalCheck = await isAlreadyScannedInTour(dossard, nextTour);
+        if (finalCheck) {
+          if (statusDiv) {
+            statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
+            statusDiv.className = "message error";
+          }
+          updateDossardButton(dossard);
+          return false;
+        }
+
+        // 8. Vérifier hors délai
+        const horsDelai = await isHorsDelai(dossard, nextTour);
+        if (horsDelai) {
+          await addDoc(collection(db, "resultats"), {
+            dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
+          });
+          const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+          const snap = await getDocs(q);
+          if (!snap.empty && !["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+            await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
+            runnerStatuses[dossard] = "ELIMINE";
+          }
+          updateDossardButton(dossard);
+          if (statusDiv) {
+            statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
+            statusDiv.className = "message warning";
+          }
+          return true;
+        }
+
+        // 9. Tout est OK, enregistrer le scan
+        const now = Date.now();
+        const elapsedTime = now - startMs;
+        const formattedTime = formatTime(elapsedTime);
+
+        await addDoc(collection(db, "resultats"), {
+          dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest"
+        });
+
+        updateDossardButton(dossard);
+        if (statusDiv) {
+          statusDiv.innerHTML = `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
+          statusDiv.className = "message success";
+        }
+        return true;
+
+      } catch (error) {
+        console.error(`Erreur dans performScan pour ${dossard}:`, error);
+        if (statusDiv) {
+          statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+          statusDiv.className = "message error";
+        }
+        return false;
+      } finally {
+        // Toujours déverrouiller le dossard, même en cas d'erreur
+        delete scanLocks[dossard];
+      }
     }
-    updateDossardButton(dossard);
-    return false;
-  }
-
-  await addDoc(collection(db, "resultats"), {
-    dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest"
-  });
-  updateDossardButton(dossard);
-  if (statusDiv) {
-    statusDiv.innerHTML = `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
-    statusDiv.className = "message success";
-  }
-  return true;
-}
 
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
@@ -915,6 +928,14 @@
         // Réinitialisation
         btn.disabled = false;
         btn.classList.remove("scanned", "banned");
+
+        // Si le dossard est verrouillé (scan en cours)
+        if (scanLocks[dossard]) {
+          btn.disabled = true;
+          btn.classList.add("scanned");
+          btn.title = "Scan en cours...";
+          return;
+        }
 
         // 1. Statut du coureur
         if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
@@ -931,7 +952,16 @@
           return;
         }
 
-        // 3. Récupérer le dernier tour scanné pour ce coureur
+        // 3. Vérifier si déjà scanné dans le tour actuel
+        const alreadyScanned = await isAlreadyScannedInTour(dossard, currentTour);
+        if (alreadyScanned) {
+          btn.disabled = true;
+          btn.classList.add("scanned");
+          btn.title = `Scanné tour ${currentTour}`;
+          return;
+        }
+
+        // 4. Récupérer le dernier tour scanné
         const resultsSnap = await getDocs(query(
           collection(db, "resultats"),
           where("dossard", "==", dossard)
@@ -944,20 +974,6 @@
             lastScannedTour = data.tour;
           }
         });
-
-        // 4. Si déjà scanné dans le tour actuel → bloqué
-        if (lastScannedTour === currentTour) {
-          const result = resultsSnap.docs.find(d => d.data().tour === currentTour)?.data();
-          btn.disabled = true;
-          btn.classList.add("scanned");
-          if (result?.horsDelai) {
-            btn.classList.add("banned");
-            btn.title = `Hors délai tour ${currentTour}`;
-          } else {
-            btn.title = `Scanné tour ${currentTour}`;
-          }
-          return;
-        }
 
         // 5. Si dernier scan = tour précédent ET moins de 3 min depuis le début du tour → bloqué
         if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
@@ -999,13 +1015,35 @@
         statusDiv.className = "message error";
         return;
       }
+
+      // Désactiver le champ pendant le traitement
+      const input = document.getElementById("quick-scan-dossard");
+      input.disabled = true;
+
       await performScan(dossard, statusDiv);
+
+      // Réactiver le champ et le vider
+      input.disabled = false;
       document.getElementById("quick-scan-dossard").value = "";
     };
 
     window.buttonScan = async function(dossard) {
       const statusDiv = document.getElementById("button-scan-status");
+      // Désactiver le bouton pendant le traitement
+      const btn = document.getElementById(`dossard-btn-${dossard}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add("scanned");
+      }
+
       await performScan(dossard, statusDiv);
+
+      // Réactiver le bouton après traitement (l'état sera mis à jour par updateDossardButton)
+      setTimeout(() => {
+        if (btn) {
+          btn.disabled = false;
+        }
+      }, 500);
     };
 
     window.quickDnfScan = async function() {
@@ -1195,6 +1233,7 @@
         const snap = await getDocs(collection(db, "coureurs"));
         for (const docu of snap.docs) await deleteDoc(doc(db, "coureurs", docu.id));
         runnerStatuses = {};
+        scanLocks = {};
         updateDossardButtonsState();
         document.getElementById("reset-coureurs-status").innerHTML = "🗑️ Coureurs supprimés.";
         document.getElementById("reset-coureurs-status").className = "message success";
@@ -1214,6 +1253,7 @@
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         for (const docu of coureursSnap.docs) await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
         runnerStatuses = {};
+        scanLocks = {};
         // Réinitialiser tous les boutons
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
