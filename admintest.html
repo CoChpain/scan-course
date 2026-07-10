@@ -1,12 +1,10 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <!-- Le CSS reste inchangé -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ADMIN – APOLLO RUN</title>
   <style>
-    /* (Le CSS reste identique à ton code actuel) */
     :root {
       --bg-primary: #000;
       --bg-secondary: #111;
@@ -21,6 +19,7 @@
       --btn-bg-warning: #ffaa00;
       --btn-bg-dark-red: #8B0000;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg-primary);
@@ -30,12 +29,162 @@
       padding: 20px;
       min-height: 100vh;
     }
-    /* ... (le reste du CSS reste inchangé) ... */
+    h1, h2, h3 { margin-bottom: 15px; color: var(--text-primary); }
+    h1 { font-size: 2rem; margin-top: 20px; }
+    h2 { font-size: 1.5rem; margin-top: 30px; }
+    a {
+      color: var(--btn-bg);
+      text-decoration: none;
+      display: inline-block;
+      margin-bottom: 20px;
+    }
+    a:hover { text-decoration: underline; }
+    .form-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+      justify-content: center;
+    }
+    input, select {
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-width: 120px;
+    }
+    input:focus, select:focus { outline: 2px solid var(--btn-bg); }
+    button {
+      padding: 10px 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+    button:hover:not(:disabled) { background: var(--border-color); }
+    button:disabled { opacity: 1; cursor: not-allowed; }
+    button.btn-success { background: var(--btn-bg-success); color: black; }
+    button.btn-danger { background: var(--btn-bg-danger); }
+    button.btn-warning { background: var(--btn-bg-warning); }
+    table {
+      width: 90%;
+      max-width: 1000px;
+      margin: 20px auto;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 10px;
+      text-align: left;
+    }
+    th { background: var(--bg-secondary); font-weight: bold; }
+    tr:nth-child(even) { background: rgba(255, 255, 255, 0.05); }
+    tr:hover { background: rgba(255, 255, 255, 0.1); }
+    .message {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .error { color: var(--text-error); background: rgba(255, 0, 0, 0.1); }
+    .success { color: var(--text-success); background: rgba(0, 255, 0, 0.1); }
+    .warning { color: var(--text-warning); background: rgba(255, 170, 0, 0.1); }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 20px 0;
+    }
+    .tab-btn {
+      padding: 12px 20px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .tab-btn:hover { background: var(--border-color); }
+    .tab-btn.active { background: var(--btn-bg); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    #lock {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin: 15px 0;
+    }
+    .dossard-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 8px;
+      margin: 20px auto;
+      max-width: 1200px;
+    }
+    .dossard-btn {
+      padding: 12px;
+      font-size: 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      cursor: pointer;
+      position: relative;
+    }
+    .dossard-btn:hover:not(:disabled) { background: var(--border-color); }
+    .dossard-btn:disabled { opacity: 1; cursor: not-allowed; }
+    .dossard-btn.scanned {
+      background: #ff4444 !important;
+      color: white !important;
+      cursor: not-allowed !important;
+    }
+    .dossard-btn.banned {
+      background: #8B0000 !important;
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+    }
+    .section {
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .section-title {
+      margin-bottom: 10px;
+      font-size: 1.2rem;
+      color: var(--btn-bg);
+    }
+    @media (max-width: 1200px) { .dossard-grid { grid-template-columns: repeat(5, 1fr); } }
+    @media (max-width: 768px) {
+      .form-group { flex-direction: column; align-items: center; }
+      input, select, button { width: 100%; max-width: 300px; }
+      table { width: 100%; font-size: 0.9rem; }
+      th, td { padding: 8px; }
+      .dossard-grid { grid-template-columns: repeat(3, 1fr); }
+    }
   </style>
 </head>
 
 <body>
-  <!-- Le HTML reste inchangé -->
   <div id="lock">
     <h2>🔒 Accès administrateur</h2>
     <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;" autocomplete="off">
@@ -55,14 +204,114 @@
   </div>
   <hr>
 
-  <!-- Le reste du HTML reste inchangé -->
   <div id="chrono-tab" class="tab-content active">
-    <!-- ... -->
+    <h2>⏱️ Départ de la course</h2>
+    <div class="action-buttons">
+      <button id="btn-start" onclick="startChrono()" class="btn-success">🚀 Lancer le chrono</button>
+      <button id="btn-reset" onclick="resetChrono()" class="btn-danger">🔁 Réinitialiser le chrono</button>
+    </div>
+    <div id="chrono-status" class="message">Chrono en attente…</div>
   </div>
+
+  <div id="coureurs-tab" class="tab-content">
+    <h2>👥 Gestion des coureurs</h2>
+    <h3>🔍 Rechercher un coureur</h3>
+    <div class="form-group">
+      <input id="search-dossard" type="text" placeholder="Dossard">
+      <button onclick="searchRunner()">Rechercher</button>
+    </div>
+    <div id="runner-info"></div>
+    <hr>
+    <h3>➕ Ajouter / Modifier un coureur</h3>
+    <div class="form-group">
+      <input id="c-dossard" type="text" placeholder="Dossard">
+      <input id="c-nom" type="text" placeholder="Nom">
+      <input id="c-prenom" type="text" placeholder="Prénom">
+      <select id="c-sexe">
+        <option value="H">Homme</option>
+        <option value="F">Femme</option>
+      </select>
+      <button onclick="saveRunner()">Enregistrer</button>
+    </div>
+    <div id="runner-save-status" class="message"></div>
+    <hr>
+    <h3>⚙️ Modifier statut coureur</h3>
+    <div class="form-group">
+      <input id="status-dossard" type="text" placeholder="Dossard">
+      <select id="status-select">
+        <option value="OK">OK</option>
+        <option value="DNS">DNS</option>
+        <option value="DNF">DNF</option>
+        <option value="ELIMINE">Éliminé</option>
+      </select>
+      <button onclick="updateStatus()">Mettre à jour</button>
+    </div>
+    <hr>
+    <h3>📋 Liste complète des coureurs</h3>
+    <button onclick="toggleCoureurs()" style="margin-bottom: 10px; padding: 5px 12px;">👁️ Afficher / Masquer</button>
+    <div id="table-coureurs" style="display: none;"></div>
+  </div>
+
   <div id="scans-tab" class="tab-content">
-    <!-- ... -->
+    <h2>📡 Gestion des scans</h2>
+    <div class="section">
+      <div class="section-title">⏱️ Ajout scan manuel (temps actuel)</div>
+      <div class="form-group">
+        <input id="quick-scan-dossard" type="text" placeholder="Dossard">
+        <button onclick="quickScan()" class="btn-success">📡 Scanner maintenant</button>
+      </div>
+      <div class="form-group">
+        <input id="quick-dnf-dossard" type="text" placeholder="Dossard DNF">
+        <button onclick="quickDnfScan()" class="btn-warning">🏳️ DNF</button>
+      </div>
+      <div class="form-group">
+        <input id="quick-dns-dossard" type="text" placeholder="Dossard DNS">
+        <button onclick="quickDnsScan()" class="btn-danger">🚫 DNS</button>
+      </div>
+      <div id="quick-scan-status" class="message"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🔢 Scan manuel (boutons 1 à 160)</div>
+      <div id="dossard-buttons-grid" class="dossard-grid"></div>
+      <div id="button-scan-status" class="message"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">✏️ Ajouter un scan manuellement</div>
+      <div class="form-group">
+        <input id="add-dossard" type="text" placeholder="Dossard">
+        <input id="add-tour" type="number" placeholder="Tour" min="1">
+        <input id="add-time" type="text" placeholder="Temps (HH:MM:SS)" pattern="\d{2}:\d{2}:\d{2}">
+        <button onclick="addScan()">Ajouter</button>
+      </div>
+      <div id="scan-add-status" class="message"></div>
+    </div>
   </div>
-  <!-- ... -->
+
+  <div id="resultats-tab" class="tab-content">
+    <h2>🏆 Réinitialisation des données</h2>
+    <h3>🗑️ Réinitialiser la base coureurs</h3>
+    <div class="action-buttons">
+      <button onclick="resetCoureurs()" class="btn-danger">⚠️ Supprimer TOUS les coureurs</button>
+    </div>
+    <div id="reset-coureurs-status" class="message warning"></div>
+    <hr>
+    <h3>🗑️ Réinitialiser les résultats</h3>
+    <div class="action-buttons">
+      <button onclick="resetResultats()" class="btn-danger">⚠️ Supprimer TOUS les résultats</button>
+    </div>
+    <div id="reset-resultats-status" class="message warning"></div>
+  </div>
+
+  <div id="tours-tab" class="tab-content">
+    <h2>🔄 Durée des tours</h2>
+    <div id="tour-settings"></div>
+    <div class="action-buttons">
+      <button onclick="saveTourDurations()" class="btn-success">💾 Enregistrer les durées</button>
+    </div>
+    <div id="tour-save-status" class="message"></div>
+  </div>
 
   <script type="module">
     // ======================
@@ -192,7 +441,7 @@
     }
 
     // ✅ NOUVELLE FONCTION : Vérifie si un verrou existe pour (dossard, tour)
-    async function isAlreadyScannedInTour(dossard, tour) {
+    async function isScanLocked(dossard, tour) {
       const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
       const lockSnap = await getDoc(lockRef);
       return lockSnap.exists();
@@ -525,7 +774,7 @@
       }, 200);
     }
 
-    // ✅ NOUVELLE FONCTION CENTRALISÉE AVEC VERROU FIRESTORE
+    // ✅ FONCTION CENTRALISÉE AVEC VERROU FIRESTORE
     async function performScan(dossard, statusDiv = null) {
       // 1. Vérifications basiques
       if (!startMs) {
@@ -584,10 +833,8 @@
       }
 
       // ✅ VÉRIFIER LE VERROU FIRESTORE POUR (dossard, nextTour)
-      const lockRef = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
-      const lockSnap = await getDoc(lockRef);
-
-      if (lockSnap.exists()) {
+      const isLocked = await isScanLocked(dossard, nextTour);
+      if (isLocked) {
         if (statusDiv) {
           statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
           statusDiv.className = "message error";
@@ -597,6 +844,7 @@
       }
 
       // ✅ CRÉER LE VERROU AVANT D'ENREGISTRER LE RÉSULTAT
+      const lockRef = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
       await setDoc(lockRef, {
         dossard: dossard,
         tour: nextTour,
@@ -667,9 +915,8 @@
         }
 
         // 3. Vérifier si déjà scanné dans le tour actuel via le verrou Firestore
-        const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
-        const lockSnap = await getDoc(lockRef);
-        if (lockSnap.exists()) {
+        const isLocked = await isScanLocked(dossard, currentTour);
+        if (isLocked) {
           btn.disabled = true;
           btn.classList.add("scanned");
           btn.title = `Scanné tour ${currentTour}`;
@@ -871,15 +1118,15 @@
       }
 
       // ✅ Vérifier le verrou Firestore
-      const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
-      const lockSnap = await getDoc(lockRef);
-      if (lockSnap.exists()) {
+      const isLocked = await isScanLocked(dossard, tour);
+      if (isLocked) {
         statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${tour}.`;
         statusDiv.className = "message error";
         return;
       }
 
       // ✅ Créer le verrou
+      const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
       await setDoc(lockRef, {
         dossard: dossard,
         tour: tour,
