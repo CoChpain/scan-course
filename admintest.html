@@ -1,8 +1,3 @@
-Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles zones pour **DNF** et **DNS** dans la section "Ajout scan manuel (temps actuel)" :
-
----
-
-```html
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -23,7 +18,6 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       --btn-bg-danger: #ff4444;
       --btn-bg-warning: #ffaa00;
       --btn-bg-dark-red: #8B0000;
-      --btn-bg-very-dark-red: #550000;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -159,13 +153,14 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
     .dossard-btn:hover:not(:disabled) { background: var(--border-color); }
     .dossard-btn:disabled { opacity: 1; cursor: not-allowed; }
 
-    /* 🔴 CLASSES UNIFIÉES POUR LES BOUTONS SCANNÉS */
+    /* 🔴 NOUVELLES CLASSES POUR LES COULEURS */
     .dossard-btn.scanned {
-      background: #ff4444 !important;
+      background: #ff4444 !important; /* ROUGE VIF pour scanné dans les délais */
       color: white !important;
       cursor: not-allowed !important;
     }
-    .dossard-btn.banned {
+    .dossard-btn.scanned.banned {
+      background: #8B0000 !important; /* ROUGE FONCÉ pour hors délai/DNS/DNF */
       text-decoration: line-through;
       text-decoration-thickness: 2px;
     }
@@ -263,6 +258,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
   <div id="scans-tab" class="tab-content">
     <h2>📡 Gestion des scans</h2>
 
+    <!-- 🆕 SECTION AVEC DNF ET DNS -->
     <div class="section">
       <div class="section-title">⏱️ Ajout scan manuel (temps actuel)</div>
       <div class="form-group">
@@ -392,7 +388,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
     };
 
     // ======================
-    // 📊 Fonctions utilitaires pour les tours
+    // 📊 Fonctions utilitaires
     // ======================
     async function isHorsDelai(dossard, tour) {
       if (!startMs || tour < 1 || tour > 10) return false;
@@ -413,7 +409,6 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       return !snap.empty;
     }
 
-    // Initialisation des limites si absentes
     async function initLimites() {
       const docRef = doc(db, "course", "limitesTours");
       const docSnap = await getDoc(docRef);
@@ -467,7 +462,6 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         newTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
       }
 
-      // Si le tour change, enregistrer le temps de début du nouveau tour
       if (newTour !== currentTour) {
         lastTourStartTime = Date.now();
       }
@@ -749,16 +743,17 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       updateDossardButtonsState();
     }
 
+    // 🔥 FONCTION CORRIGÉE POUR LES BOUTONS
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
       const now = Date.now();
 
-      // Réinitialisation
+      // 🔄 Réinitialisation complète
       btn.disabled = false;
       btn.classList.remove("scanned", "banned");
 
-      // 1. Bloqué si DNS/DNF/ELIMINE
+      // 1️⃣ Bloqué si DNS/DNF/ELIMINE → ROUGE FONCÉ + RAYÉ
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         btn.disabled = true;
         btn.classList.add("scanned", "banned");
@@ -766,14 +761,14 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         return;
       }
 
-      // 2. Chrono non lancé
+      // 2️⃣ Chrono non lancé → DÉSACTIVÉ (mais pas rouge)
       if (!startMs) {
         btn.disabled = true;
         btn.title = "Chrono non lancé";
         return;
       }
 
-      // 3. Vérifier si scanné dans le tour actuel
+      // 3️⃣ Vérifier si scanné dans le tour actuel → ROUGE
       const resultsSnap = await getDocs(query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -785,7 +780,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         btn.disabled = true;
         btn.classList.add("scanned");
         if (result.horsDelai) {
-          btn.classList.add("banned");
+          btn.classList.add("banned"); // Hors délai → barré
           btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
         } else {
           btn.title = `Scanné dans le tour ${currentTour}`;
@@ -793,7 +788,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         return;
       }
 
-      // 4. Vérifier si scanné au tour précédent (délai 3min)
+      // 4️⃣ Vérifier si scanné au tour précédent (délai 3min) → ROUGE
       const allResults = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
       let lastScannedTour = 0;
       allResults.forEach(docu => {
@@ -812,14 +807,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         }
       }
 
-      // 5. Tour suivant non ouvert
-      if (lastScannedTour >= currentTour) {
-        btn.disabled = true;
-        btn.title = `Tour ${lastScannedTour + 1} non encore ouvert (actuel: ${currentTour})`;
-        return;
-      }
-
-      // 6. Sinon → bouton actif
+      // 5️⃣ Sinon → BOUTON ACTIF (cliquable, couleur normale)
       btn.disabled = false;
     }
 
@@ -841,12 +829,12 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         return;
       }
       if (!startMs) {
-        statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de scanner.";
+        statusDiv.innerHTML = "❌ Chrono non lancé.";
         statusDiv.className = "message error";
         return;
       }
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-        statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]} - Impossible de scanner.`;
+        statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]}`;
         statusDiv.className = "message error";
         return;
       }
@@ -855,17 +843,17 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       let lastScannedTour = 0;
       resultsSnap.forEach(docu => {
         const data = docu.data();
-        if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
+        if (data.tour > lastScannedTour) lastScannedTour = data.tour;
       });
       const nextTour = lastScannedTour + 1;
 
       if (nextTour > currentTour) {
-        statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert (actuel : ${currentTour}).`;
+        statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
         statusDiv.className = "message error";
         return;
       }
       if (await isAlreadyScannedInTour(dossard, nextTour)) {
-        statusDiv.innerHTML = `❌ Dossard déjà scanné pour le tour ${nextTour}.`;
+        statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
         statusDiv.className = "message error";
         return;
       }
@@ -883,20 +871,17 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         }
         lastScanTimes[dossard] = Date.now();
         updateDossardButton(dossard);
-        statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai pour le tour ${nextTour} (ELIMINÉ).`;
+        statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
         statusDiv.className = "message warning";
         return;
       }
 
       const now = Date.now();
-      if (lastScanTimes[dossard] && lastTourStartTime) {
-        const timeSinceTourStart = now - lastTourStartTime;
-        if (timeSinceTourStart < 3 * 60 * 1000) {
-          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
-          statusDiv.innerHTML = `❌ Attendez ${remainingSeconds} secondes avant de scanner à nouveau.`;
-          statusDiv.className = "message error";
-          return;
-        }
+      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 3 * 60 * 1000) {
+        const remainingSeconds = Math.ceil((3 * 60 * 1000 - (now - lastTourStartTime)) / 1000);
+        statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
+        statusDiv.className = "message error";
+        return;
       }
 
       const elapsedTime = now - startMs;
@@ -906,12 +891,12 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       });
       lastScanTimes[dossard] = now;
       updateDossardButton(dossard);
-      statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
+      statusDiv.innerHTML = `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
       statusDiv.className = "message success";
       document.getElementById("quick-scan-dossard").value = "";
     };
 
-    // 🆕 NOUVELLE FONCTION POUR DNF
+    // 🆕 FONCTION POUR DNF
     window.quickDnfScan = async function() {
       const dossard = document.getElementById("quick-dnf-dossard").value.trim();
       const statusDiv = document.getElementById("quick-scan-status");
@@ -929,9 +914,8 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
           return;
         }
         const docRef = snap.docs[0];
-        const coureur = docRef.data();
-        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+        if (["DNF", "DNS", "ELIMINE"].includes(snap.docs[0].data().statut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${snap.docs[0].data().statut}`;
           statusDiv.className = "message error";
           return;
         }
@@ -951,7 +935,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       }
     };
 
-    // 🆕 NOUVELLE FONCTION POUR DNS
+    // 🆕 FONCTION POUR DNS
     window.quickDnsScan = async function() {
       const dossard = document.getElementById("quick-dns-dossard").value.trim();
       const statusDiv = document.getElementById("quick-scan-status");
@@ -969,9 +953,8 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
           return;
         }
         const docRef = snap.docs[0];
-        const coureur = docRef.data();
-        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+        if (["DNF", "DNS", "ELIMINE"].includes(snap.docs[0].data().statut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${snap.docs[0].data().statut}`;
           statusDiv.className = "message error";
           return;
         }
@@ -994,12 +977,12 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
     window.buttonScan = async function(dossard) {
       const statusDiv = document.getElementById("button-scan-status");
       if (!startMs) {
-        statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de scanner.";
+        statusDiv.innerHTML = "❌ Chrono non lancé.";
         statusDiv.className = "message error";
         return;
       }
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-        statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]} - Impossible de scanner.`;
+        statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]}`;
         statusDiv.className = "message error";
         return;
       }
@@ -1008,17 +991,17 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       let lastScannedTour = 0;
       resultsSnap.forEach(docu => {
         const data = docu.data();
-        if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
+        if (data.tour > lastScannedTour) lastScannedTour = data.tour;
       });
       const nextTour = lastScannedTour + 1;
 
       if (nextTour > currentTour) {
-        statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert (actuel : ${currentTour}).`;
+        statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
         statusDiv.className = "message error";
         return;
       }
       if (await isAlreadyScannedInTour(dossard, nextTour)) {
-        statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné pour le tour ${nextTour}.`;
+        statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
         statusDiv.className = "message error";
         return;
       }
@@ -1036,20 +1019,17 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
         }
         lastScanTimes[dossard] = Date.now();
         updateDossardButton(dossard);
-        statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai pour le tour ${nextTour} (ELIMINÉ).`;
+        statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
         statusDiv.className = "message warning";
         return;
       }
 
       const now = Date.now();
-      if (lastScanTimes[dossard] && lastTourStartTime) {
-        const timeSinceTourStart = now - lastTourStartTime;
-        if (timeSinceTourStart < 3 * 60 * 1000) {
-          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
-          statusDiv.innerHTML = `❌ Dossard ${dossard} déjà scanné. Attendez ${remainingSeconds} secondes.`;
-          statusDiv.className = "message error";
-          return;
-        }
+      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 3 * 60 * 1000) {
+        const remainingSeconds = Math.ceil((3 * 60 * 1000 - (now - lastTourStartTime)) / 1000);
+        statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
+        statusDiv.className = "message error";
+        return;
       }
 
       const elapsedTime = now - startMs;
@@ -1059,7 +1039,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       });
       lastScanTimes[dossard] = now;
       updateDossardButton(dossard);
-      statusDiv.innerHTML = `✅ Scan enregistré pour le dossard ${dossard} (Tour ${nextTour}) à ${formattedTime} !`;
+      statusDiv.innerHTML = `✅ Dossard ${dossard} - Tour ${nextTour} à ${formattedTime} !`;
       statusDiv.className = "message success";
     };
 
@@ -1077,44 +1057,41 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
 
       const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
       if (!timeRegex.test(time)) {
-        statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS (ex: 01:23:45)";
+        statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
         statusDiv.className = "message error";
         return;
       }
 
       if (!startMs) {
-        statusDiv.innerHTML = "❌ Chrono non défini. Impossible de calculer le timestamp.";
+        statusDiv.innerHTML = "❌ Chrono non défini.";
         statusDiv.className = "message error";
         return;
       }
 
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-        statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]} - Impossible de scanner.`;
+        statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]}`;
         statusDiv.className = "message error";
         return;
       }
 
       if (tour > currentTour) {
-        statusDiv.innerHTML = `❌ Tour ${tour} non encore ouvert (actuel : ${currentTour}).`;
+        statusDiv.innerHTML = `❌ Tour ${tour} non encore ouvert.`;
         statusDiv.className = "message error";
         return;
       }
 
       if (await isAlreadyScannedInTour(dossard, tour)) {
-        statusDiv.innerHTML = `❌ Dossard déjà scanné pour le tour ${tour}.`;
+        statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${tour}.`;
         statusDiv.className = "message error";
         return;
       }
 
       const now = Date.now();
-      if (lastScanTimes[dossard] && lastTourStartTime) {
-        const timeSinceTourStart = now - lastTourStartTime;
-        if (timeSinceTourStart < 3 * 60 * 1000) {
-          const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
-          statusDiv.innerHTML = `❌ Attendez ${remainingSeconds} secondes avant de scanner à nouveau.`;
-          statusDiv.className = "message error";
-          return;
-        }
+      if (lastScanTimes[dossard] && lastTourStartTime && (now - lastTourStartTime) < 3 * 60 * 1000) {
+        const remainingSeconds = Math.ceil((3 * 60 * 1000 - (now - lastTourStartTime)) / 1000);
+        statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
+        statusDiv.className = "message error";
+        return;
       }
 
       const [h, m, s] = time.split(":").map(Number);
@@ -1124,7 +1101,6 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
       await addDoc(collection(db, "resultats"), {
         dossard, tour, timestamp, horsDelai: false, source: "admintest"
       });
-
       lastScanTimes[dossard] = now;
       updateDossardButton(dossard);
       statusDiv.innerHTML = "✅ Scan ajouté avec succès !";
@@ -1135,23 +1111,19 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
     };
 
     // ======================
-    // 🏆 Réinitialisation des données
+    // 🏆 Réinitialisation
     // ======================
     window.resetCoureurs = async function() {
       if (!confirm("⚠️ Supprimer TOUS les coureurs ?")) return;
-      if (!confirm("⚠️ Cette action est irréversible.")) return;
+      if (!confirm("⚠️ Irréversible.")) return;
       if (!confirm("⚠️ Dernière confirmation.")) return;
       try {
         const snap = await getDocs(collection(db, "coureurs"));
-        let count = 0;
-        for (const docu of snap.docs) {
-          await deleteDoc(doc(db, "coureurs", docu.id));
-          count++;
-        }
+        for (const docu of snap.docs) await deleteDoc(doc(db, "coureurs", docu.id));
         lastScanTimes = {};
         runnerStatuses = {};
         updateDossardButtonsState();
-        document.getElementById("reset-coureurs-status").innerHTML = `🗑️ ${count} coureurs supprimés.`;
+        document.getElementById("reset-coureurs-status").innerHTML = "🗑️ Coureurs supprimés.";
         document.getElementById("reset-coureurs-status").className = "message success";
       } catch (error) {
         document.getElementById("reset-coureurs-status").innerHTML = `❌ Erreur : ${error.message}`;
@@ -1161,24 +1133,16 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
 
     window.resetResultats = async function() {
       if (!confirm("⚠️ Supprimer TOUS les résultats ?")) return;
-      if (!confirm("⚠️ Cette action est irréversible.")) return;
+      if (!confirm("⚠️ Irréversible.")) return;
       if (!confirm("⚠️ Dernière confirmation.")) return;
       try {
         const resultatsSnap = await getDocs(collection(db, "resultats"));
-        let count = 0;
-        for (const docu of resultatsSnap.docs) {
-          await deleteDoc(doc(db, "resultats", docu.id));
-          count++;
-        }
-
+        for (const docu of resultatsSnap.docs) await deleteDoc(doc(db, "resultats", docu.id));
         const coureursSnap = await getDocs(collection(db, "coureurs"));
-        for (const docu of coureursSnap.docs) {
-          await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
-        }
-
+        for (const docu of coureursSnap.docs) await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
         lastScanTimes = {};
         updateDossardButtonsState();
-        document.getElementById("reset-resultats-status").innerHTML = `🗑️ ${count} résultats supprimés et statuts réinitialisés.`;
+        document.getElementById("reset-resultats-status").innerHTML = "🗑️ Résultats supprimés.";
         document.getElementById("reset-resultats-status").className = "message success";
       } catch (error) {
         document.getElementById("reset-resultats-status").innerHTML = `❌ Erreur : ${error.message}`;
@@ -1192,25 +1156,14 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
     onSnapshot(doc(db, "course", "limitesTours"), snap => {
       try {
         if (!snap.exists()) {
-          document.getElementById("tour-settings").innerHTML = "<p class='message'>Aucune durée de tour configurée.</p>";
+          document.getElementById("tour-settings").innerHTML = "<p class='message'>Aucune durée configurée.</p>";
           return;
         }
         const data = snap.data();
         const tours = Object.keys(data).sort((a, b) => Number(a.replace("t", "")) - Number(b.replace("t", "")));
-        let html = `
-          <table>
-            <tr>
-              <th>Tour</th>
-              <th>Durée (minutes)</th>
-            </tr>
-        `;
+        let html = `<table><tr><th>Tour</th><th>Durée (min)</th></tr>`;
         tours.forEach(t => {
-          html += `
-            <tr>
-              <td>${t.toUpperCase()}</td>
-              <td><input id="tour-${t}" type="number" value="${data[t]}" style="width: 80px; text-align: center;"></td>
-            </tr>
-          `;
+          html += `<tr><td>${t.toUpperCase()}</td><td><input id="tour-${t}" type="number" value="${data[t]}" style="width:80px;text-align:center;"></td></tr>`;
         });
         html += "</table>";
         document.getElementById("tour-settings").innerHTML = html;
@@ -1228,7 +1181,7 @@ Voici le **code complet corrigé de `admintest.html`** avec les deux nouvelles z
           newData[key] = Number(input.value);
         });
         await setDoc(doc(db, "course", "limitesTours"), newData, { merge: true });
-        document.getElementById("tour-save-status").innerHTML = "✅ Durées mises à jour !";
+        document.getElementById("tour-save-status").innerHTML = "✅ Durées enregistrées !";
         document.getElementById("tour-save-status").className = "message success";
       } catch (error) {
         document.getElementById("tour-save-status").innerHTML = `❌ Erreur : ${error.message}`;
