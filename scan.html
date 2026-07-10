@@ -1506,14 +1506,12 @@ async(text)=>{
 
 
 const dossard =
-
-text
-
-.split("-")
-
-.pop()
-
-.replace(/\D/g,"");
+Number(
+document
+.getElementById("arrivee-manuel")
+.value
+.replace(/\D/g,"")
+);
 
 
 
@@ -1634,15 +1632,12 @@ document
 
 
 const dossard =
-
-document
-
-.getElementById("arrivee-manuel")
-
-.value
-
-.replace(/\D/g,"");
-
+Number(
+text
+.split("-")
+.pop()
+.replace(/\D/g,"")
+);
 
 
 await traiterArrivee(
