@@ -756,6 +756,7 @@
         };
         grid.appendChild(btn);
       }
+      // Ne pas appliquer de classe par défaut au chargement
       updateDossardButtonsState();
     }
 
@@ -763,6 +764,7 @@
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
 
+      // Réinitialisation complète
       btn.disabled = false;
       btn.classList.remove("scanned", "banned");
 
@@ -774,33 +776,35 @@
         return;
       }
 
-      // 2. Chrono non lancé → Désactivé
+      // 2. Chrono non lancé → Désactivé mais pas rouge
       if (!startMs) {
         btn.disabled = true;
         btn.title = "Chrono non lancé";
         return;
       }
 
-      // 3. Vérifier si le coureur a été scanné dans le tour actuel
-      const resultsSnap = await getDocs(query(
+      // 3. Vérifier si scanné DANS LE TOUR ACTUEL
+      const currentTourResults = await getDocs(query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
         where("tour", "==", currentTour)
       ));
 
-      if (!resultsSnap.empty) {
-        const result = resultsSnap.docs[0].data();
+      if (!currentTourResults.empty) {
+        const result = currentTourResults.docs[0].data();
         btn.disabled = true;
         btn.classList.add("scanned");
         if (result.horsDelai) {
           btn.classList.add("banned");
           btn.title = `Hors délai pour le tour ${currentTour} - Bloqué`;
-          // Marquer le coureur comme ELIMINE si hors délai
-          const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-          const snap = await getDocs(q);
-          if (!snap.empty && runnerStatuses[dossard] !== "ELIMINE") {
-            await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
-            runnerStatuses[dossard] = "ELIMINE";
+          // Marquer comme ELIMINE si pas déjà fait
+          if (runnerStatuses[dossard] !== "ELIMINE") {
+            const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
+              runnerStatuses[dossard] = "ELIMINE";
+            }
           }
         } else {
           btn.title = `Scanné dans le tour ${currentTour}`;
@@ -808,12 +812,12 @@
         return;
       }
 
-      // 4. Vérifier si le coureur a été scanné au tour précédent (délai de 3 minutes)
+      // 4. Vérifier délai de 3min après début du tour
       const allResults = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
       let lastScannedTour = 0;
       allResults.forEach(docu => {
         const data = docu.data();
-        if (data.tour > lastScannedTour) lastScannedTour = data.tour;
+        if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
       });
 
       if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
@@ -822,12 +826,12 @@
           btn.disabled = true;
           btn.classList.add("scanned");
           const remainingSeconds = Math.ceil((3 * 60 * 1000 - timeSinceTourStart) / 1000);
-          btn.title = `Attendez ${remainingSeconds}s (délai 3min après début du tour)`;
+          btn.title = `Attendez ${remainingSeconds}s (délai 3min)`;
           return;
         }
       }
 
-      // 5. Sinon → Bouton actif
+      // 5. Par défaut → Bouton actif
       btn.disabled = false;
       btn.title = `Prêt pour le scan (tour ${currentTour})`;
     }
@@ -864,7 +868,7 @@
       let lastScannedTour = 0;
       resultsSnap.forEach(docu => {
         const data = docu.data();
-        if (data.tour > lastScannedTour) lastScannedTour = data.tour;
+        if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
       });
       const nextTour = lastScannedTour + 1;
 
@@ -939,17 +943,22 @@
           return;
         }
         const docRef = snap.docs[0];
-        if (["DNF", "DNS", "ELIMINE"].includes(snap.docs[0].data().statut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${snap.docs[0].data().statut}`;
+        const currentStatut = docRef.data().statut;
+        if (["DNF", "DNS", "ELIMINE"].includes(currentStatut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${currentStatut}`;
           statusDiv.className = "message error";
           return;
         }
+        // Marquer comme DNF IMMEDIATEMENT
         await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
-        await addDoc(collection(db, "resultats"), {
-          dossard, tour: currentTour, timestamp: new Date(), horsDelai: false, source: "admintest", type: "DNF"
-        });
         runnerStatuses[dossard] = "DNF";
-        lastScanTimes[dossard] = Date.now();
+        // NE PAS enregistrer de tour pour les DNF
+        await addDoc(collection(db, "resultats"), {
+          dossard,
+          timestamp: new Date(),
+          type: "DNF",
+          source: "admintest"
+        });
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF !`;
         statusDiv.className = "message success";
@@ -982,17 +991,22 @@
           return;
         }
         const docRef = snap.docs[0];
-        if (["DNF", "DNS", "ELIMINE"].includes(snap.docs[0].data().statut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${snap.docs[0].data().statut}`;
+        const currentStatut = docRef.data().statut;
+        if (["DNF", "DNS", "ELIMINE"].includes(currentStatut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${currentStatut}`;
           statusDiv.className = "message error";
           return;
         }
+        // Marquer comme DNS IMMEDIATEMENT
         await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
-        await addDoc(collection(db, "resultats"), {
-          dossard, tour: currentTour, timestamp: new Date(), horsDelai: false, source: "admintest", type: "DNS"
-        });
         runnerStatuses[dossard] = "DNS";
-        lastScanTimes[dossard] = Date.now();
+        // NE PAS enregistrer de tour pour les DNS
+        await addDoc(collection(db, "resultats"), {
+          dossard,
+          timestamp: new Date(),
+          type: "DNS",
+          source: "admintest"
+        });
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS !`;
         statusDiv.className = "message success";
@@ -1020,7 +1034,7 @@
       let lastScannedTour = 0;
       resultsSnap.forEach(docu => {
         const data = docu.data();
-        if (data.tour > lastScannedTour) lastScannedTour = data.tour;
+        if (data.tour && data.tour > lastScannedTour) lastScannedTour = data.tour;
       });
       const nextTour = lastScannedTour + 1;
 
