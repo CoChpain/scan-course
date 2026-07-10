@@ -89,7 +89,6 @@
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      transition: none; /* Suppression de la transition pour éviter le clignotement */
       background: var(--btn-bg);
       color: var(--text-primary);
     }
@@ -99,7 +98,7 @@
     }
 
     button:disabled {
-      opacity: 1; /* Opacité à 1 pour éviter le clignotement */
+      opacity: 1;
       cursor: not-allowed;
     }
 
@@ -236,7 +235,6 @@
       border-radius: 6px;
       cursor: pointer;
       position: relative;
-      transition: none; /* Suppression de la transition pour éviter le clignotement */
     }
 
     .dossard-btn:hover:not(:disabled) {
@@ -244,7 +242,7 @@
     }
 
     .dossard-btn:disabled {
-      opacity: 1; /* Opacité à 1 pour éviter le clignotement */
+      opacity: 1;
       cursor: not-allowed;
       background: #333;
     }
@@ -483,7 +481,7 @@
     let limites = {};
     let currentTour = 0;
     let runnerStatuses = {};
-    let isUpdatingButtons = false; // Flag pour éviter les mises à jour simultanées
+    let isUpdatingButtons = false;
 
     // ======================
     // 🎨 Fonctions UI
@@ -510,7 +508,7 @@
         document.getElementById("lock").style.display = "none";
         document.getElementById("err").textContent = "";
         loadAllRunners();
-        setupRealtimeScanListener();
+        setupRealtimeListeners();
         generateDossardButtons();
       } else {
         document.getElementById("err").textContent = "Mot de passe incorrect";
@@ -795,7 +793,8 @@
     // ======================
     // 📡 Gestion des scans
     // ======================
-    function setupRealtimeScanListener() {
+    function setupRealtimeListeners() {
+      // Écouteur pour les résultats
       if (resultsUnsubscribe) {
         resultsUnsubscribe();
       }
@@ -833,41 +832,25 @@
           }
         });
       });
+
+      // Écouteur pour les statuts des coureurs
+      onSnapshot(collection(db, "coureurs"), snap => {
+        runnerStatuses = {};
+        snap.forEach(docu => {
+          const data = docu.data();
+          if (data.dossard) {
+            runnerStatuses[data.dossard] = data.statut;
+          }
+        });
+        if (!isUpdatingButtons) {
+          isUpdatingButtons = true;
+          setTimeout(() => {
+            updateDossardButtonsState();
+            isUpdatingButtons = false;
+          }, 50);
+        }
+      });
     }
-
-    // Écouteur pour les verrous de scan (éviter les doublons entre scan.html et admintest.html)
-    onSnapshot(collection(db, "scanLocks"), snap => {
-      snap.forEach(docu => {
-        const data = docu.data();
-        if (data.dossard && data.lockedUntil) {
-          lastScanTimes[data.dossard] = data.lockedUntil.toMillis();
-        }
-      });
-      if (!isUpdatingButtons) {
-        isUpdatingButtons = true;
-        setTimeout(() => {
-          updateDossardButtonsState();
-          isUpdatingButtons = false;
-        }, 50);
-      }
-    });
-
-    onSnapshot(collection(db, "coureurs"), snap => {
-      runnerStatuses = {};
-      snap.forEach(docu => {
-        const data = docu.data();
-        if (data.dossard) {
-          runnerStatuses[data.dossard] = data.statut;
-        }
-      });
-      if (!isUpdatingButtons) {
-        isUpdatingButtons = true;
-        setTimeout(() => {
-          updateDossardButtonsState();
-          isUpdatingButtons = false;
-        }, 50);
-      }
-    });
 
     function generateDossardButtons() {
       const grid = document.getElementById("dossard-buttons-grid");
@@ -876,39 +859,13 @@
         const btn = document.createElement("button");
         btn.textContent = i;
         btn.className = "dossard-btn";
-        btn.onclick = () => buttonScan(i);
         btn.id = `dossard-btn-${i}`;
+        btn.onclick = function() {
+          buttonScan(i);
+        };
         grid.appendChild(btn);
       }
       updateDossardButtonsState();
-    }
-
-    // Fonction pour verrouiller un dossard (éviter les doublons)
-    async function lockDossard(dossard, durationMs = 10 * 60 * 1000) {
-      const lockedUntil = new Date(Date.now() + durationMs);
-      await setDoc(doc(db, "scanLocks", dossard), {
-        dossard: dossard,
-        lockedUntil: lockedUntil,
-        source: "admintest"
-      }, { merge: true });
-      lastScanTimes[dossard] = lockedUntil.getTime();
-    }
-
-    // Fonction pour vérifier si un dossard est verrouillé
-    async function isDossardLocked(dossard) {
-      try {
-        const docu = await getDoc(doc(db, "scanLocks", dossard));
-        if (docu.exists()) {
-          const data = docu.data();
-          if (data.lockedUntil && data.lockedUntil.toMillis() > Date.now()) {
-            return true;
-          }
-        }
-        return false;
-      } catch (error) {
-        console.error("Erreur vérification verrou :", error);
-        return false;
-      }
     }
 
     async function updateDossardButtonsState() {
@@ -956,7 +913,7 @@
             continue;
           }
 
-          // 5. Vérifier si le coureur a été scanné dans les 10 dernières minutes (via lastScanTimes ou scanLocks)
+          // 5. Vérifier si le coureur a été scanné dans les 10 dernières minutes
           if (lastScanTimes[i] && (now - lastScanTimes[i]) < 10 * 60 * 1000) {
             btn.disabled = true;
             btn.classList.add("scanned-recently");
@@ -992,14 +949,6 @@
         return;
       }
 
-      // Vérifier si le dossard est verrouillé (déjà scanné depuis scan.html ou admintest.html)
-      const isLocked = await isDossardLocked(dossard);
-      if (isLocked) {
-        statusDiv.innerHTML = "❌ Ce dossard a déjà été scanné (depuis un autre appareil). Attendez 10 min.";
-        statusDiv.className = "message error";
-        return;
-      }
-
       // Calculer le dernier tour scanné pour ce coureur
       const resultsSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
       let lastScannedTour = 0;
@@ -1030,9 +979,6 @@
       const elapsedTime = now - startMs;
       const formattedTime = formatTime(elapsedTime);
 
-      // Verrouiller le dossard pour éviter les doublons
-      await lockDossard(dossard);
-
       // Enregistrer le scan
       const timestamp = new Date();
       await addDoc(collection(db, "resultats"), {
@@ -1043,6 +989,7 @@
         source: "admintest"
       });
 
+      // Mettre à jour le dernier temps de scan
       lastScanTimes[dossard] = now;
       updateDossardButtonsState();
 
@@ -1063,14 +1010,6 @@
       // Vérifier si le coureur est DNF/DNS/Éliminé
       if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]} - Impossible de scanner.`;
-        statusDiv.className = "message error";
-        return;
-      }
-
-      // Vérifier si le dossard est verrouillé (déjà scanné depuis scan.html ou admintest.html)
-      const isLocked = await isDossardLocked(dossard);
-      if (isLocked) {
-        statusDiv.innerHTML = "❌ Ce dossard a déjà été scanné (depuis un autre appareil). Attendez 10 min.";
         statusDiv.className = "message error";
         return;
       }
@@ -1105,9 +1044,6 @@
       const elapsedTime = now - startMs;
       const formattedTime = formatTime(elapsedTime);
 
-      // Verrouiller le dossard pour éviter les doublons
-      await lockDossard(dossard);
-
       // Enregistrer le scan
       const timestamp = new Date();
       await addDoc(collection(db, "resultats"), {
@@ -1118,6 +1054,7 @@
         source: "admintest"
       });
 
+      // Mettre à jour le dernier temps de scan
       lastScanTimes[dossard] = now;
       updateDossardButtonsState();
 
@@ -1165,14 +1102,6 @@
         return;
       }
 
-      // Vérifier si le dossard est verrouillé (déjà scanné depuis scan.html ou admintest.html)
-      const isLocked = await isDossardLocked(dossard);
-      if (isLocked) {
-        statusDiv.innerHTML = "❌ Ce dossard a déjà été scanné (depuis un autre appareil). Attendez 10 min.";
-        statusDiv.className = "message error";
-        return;
-      }
-
       const now = Date.now();
       if (lastScanTimes[dossard] && (now - lastScanTimes[dossard]) < 10 * 60 * 1000) {
         const remainingMinutes = Math.ceil((10 * 60 * 1000 - (now - lastScanTimes[dossard])) / 1000 / 60);
@@ -1184,9 +1113,6 @@
       const [h, m, s] = time.split(":").map(Number);
       const ms = (h * 3600 + m * 60 + s) * 1000;
       const timestamp = new Date(startMs + ms);
-
-      // Verrouiller le dossard pour éviter les doublons
-      await lockDossard(dossard);
 
       await addDoc(collection(db, "resultats"), {
         dossard, tour, timestamp, horsDelai: false, source: "admintest"
@@ -1242,12 +1168,6 @@
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         for (const docu of coureursSnap.docs) {
           await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
-        }
-
-        // Supprimer tous les verrous
-        const locksSnap = await getDocs(collection(db, "scanLocks"));
-        for (const docu of locksSnap.docs) {
-          await deleteDoc(doc(db, "scanLocks", docu.id));
         }
 
         lastScanTimes = {};
