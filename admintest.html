@@ -322,7 +322,7 @@
   <!-- 🔐 VERROUILLAGE -->
   <div id="lock">
     <h2>🔒 Accès administrateur</h2>
-    <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;">
+    <input id="pwd" type="password" placeholder="Mot de passe" style="padding:10px;font-size:20px;" autocomplete="off">
     <button onclick="checkPwd()" style="padding:10px 20px;margin-top:10px;font-size:20px;">Entrer</button>
     <div id="err" style="color:red;margin-top:10px;"></div>
   </div>
@@ -505,7 +505,8 @@
     // 🔐 Vérification mot de passe
     // ======================
     window.checkPwd = function() {
-      const good = "3sRunTravel2026";
+      // Remplacez par votre mot de passe sécurisé
+      const good = "ApolloRun2026!";
       const val = document.getElementById("pwd").value;
       if (val === good) {
         document.getElementById("lock").style.display = "none";
@@ -844,7 +845,7 @@
     }
 
     // Met à jour un seul bouton (pour les mises à jour en temps réel)
-    function updateDossardButton(dossard) {
+    async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
 
