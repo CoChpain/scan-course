@@ -3,13 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>SCAN COURSE</title>
-
   <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 
 <body style="background:#000;color:white;font-family:Arial;text-align:center;">
 
-<!-- 🔒 LOCK -->
 <div id="lock" style="position:fixed;inset:0;background:black;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:9999;">
   <h2>🔒 Accès protégé</h2>
   <input id="pwd" type="password" placeholder="Mot de passe">
@@ -36,7 +34,6 @@ function unlock(){
 function checkSession(){
   const saved = localStorage.getItem("scanAuthTime");
   if(!saved) return;
-
   if(Date.now() - saved < SESSION_DURATION){
     unlock();
   }
@@ -49,19 +46,16 @@ checkSession();
 <div id="reader" style="width:320px;margin:20px auto;"></div>
 <div id="feedback" style="font-size:26px;font-weight:bold;margin-top:20px;"></div>
 
-<!-- ARRIVEE -->
 <div>
   <input id="arrivee-manuel" placeholder="Dossard arrivée">
   <button id="btn-arrivee">✅ ARRIVÉE</button>
 </div>
 
-<!-- DNF -->
 <div>
   <input id="dossard-dnf" placeholder="Dossard DNF">
   <button id="btn-dnf">DNF</button>
 </div>
 
-<!-- DNS -->
 <div>
   <input id="dossard-dns" placeholder="Dossard DNS">
   <button id="btn-dns">DNS</button>
@@ -70,339 +64,211 @@ checkSession();
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
-  getFirestore,
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  updateDoc,
-  doc,
-  serverTimestamp,
-  onSnapshot,
-  runTransaction,
-  getDoc
+  getFirestore, collection, query, where, getDocs,
+  addDoc, updateDoc, doc, serverTimestamp, onSnapshot, getDoc
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Variables globales
 let startMs = null;
-let limites = {};
+let limites = { t1: 40, t2: 37, t3: 34, t4: 31, t5: 28, t6: 25, t7: 22, t8: 19, t9: 16, t10: 13 };
+let currentTour = 0;
+let lastTourStartTime = null;
+let runnerStatuses = {};
 
-// ✅ écouter départ
-onSnapshot(doc(db,"course","depart"), snap=>{
-  if(snap.exists()){
-    startMs = snap.data().startMs;
-  }
-});
-
-// ✅ écouter limites
-onSnapshot(doc(db,"course","limitesTours"), snap=>{
-  if(snap.exists()){
-    limites = snap.data();
-  }
-});
-
+// Sons
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
 const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
-// 🔥 anti double
-let lastScan=null;
-let lastScanTime=0;
-let processing=false;
+// Anti-double scan
+let lastScan = null;
+let lastScanTime = 0;
+let processing = false;
 
-/* ---------------- VÉRIFICATION SCAN MANUEL (ADMIN) ---------------- */
-async function isManuallyScanned(dossard) {
-  try {
-    const ref = doc(db, "adminManualScans", dossard);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data();
-      const now = Date.now();
-      if (data.lastScan && (now - data.lastScan.toMillis()) < 10 * 60 * 1000) {
-        return true; // Déjà scanné manuellement dans les 10 dernières minutes
-      }
-    }
-    return false;
-  } catch (error) {
-    console.error("Erreur vérification scan manuel :", error);
-    return false;
-  }
-}
-
-/* ---------------- TOUR AUTORISÉ ---------------- */
-function getTourAutorise(){
-
-  if(!startMs) return 0;
-
+// ======================
+// 📊 Fonctions utilitaires
+// ======================
+function updateCurrentTour() {
+  if (!startMs) { currentTour = 0; lastTourStartTime = null; return; }
   const now = Date.now();
   const diffMin = (now - startMs) / 60000;
-
   let cumul = 0;
-
-  for(let i=1;i<=10;i++){
-
-    const limite = limites["t"+i];
-    if(!limite) break;
-
+  for (let i = 1; i <= 10; i++) {
+    const limite = limites[`t${i}`];
+    if (!limite) break;
     cumul += limite;
-
-    if(diffMin < cumul){
-      return i;
+    if (diffMin < cumul) {
+      if (i !== currentTour) lastTourStartTime = now;
+      currentTour = i;
+      return;
     }
   }
-
-  return 10;
+  currentTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
+  if (currentTour !== 0) lastTourStartTime = now;
 }
 
-/* ---------------- CONTROLE GLOBAL 10 MINUTES ---------------- */
-
-async function reservePassage(dossard){
-
-  const ref = doc(db, "controlePassages", dossard);
-
-  try{
-
-    await runTransaction(db, async(transaction)=>{
-
-      const snap = await transaction.get(ref);
-      const now = Date.now();
-
-      if(snap.exists()){
-
-        const data = snap.data();
-
-        if(data.lastScan){
-
-          const last = data.lastScan.toMillis();
-
-          if((now - last) < 10 * 60 * 1000){
-            throw new Error("TOO_EARLY");
-          }
-        }
-      }
-
-      transaction.set(ref,{
-        lastScan: new Date()
-      });
-
-    });
-
-    return true;
-
-  }catch(error){
-
-    if(error.message === "TOO_EARLY"){
-      return false;
-    }
-
-    console.error(error);
-    throw error;
+async function isHorsDelai(dossard, tour) {
+  if (!startMs || tour < 1 || tour > 10) return false;
+  let cumulMin = 0;
+  for (let i = 1; i <= tour; i++) {
+    cumulMin += (limites[`t${i}`] || 0);
   }
+  return (Date.now() - startMs) > (cumulMin * 60 * 1000);
 }
 
-/* ---------------- ARRIVEE ---------------- */
-async function traiterArrivee(dossard, mode){
-
-  if(!startMs){
-    feedback("⛔ Course non démarrée","red");
-    beepError.play();
-    return;
-  }
-
-  localStorage.setItem("scanAuthTime", Date.now());
-
-  if(!dossard){
-    feedback("❌ Dossard invalide","red");
-    return;
-  }
-
-  // Vérifier si le dossard a été scanné manuellement dans l'admin dans les 10 dernières minutes
-  const isManualScan = await isManuallyScanned(dossard);
-  if (isManualScan) {
-    feedback("⏳ Dossard déjà scanné manuellement dans l'admin (attendre 10 min)","orange");
-    beepError.play();
-    return;
-  }
-
-  const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",dossard)));
-
-  if(snap.empty){
-    feedback("❌ Dossard inconnu","red");
-    return;
-  }
-
-  const docRef = snap.docs[0];
-  const coureur = docRef.data();
-
-  if(["DNS","DNF","ELIMINE"].includes(coureur.statut)){
-    feedback("⛔ Dossard bloqué ("+coureur.statut+")","red");
-    return;
-  }
-
-  const autorise = await reservePassage(dossard);
-
-  if(!autorise){
-    feedback("⏳ Dossard déjà scanné il y a moins de 10 min","orange");
-    beepError.play();
-    return;
-  }
-
-  const toursSnap = await getDocs(query(collection(db,"resultats"), where("dossard","==",dossard)));
-
-  let tour = 1;
-  toursSnap.forEach(doc=>{
-    if(doc.data().type==="PASSAGE") tour++;
-  });
-
-  const tourAutorise = getTourAutorise();
-
-  // 🔴 BLOCAGE TOUR
-  if(tour > tourAutorise){
-    feedback(`⛔ Tour ${tour} non ouvert (actuel : ${tourAutorise})`,"red");
-    beepError.play();
-    return;
-  }
-
-  await addDoc(collection(db,"resultats"),{
-    dossard,
-    type:"PASSAGE",
-    tour,
-    mode,
-    timestamp:serverTimestamp()
-  });
-
-  beepOk.play();
-
-  let couleur="lime";
-  const sexe=(coureur.sexe||"").toUpperCase();
-
-  if(sexe==="F") couleur="violet";
-  if(sexe==="H") couleur="cyan";
-
-  feedback(`✅ Dossard ${dossard} - Tour ${tour}`,couleur);
+async function isAlreadyScannedInTour(dossard, tour) {
+  const snap = await getDocs(query(
+    collection(db, "resultats"),
+    where("dossard", "==", dossard),
+    where("tour", "==", tour)
+  ));
+  return !snap.empty;
 }
 
-/* ---------------- SCAN ---------------- */
-const scanner = new Html5QrcodeScanner("reader",{fps:10,qrbox:220});
+// ======================
+// 🔥 Écouteurs Firebase
+// ======================
+onSnapshot(doc(db, "course", "depart"), snap => {
+  if (snap.exists()) { startMs = snap.data().startMs; updateCurrentTour(); }
+  else { startMs = null; currentTour = 0; lastTourStartTime = null; }
+});
 
-scanner.render(async (text)=>{
-
-  if(!startMs){
-    feedback("⛔ Course non démarrée","orange");
-    return;
-  }
-
-  const d = text.split("-").pop().replace(/\D/g,"");
-  const now = Date.now();
-
-  if(d===lastScan && now-lastScanTime<3000) return;
-  if(processing) return;
-
-  lastScan=d;
-  lastScanTime=now;
-  processing=true;
-
-  try{
-    await traiterArrivee(d,"SCAN");
-  }finally{
-    setTimeout(()=>processing=false,1500);
+onSnapshot(doc(db, "course", "limitesTours"), snap => {
+  if (snap.exists()) { limites = snap.data(); updateCurrentTour(); }
+  else {
+    // Initialiser avec les valeurs par défaut
+    setDoc(doc(db, "course", "limitesTours"), limites);
   }
 });
 
-/* ---------------- BOUTONS ---------------- */
-document.getElementById("btn-arrivee").onclick = ()=>{
-  const d=document.getElementById("arrivee-manuel").value.replace(/\D/g,"");
-  traiterArrivee(d,"MANUEL");
-};
+onSnapshot(collection(db, "coureurs"), snap => {
+  runnerStatuses = {};
+  snap.forEach(docu => {
+    const data = docu.data();
+    if (data.dossard) runnerStatuses[data.dossard] = data.statut;
+  });
+});
 
-document.getElementById("btn-dnf").onclick = async ()=>{
-  const d=document.getElementById("dossard-dnf").value.replace(/\D/g,"");
-
+// ======================
+// 🏁 Traitement des arrivées
+// ======================
+async function traiterArrivee(dossard, mode) {
+  if (!startMs) { feedback("⛔ Course non démarrée", "red"); beepError.play(); return; }
   localStorage.setItem("scanAuthTime", Date.now());
+  if (!dossard) { feedback("❌ Dossard invalide", "red"); return; }
 
-  // Vérifier si le dossard a été scanné manuellement dans l'admin dans les 10 dernières minutes
-  const isManualScan = await isManuallyScanned(d);
-  if (isManualScan) {
-    feedback("⏳ Dossard déjà scanné manuellement dans l'admin (attendre 10 min)","orange");
-    beepError.play();
-    return;
-  }
-
-  const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",d)));
-
-  if(snap.empty){
-    feedback("❌ Dossard inconnu","red");
-    return;
-  }
-
+  // Vérifier existence
+  const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", dossard)));
+  if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
   const docRef = snap.docs[0];
   const coureur = docRef.data();
-
-  if(["DNF","DNS","ELIMINE"].includes(coureur.statut)){
-    feedback("⛔ Déjà "+coureur.statut,"red");
-    return;
+  if (["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
+    feedback(`⛔ Bloqué (${coureur.statut})`, "red"); beepError.play(); return;
   }
 
-  await updateDoc(doc(db,"coureurs",docRef.id),{ statut:"DNF" });
-
-  await addDoc(collection(db,"resultats"),{
-    dossard:d,
-    type:"DNF",
-    timestamp:serverTimestamp()
+  // Calcul prochain tour
+  const toursSnap = await getDocs(query(collection(db, "resultats"), where("dossard", "==", dossard)));
+  let nextTour = 1;
+  toursSnap.forEach(doc => {
+    const data = doc.data();
+    if (data.tour >= nextTour) nextTour = data.tour + 1;
   });
 
-  beepError.play();
-  feedback("🏳️ DNF enregistré : "+d,"orange");
+  // Vérifications
+  if (nextTour > currentTour) {
+    feedback(`⛔ Tour ${nextTour} non ouvert (actuel: ${currentTour})`, "red");
+    beepError.play(); return;
+  }
+  if (await isAlreadyScannedInTour(dossard, nextTour)) {
+    feedback(`⛔ Déjà scanné pour le tour ${nextTour}`, "orange"); beepError.play(); return;
+  }
+  if (await isHorsDelai(dossard, nextTour)) {
+    await addDoc(collection(db, "resultats"), {
+      dossard, tour: nextTour, timestamp: serverTimestamp(), horsDelai: true, source: mode
+    });
+    await updateDoc(doc(db, "coureurs", docRef.id), { statut: "ELIMINE" });
+    beepError.play(); feedback(`🚨 Hors délai - ELIMINÉ (Tour ${nextTour})`, "red"); return;
+  }
+  if (lastTourStartTime && (Date.now() - lastTourStartTime) < 3 * 60 * 1000) {
+    const remaining = Math.ceil((3 * 60 * 1000 - (Date.now() - lastTourStartTime)) / 1000);
+    feedback(`⏳ Attendez ${remaining}s (délai 3min)`, "orange"); beepError.play(); return;
+  }
+
+  // Enregistrement
+  await addDoc(collection(db, "resultats"), {
+    dossard, tour: nextTour, timestamp: serverTimestamp(), horsDelai: false, source: mode
+  });
+  beepOk.play();
+  let couleur = "lime";
+  if ((coureur.categorie || coureur.sexe || "").toUpperCase() === "F") couleur = "violet";
+  else if ((coureur.categorie || coureur.sexe || "").toUpperCase() === "H") couleur = "cyan";
+  feedback(`✅ Dossard ${dossard} - Tour ${nextTour}`, couleur);
+}
+
+// ======================
+// 📷 Scanner QR Code
+// ======================
+const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 220 });
+scanner.render(async (text) => {
+  if (!startMs) { feedback("⛔ Course non démarrée", "orange"); return; }
+  const d = text.split("-").pop().replace(/\D/g, "");
+  const now = Date.now();
+  if (d === lastScan && now - lastScanTime < 3000) return;
+  if (processing) return;
+  lastScan = d; lastScanTime = now; processing = true;
+  try { await traiterArrivee(d, "SCAN"); } finally { setTimeout(() => processing = false, 1500); }
+});
+
+// ======================
+// 🔘 Boutons manuels
+// ======================
+document.getElementById("btn-arrivee").onclick = () => {
+  const d = document.getElementById("arrivee-manuel").value.replace(/\D/g, "");
+  traiterArrivee(d, "MANUEL");
 };
 
-document.getElementById("btn-dns").onclick = async ()=>{
-  const d=document.getElementById("dossard-dns").value.replace(/\D/g,"");
-
+document.getElementById("btn-dnf").onclick = async () => {
+  const d = document.getElementById("dossard-dnf").value.replace(/\D/g, "");
   localStorage.setItem("scanAuthTime", Date.now());
-
-  // Vérifier si le dossard a été scanné manuellement dans l'admin dans les 10 dernières minutes
-  const isManualScan = await isManuallyScanned(d);
-  if (isManualScan) {
-    feedback("⏳ Dossard déjà scanné manuellement dans l'admin (attendre 10 min)","orange");
-    beepError.play();
-    return;
-  }
-
-  const snap = await getDocs(query(collection(db,"coureurs"), where("dossard","==",d)));
-
-  if(snap.empty){
-    feedback("❌ Dossard inconnu","red");
-    return;
-  }
-
+  const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", d)));
+  if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
   const docRef = snap.docs[0];
-  const coureur = docRef.data();
-
-  if(["DNF","DNS","ELIMINE"].includes(coureur.statut)){
-    feedback("⛔ Déjà "+coureur.statut,"red");
-    return;
+  if (["DNF", "DNS", "ELIMINE"].includes(docRef.data().statut)) {
+    feedback("⛔ Déjà " + docRef.data().statut, "red"); return;
   }
-
-  await updateDoc(doc(db,"coureurs",docRef.id),{ statut:"DNS" });
-
-  await addDoc(collection(db,"resultats"),{
-    dossard:d,
-    type:"DNS",
-    timestamp:serverTimestamp()
+  await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
+  await addDoc(collection(db, "resultats"), {
+    dossard: d, type: "DNF", timestamp: serverTimestamp()
   });
-
-  beepError.play();
-  feedback("🚫 DNS enregistré : "+d,"orange");
+  beepError.play(); feedback("🏳️ DNF: " + d, "orange");
 };
 
-/* ---------------- FEEDBACK ---------------- */
-function feedback(msg,color){
-  const f=document.getElementById("feedback");
-  f.style.color=color;
-  f.innerHTML=msg;
+document.getElementById("btn-dns").onclick = async () => {
+  const d = document.getElementById("dossard-dns").value.replace(/\D/g, "");
+  localStorage.setItem("scanAuthTime", Date.now());
+  const snap = await getDocs(query(collection(db, "coureurs"), where("dossard", "==", d)));
+  if (snap.empty) { feedback("❌ Dossard inconnu", "red"); return; }
+  const docRef = snap.docs[0];
+  if (["DNF", "DNS", "ELIMINE"].includes(docRef.data().statut)) {
+    feedback("⛔ Déjà " + docRef.data().statut, "red"); return;
+  }
+  await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
+  await addDoc(collection(db, "resultats"), {
+    dossard: d, type: "DNS", timestamp: serverTimestamp()
+  });
+  beepError.play(); feedback("🚫 DNS: " + d, "orange");
+};
+
+// ======================
+// 💬 Feedback
+// ======================
+function feedback(msg, color) {
+  const f = document.getElementById("feedback");
+  f.style.color = color;
+  f.innerHTML = msg;
 }
 </script>
 
