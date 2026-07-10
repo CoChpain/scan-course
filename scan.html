@@ -616,10 +616,24 @@ nouveauTour;
 
 
 
-async function isHorsDelai(
-dossard,
-tour
-){
+async function isHorsDelai(tour){
+
+if(!startMs) return false;
+
+let cumul=0;
+
+for(let i=1;i<=tour;i++){
+
+    cumul += limites["t"+i] || 0;
+
+}
+
+return (
+Date.now()-startMs >
+cumul*60000
+);
+
+}
 
 
 
@@ -766,49 +780,24 @@ updateCurrentTour();
 
 
 onSnapshot(
-
-collection(
-db,
-"coureurs"
-),
-
+collection(db,"coureurs"),
 snap=>{
 
+    runnerStatuses={};
 
-runnerStatuses={};
+    snap.forEach(d=>{
 
+        const data=d.data();
 
+        if(data.dossard){
 
-snap.forEach(
+            runnerStatuses[data.dossard]=data.statut;
 
-d=>{
+        }
 
+    });
 
-const data =
-d.data();
-
-
-
-if(data.dossard){
-
-
-runnerStatuses[data.dossard]
-=
-data.statut;
-
-
-}
-
-
-}
-
-
-);
-
-
-}
-
-);
+});
 
   // =======================================
 // 🏁 TRAITEMENT ARRIVEE
@@ -1095,9 +1084,8 @@ async function traiterArrivee(dossard, source){
 
     const horsDelai =
     await isHorsDelai(
-        dossard,
-        prochainTour
-    );
+prochainTour
+);
 
 
 
