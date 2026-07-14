@@ -152,24 +152,19 @@
     }
     .dossard-btn:hover:not(:disabled) { background: var(--border-color); }
     .dossard-btn:disabled { opacity: 1; cursor: not-allowed; }
-   /* Scan valide dans le délai */
-.dossard-btn.valid {
-  background: #ff4444 !important;
-  color: white !important;
-}
-
-/* Hors délai / DNS / DNF */
-.dossard-btn.invalid {
-  background: #8B0000 !important;
-  color: white !important;
-  text-decoration: line-through;
-  text-decoration-thickness: 3px;
-}
-
-/* Désactivation temporaire attente 3 minutes */
-.dossard-btn.waiting {
-  opacity: 0.5;
-}
+    .dossard-btn.valid {
+      background: #ff4444 !important;
+      color: white !important;
+    }
+    .dossard-btn.invalid {
+      background: #8B0000 !important;
+      color: white !important;
+      text-decoration: line-through;
+      text-decoration-thickness: 3px;
+    }
+    .dossard-btn.waiting {
+      opacity: 0.5;
+    }
     .section {
       border: 1px solid var(--border-color);
       border-radius: 8px;
@@ -209,6 +204,7 @@
     <button class="tab-btn" onclick="openTab('scans-tab', this)">📡 Gestion scans</button>
     <button class="tab-btn" onclick="openTab('resultats-tab', this)">🏆 Résultats</button>
     <button class="tab-btn" onclick="openTab('tours-tab', this)">🔄 Durée des tours</button>
+    <button class="tab-btn" onclick="openTab('scans-history-tab', this)">📜 Tous les scans</button>
   </div>
   <hr>
 
@@ -321,6 +317,15 @@
     <div id="tour-save-status" class="message"></div>
   </div>
 
+  <!-- NOUVEL ONGLET : TOUS LES SCANS -->
+  <div id="scans-history-tab" class="tab-content">
+    <h2>📜 Historique de tous les scans</h2>
+    <div class="action-buttons">
+      <button onclick="refreshScansHistory()" class="btn-success">🔄 Rafraîchir</button>
+    </div>
+    <div id="scans-history-table"></div>
+  </div>
+
   <script type="module">
     // ======================
     // 🔥 Firebase Configuration
@@ -328,7 +333,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import {
       getFirestore, collection, query, where, getDocs,
-      doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp, getDoc
+      doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp, getDoc,
+      orderBy
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -348,6 +354,7 @@
     let lastTourStartTime = null;
     let buttonsInitialized = false;
     let resultsUnsubscribe = null;
+    let scansHistoryUnsubscribe = null;
 
     // Durées par défaut (en minutes)
     const DEFAULT_TOUR_DUREES = {
@@ -363,6 +370,11 @@
       document.querySelectorAll(".tab-btn").forEach(button => button.classList.remove("active"));
       document.getElementById(tabId).classList.add("active");
       btn.classList.add("active");
+
+      // Charger l'historique si on ouvre l'onglet des scans
+      if (tabId === "scans-history-tab") {
+        loadScansHistory();
+      }
     };
 
     window.toggleCoureurs = function() {
@@ -448,7 +460,7 @@
       return (Date.now() - startMs) > limiteMs;
     }
 
-    // ✅ NOUVELLE FONCTION : Vérifie si un verrou existe pour (dossard, tour)
+    // ✅ Vérifie si un verrou existe pour (dossard, tour)
     async function isScanLocked(dossard, tour) {
       const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
       const lockSnap = await getDoc(lockRef);
@@ -460,6 +472,136 @@
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) {
         await setDoc(docRef, DEFAULT_TOUR_DUREES);
+      }
+    }
+
+    // ======================
+    // 📜 HISTORIQUE DES SCANS
+    // ======================
+    function formatDate(timestamp) {
+      if (!timestamp) return "N/A";
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleString('fr-FR', {
+        day: '2-digit', month: '2-digit', year: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+    }
+
+    async function loadScansHistory() {
+      const tableContainer = document.getElementById("scans-history-table");
+      tableContainer.innerHTML = '<p class="message">Chargement en cours...</p>';
+
+      try {
+        // Récupérer tous les résultats triés par timestamp
+        const q = query(
+          collection(db, "resultats"),
+          orderBy("timestamp", "asc")
+        );
+
+        if (scansHistoryUnsubscribe) scansHistoryUnsubscribe();
+
+        scansHistoryUnsubscribe = onSnapshot(q, async (snap) => {
+          if (snap.empty) {
+            tableContainer.innerHTML = '<p class="message">Aucun scan enregistré.</p>';
+            return;
+          }
+
+          let html = `
+            <table>
+              <tr>
+                <th>Date/Heure</th>
+                <th>Dossard</th>
+                <th>Type</th>
+                <th>Tour</th>
+                <th>Source</th>
+                <th>Hors délai</th>
+                <th>Statut coureur</th>
+                <th>Actions</th>
+              </tr>
+          `;
+
+          for (const docu of snap.docs) {
+            const data = docu.data();
+            const timestamp = data.timestamp;
+            const dateStr = formatDate(timestamp);
+            const type = data.type || (data.tour ? `Tour ${data.tour}` : "Inconnu");
+            const horsDelai = data.horsDelai ? "❌ Oui" : "✅ Non";
+            const source = data.source || "Inconnu";
+
+            // Récupérer le statut actuel du coureur
+            let statutCoureur = "N/A";
+            const coureurSnap = await getDocs(
+              query(collection(db, "coureurs"), where("dossard", "==", data.dossard))
+            );
+            if (!coureurSnap.empty) {
+              statutCoureur = coureurSnap.docs[0].data().statut || "OK";
+            }
+
+            html += `
+              <tr>
+                <td>${dateStr}</td>
+                <td><strong>${data.dossard}</strong></td>
+                <td>${type}</td>
+                <td>${data.tour || "-"}</td>
+                <td>${source}</td>
+                <td>${horsDelai}</td>
+                <td>${statutCoureur}</td>
+                <td>
+                  <button onclick="confirmCancelScan('${docu.id}', ${data.dossard}, ${data.tour || 'null'}, '${data.type || 'arrivee'}')"
+                          class="btn-danger" style="padding: 5px 10px; font-size: 14px;">
+                    ❌ Annuler
+                  </button>
+                </td>
+              </tr>
+            `;
+          }
+
+          html += `</table>`;
+          tableContainer.innerHTML = html;
+        });
+      } catch (error) {
+        tableContainer.innerHTML = `<p class="message error">❌ Erreur : ${error.message}</p>`;
+      }
+    }
+
+    window.refreshScansHistory = function() {
+      if (scansHistoryUnsubscribe) scansHistoryUnsubscribe();
+      loadScansHistory();
+    };
+
+    async function confirmCancelScan(docId, dossard, tour, type) {
+      if (!confirm("⚠️ Annuler ce scan ? Cette action est irréversible.")) return;
+      if (!confirm("⚠️ Dernière confirmation. Le scan sera supprimé définitivement.")) return;
+
+      try {
+        // Supprimer le scan de la collection resultats
+        await deleteDoc(doc(db, "resultats", docId));
+
+        // Supprimer le verrou correspondant si c'est un scan de tour
+        if (tour) {
+          const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
+          await deleteDoc(lockRef);
+        }
+
+        // Si c'était un DNF/DNS/ELIMINE, réinitialiser le statut du coureur
+        if (type === "DNF" || type === "DNS" || type === "ELIMINE") {
+          const coureurSnap = await getDocs(
+            query(collection(db, "coureurs"), where("dossard", "==", dossard))
+          );
+          if (!coureurSnap.empty) {
+            await updateDoc(doc(db, "coureurs", coureurSnap.docs[0].id), { statut: "OK" });
+            runnerStatuses[dossard] = "OK";
+          }
+        }
+
+        // Mettre à jour l'UI
+        updateDossardButton(dossard);
+        feedback(`✅ Scan annulé pour le dossard ${dossard}`, "success");
+
+        // Rafraîchir l'historique
+        setTimeout(() => refreshScansHistory(), 500);
+      } catch (error) {
+        feedback(`❌ Erreur : ${error.message}`, "error");
       }
     }
 
@@ -520,24 +662,14 @@
 
         // Après 3 minutes, recalculer l'état de TOUS les boutons
         setTimeout(() => {
-
-  // Nouveau tour après 3 minutes :
-  // on enlève uniquement les scans valides
-
-  for(let i=1;i<=160;i++){
-
-    const btn =
-      document.getElementById(`dossard-btn-${i}`);
-
-    if(btn){
-
-      btn.classList.remove("valid");
-    }
-  }
-
-  updateDossardButtonsState();
-
-},180000); // 3 minutes
+          for(let i=1;i<=160;i++){
+            const btn = document.getElementById(`dossard-btn-${i}`);
+            if(btn){
+              btn.classList.remove("valid");
+            }
+          }
+          updateDossardButtonsState();
+        },180000); // 3 minutes
       }
     }
 
@@ -798,7 +930,7 @@
       }, 200);
     }
 
-    // ✅ FONCTION CENTRALISÉE AVEC VERROU FIRESTORE
+    // FONCTION CENTRALISÉE AVEC VERROU FIRESTORE
     async function performScan(dossard, statusDiv = null) {
       // 1. Vérifications basiques
       if (!startMs) {
@@ -818,10 +950,9 @@
       }
 
       // 2. Récupérer le dernier tour scanné
-      const resultsSnap = await getDocs(query(
-        collection(db, "resultats"),
-        where("dossard", "==", dossard)
-      ));
+      const resultsSnap = await getDocs(
+        query(collection(db, "resultats"), where("dossard", "==", dossard))
+      );
 
       let lastScannedTour = 0;
       resultsSnap.forEach(docu => {
@@ -856,7 +987,7 @@
         }
       }
 
-      // ✅ VÉRIFIER LE VERROU FIRESTORE POUR (dossard, nextTour)
+      // VÉRIFIER LE VERROU FIRESTORE POUR (dossard, nextTour)
       const isLocked = await isScanLocked(dossard, nextTour);
       if (isLocked) {
         if (statusDiv) {
@@ -867,7 +998,7 @@
         return false;
       }
 
-      // ✅ CRÉER LE VERROU AVANT D'ENREGISTRER LE RÉSULTAT
+      // CRÉER LE VERROU AVANT D'ENREGISTRER LE RÉSULTAT
       const lockRef = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
       await setDoc(lockRef, {
         dossard: dossard,
@@ -875,36 +1006,37 @@
         createdAt: serverTimestamp()
       });
 
-     // 6. Vérifier hors délai
-const horsDelai = await isHorsDelai(dossard, nextTour);
-if (horsDelai) {
-  await addDoc(collection(db, "resultats"), {
-    dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
-  });
+      // 6. Vérifier hors délai
+      const horsDelai = await isHorsDelai(dossard, nextTour);
+      if (horsDelai) {
+        await addDoc(collection(db, "resultats"), {
+          dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
+        });
 
-  // Mettre à jour le statut du coureur
-  const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-  const snap = await getDocs(q);
-  if (!snap.empty && !["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-    await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
-    runnerStatuses[dossard] = "ELIMINE"; // Mise à jour locale
-  }
+        // Mettre à jour le statut du coureur
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (!snap.empty && !["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+          await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
+          runnerStatuses[dossard] = "ELIMINE";
+        }
 
-  // Créer le verrou même pour les hors délai
-  const lockRef = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
-  await setDoc(lockRef, {
-    dossard: dossard,
-    tour: nextTour,
-    createdAt: serverTimestamp()
-  });
+        // Créer le verrou même pour les hors délai
+        const lockRef2 = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
+        await setDoc(lockRef2, {
+          dossard: dossard,
+          tour: nextTour,
+          createdAt: serverTimestamp()
+        });
 
-  updateDossardButton(dossard);
-  if (statusDiv) {
-    statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
-    statusDiv.className = "message warning";
-  }
-  return true;
-}
+        updateDossardButton(dossard);
+        if (statusDiv) {
+          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
+          statusDiv.className = "message warning";
+        }
+        return true;
+      }
+
       // 7. Tout est OK, enregistrer le scan
       const now = Date.now();
       const elapsedTime = now - startMs;
@@ -914,7 +1046,7 @@ if (horsDelai) {
         dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest"
       });
 
-      // ✅ Synchroniser l'UI immédiatement
+      // Synchroniser l'UI immédiatement
       updateDossardButtonsState();
 
       if (statusDiv) {
@@ -924,148 +1056,87 @@ if (horsDelai) {
       return true;
     }
 
-   async function updateDossardButton(dossard) {
+    async function updateDossardButton(dossard) {
+      const btn = document.getElementById(`dossard-btn-${dossard}`);
+      if (!btn) return;
 
-  const btn = document.getElementById(`dossard-btn-${dossard}`);
-  if (!btn) return;
+      btn.disabled = false;
+      btn.classList.remove(
+        "valid",
+        "invalid",
+        "waiting",
+        "scanned",
+        "banned"
+      );
 
-  btn.disabled = false;
+      // DNS / DNF / ELIMINE
+      if (
+        runnerStatuses[dossard] &&
+        ["DNF","DNS","ELIMINE"].includes(runnerStatuses[dossard])
+      ) {
+        btn.disabled = true;
+        btn.classList.add("invalid");
+        btn.title = runnerStatuses[dossard];
+        return;
+      }
 
-  btn.classList.remove(
-    "valid",
-    "invalid",
-    "waiting",
-    "scanned",
-    "banned"
-  );
+      // Chrono arrêté
+      if (!startMs) {
+        btn.disabled = true;
+        btn.title = "Chrono non lancé";
+        return;
+      }
 
+      // Recherche dernier scan
+      const snap = await getDocs(
+        query(collection(db,"resultats"), where("dossard","==",dossard))
+      );
 
-  // ============================
-  // DNS / DNF / ELIMINE
-  // ============================
+      let dernierTour = 0;
+      let horsDelai = false;
 
-  if (
-    runnerStatuses[dossard] &&
-    ["DNF","DNS","ELIMINE"].includes(runnerStatuses[dossard])
-  ) {
+      snap.forEach(doc=>{
+        const data = doc.data();
+        if(data.tour > dernierTour)
+          dernierTour=data.tour;
+        if(data.horsDelai)
+          horsDelai=true;
+      });
 
-    btn.disabled = true;
-    btn.classList.add("invalid");
-    btn.title = runnerStatuses[dossard];
+      // Hors délai
+      if(horsDelai){
+        btn.disabled=true;
+        btn.classList.add("invalid");
+        btn.title="Hors délai";
+        return;
+      }
 
-    return;
-  }
+      // Déjà passé ce tour
+      const verrou = await isScanLocked(dossard,currentTour);
+      if(verrou){
+        btn.disabled=true;
+        btn.classList.add("valid");
+        btn.title=`Tour ${currentTour} validé`;
+        return;
+      }
 
+      // Attente 3 minutes
+      if(
+        dernierTour === currentTour-1 &&
+        lastTourStartTime
+      ){
+        const attente = Date.now()-lastTourStartTime;
+        if(attente < 180000){
+          btn.disabled=true;
+          btn.classList.add("waiting");
+          btn.title = `Disponible dans ${Math.ceil((180000-attente)/1000)}s`;
+          return;
+        }
+      }
 
-
-  // Chrono arrêté
-
-  if (!startMs) {
-
-    btn.disabled = true;
-    btn.title = "Chrono non lancé";
-
-    return;
-  }
-
-
-
-  // ============================
-  // Recherche dernier scan
-  // ============================
-
-  const snap = await getDocs(
-    query(
-      collection(db,"resultats"),
-      where("dossard","==",dossard)
-    )
-  );
-
-
-  let dernierTour = 0;
-  let horsDelai = false;
-
-
-  snap.forEach(doc=>{
-
-    const data = doc.data();
-
-    if(data.tour > dernierTour)
-      dernierTour=data.tour;
-
-
-    if(data.horsDelai)
-      horsDelai=true;
-
-  });
-
-
-
-  // ============================
-  // Hors délai
-  // ============================
-
-  if(horsDelai){
-
-    btn.disabled=true;
-    btn.classList.add("invalid");
-    btn.title="Hors délai";
-
-    return;
-  }
-
-
-
-  // ============================
-  // Déjà passé ce tour
-  // ============================
-
-  const verrou =
-    await isScanLocked(dossard,currentTour);
-
-
-
-  if(verrou){
-
-    btn.disabled=true;
-    btn.classList.add("valid");
-    btn.title=`Tour ${currentTour} validé`;
-
-    return;
-  }
-
-
-
-  // ============================
-  // Attente 3 minutes
-  // ============================
-
-  if(
-    dernierTour === currentTour-1 &&
-    lastTourStartTime
-  ){
-
-    const attente =
-      Date.now()-lastTourStartTime;
-
-
-    if(attente < 180000){
-
-      btn.disabled=true;
-      btn.classList.add("waiting");
-
-      btn.title =
-      `Disponible dans ${Math.ceil((180000-attente)/1000)}s`;
-
-      return;
+      btn.title=`Prêt tour ${currentTour}`;
     }
-  }
 
-
-
-  btn.title=`Prêt tour ${currentTour}`;
-
-}
     async function updateDossardButtonsState() {
       if (isUpdatingButtons) return;
       isUpdatingButtons = true;
@@ -1223,7 +1294,7 @@ if (horsDelai) {
         return;
       }
 
-      // ✅ Vérifier le verrou Firestore
+      // Vérifier le verrou Firestore
       const isLocked = await isScanLocked(dossard, tour);
       if (isLocked) {
         statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${tour}.`;
@@ -1231,7 +1302,7 @@ if (horsDelai) {
         return;
       }
 
-      // ✅ Créer le verrou
+      // Créer le verrou
       const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
       await setDoc(lockRef, {
         dossard: dossard,
