@@ -2,1946 +2,423 @@
 <html lang="fr">
 
 <head>
-
 <meta charset="UTF-8">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>SCAN COURSE</title>
-
-
-<!-- Librairie QR -->
 <script src="https://unpkg.com/html5-qrcode"></script>
-
-
 <style>
-
-
 body{
-
-background:#000;
-color:white;
-font-family:Arial,Helvetica,sans-serif;
-text-align:center;
-margin:0;
-padding:0;
-
+  background:#000;
+  color:white;
+  font-family:Arial,Helvetica,sans-serif;
+  text-align:center;
+  margin:0;
+  padding:0;
 }
-
-
-
 h1{
-
-margin-top:20px;
-
+  margin-top:20px;
 }
-
-
-
 button{
-
-padding:12px 20px;
-font-size:18px;
-margin:8px;
-cursor:pointer;
-border-radius:8px;
-border:none;
-
+  padding:12px 20px;
+  font-size:18px;
+  margin:8px;
+  cursor:pointer;
+  border-radius:8px;
+  border:none;
 }
-
-
-
 input{
-
-padding:12px;
-font-size:18px;
-width:220px;
-border-radius:8px;
-border:none;
-text-align:center;
-
+  padding:12px;
+  font-size:18px;
+  width:220px;
+  border-radius:8px;
+  border:none;
+  text-align:center;
 }
-
-
-
 #feedback{
-
-font-size:28px;
-font-weight:bold;
-margin-top:25px;
-min-height:40px;
-
+  font-size:28px;
+  font-weight:bold;
+  margin-top:25px;
+  min-height:40px;
 }
-
-
-
 #reader{
-
-width:320px;
-height:320px;
-margin:20px auto;
-background:#111;
-border-radius:10px;
-
+  width:320px;
+  height:320px;
+  margin:20px auto;
+  background:#111;
+  border-radius:10px;
 }
-
-
-
-
 .zone{
-
-margin:15px auto;
-padding:10px;
-
+  margin:15px auto;
+  padding:10px;
 }
-
-
-
-
 #lock{
-
-position:fixed;
-inset:0;
-background:black;
-
-display:flex;
-flex-direction:column;
-justify-content:center;
-align-items:center;
-
-z-index:9999;
-
+  position:fixed;
+  inset:0;
+  background:black;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
 }
-
-
-
 #err{
-
-margin-top:15px;
-font-weight:bold;
-
+  margin-top:15px;
+  font-weight:bold;
 }
-
-
-
 </style>
-
-
 </head>
 
-
-
-
-
 <body>
-
-
-
-
-
-<!-- ==========================
-     PROTECTION MOT DE PASSE
-========================== -->
-
-
 <div id="lock">
-
-
-<h2>
-🔒 Accès protégé
-</h2>
-
-
-
-<input
-
-id="pwd"
-
-type="password"
-
-placeholder="Mot de passe"
-
->
-
-
-
-<button onclick="checkPwd()">
-
-Entrer
-
-</button>
-
-
-
-<div id="err"></div>
-
-
-
+  <h2>🔒 Accès protégé</h2>
+  <input id="pwd" type="password" placeholder="Mot de passe">
+  <button onclick="checkPwd()">Entrer</button>
+  <div id="err"></div>
 </div>
 
-
-
-
-
-
-
-
-<!-- ==========================
-     INTERFACE COURSE
-========================== -->
-
-
-<h1>
-🏁 ARRIVÉES COURSE
-</h1>
-
-
-
-
-
-<!-- ZONE CAMERA QR -->
-
+<h1>🏁 ARRIVÉES COURSE</h1>
 <div id="reader"></div>
-
-
-
-
-
-<!-- MESSAGE RETOUR -->
-
 <div id="feedback"></div>
 
-
-
-
-
-
-
-<!-- ==========================
-     ARRIVEE MANUELLE
-========================== -->
-
-
 <div class="zone">
-
-
-<input
-
-id="arrivee-manuel"
-
-placeholder="Dossard arrivée"
-
->
-
-
-<button id="btn-arrivee">
-
-✅ ARRIVÉE
-
-</button>
-
-
+  <input id="arrivee-manuel" placeholder="Dossard arrivée">
+  <button id="btn-arrivee">✅ ARRIVÉE</button>
 </div>
 
-
-
-
-
-
-
-
-
-<!-- ==========================
-     DNF
-========================== -->
-
-
 <div class="zone">
-
-
-<input
-
-id="dossard-dnf"
-
-placeholder="Dossard DNF"
-
->
-
-
-<button id="btn-dnf">
-
-🏳️ DNF
-
-</button>
-
-
+  <input id="dossard-dnf" placeholder="Dossard DNF">
+  <button id="btn-dnf">🏳️ DNF</button>
 </div>
 
-
-
-
-
-
-
-
-
-<!-- ==========================
-     DNS
-========================== -->
-
-
 <div class="zone">
-
-
-<input
-
-id="dossard-dns"
-
-placeholder="Dossard DNS"
-
->
-
-
-<button id="btn-dns">
-
-🚫 DNS
-
-</button>
-
-
+  <input id="dossard-dns" placeholder="Dossard DNS">
+  <button id="btn-dns">🚫 DNS</button>
 </div>
-
-
-
-
-
-
-
-
 
 <script>
-
-
-// ==========================
 // AUTHENTIFICATION LOCALE
-// ==========================
+const SESSION_DURATION = 30 * 60 * 1000;
 
-
-const SESSION_DURATION =
-30 * 60 * 1000;
-
-
-
-
-
-window.checkPwd=function(){
-
-
-const password =
-
-document
-.getElementById("pwd")
-.value;
-
-
-
-
-
-if(password==="3sRunTravel2026"){
-
-
-
-localStorage.setItem(
-
-"scanAuthTime",
-
-Date.now()
-
-);
-
-
-
-unlock();
-
-
-
-}
-
-else{
-
-
-document
-.getElementById("err")
-.innerHTML =
-
-"❌ Mot de passe incorrect";
-
-
-
-}
-
-
-
+window.checkPwd = function() {
+  const password = document.getElementById("pwd").value;
+  if(password === "3sRunTravel2026") {
+    localStorage.setItem("scanAuthTime", Date.now());
+    unlock();
+  } else {
+    document.getElementById("err").innerHTML = "❌ Mot de passe incorrect";
+  }
 };
 
-
-
-
-
-
-
-
-function unlock(){
-
-
-document
-.getElementById("lock")
-.style.display="none";
-
-
+function unlock() {
+  document.getElementById("lock").style.display = "none";
 }
 
-
-
-
-
-
-
-function checkSession(){
-
-
-const saved =
-
-localStorage
-.getItem("scanAuthTime");
-
-
-
-
-if(
-
-saved &&
-
-(Date.now()-saved)
-<
-SESSION_DURATION
-
-){
-
-
-unlock();
-
-
+function checkSession() {
+  const saved = localStorage.getItem("scanAuthTime");
+  if(saved && (Date.now() - saved) < SESSION_DURATION) unlock();
 }
-
-
-
-}
-
-
-
-
-
 checkSession();
-
-
-
-
 </script>
 
-     <script type="module">
-
-
-// ======================
+<script type="module">
 // FIREBASE IMPORT
-// ======================
-
-
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import {
+  getFirestore, collection, query, where, getDocs, addDoc, updateDoc,
+  doc, serverTimestamp, onSnapshot, getDoc, setDoc, runTransaction
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
 
-initializeApp
-
-}
-
-from
-
-"https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-
-
-
-import {
-
-
-getFirestore,
-
-collection,
-
-query,
-
-where,
-
-getDocs,
-
-addDoc,
-
-updateDoc,
-
-doc,
-
-serverTimestamp,
-
-onSnapshot,
-
-getDoc,
-
-setDoc,
-
-runTransaction
-
-
-}
-
-from
-
-"https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-
-
-import {
-
-firebaseConfig
-
-}
-
-from
-
-"./firebase-config.js";
-
-
-
-
-
-
-// ======================
 // INITIALISATION FIREBASE
-// ======================
-
-
 const app = initializeApp(firebaseConfig);
-
-
 const db = getFirestore(app);
 
-
-
-
-
-
-
-// ======================
 // VARIABLES COURSE
-// ======================
-
-
 let startMs = null;
-
-
-
-let limites = {
-
-t1:40,
-t2:37,
-t3:34,
-t4:31,
-t5:28,
-t6:25,
-t7:22,
-t8:19,
-t9:16,
-t10:13
-
-};
-
-
-
+let limites = { t1:40, t2:37, t3:34, t4:31, t5:28, t6:25, t7:22, t8:19, t9:16, t10:13 };
 let currentTour = 0;
-
-
 let lastTourStartTime = null;
-
-
 let runnerStatuses = {};
-
-
-
 let lastScan = null;
-
-
 let lastScanTime = 0;
-
-
 let processing = false;
 
-
-
-
-
-
-
-
-
-// ======================
 // SONS
-// ======================
+const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
+// VERIFICATION VERROU FIRESTORE
+async function isScanLocked(dossard, tour) {
+  const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
+  const lockSnap = await getDoc(lockRef);
+  return lockSnap.exists();
+}
 
-const beepOk = new Audio(
-
-"https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"
-
-);
-
-
-
-const beepError = new Audio(
-
-"https://actions.google.com/sounds/v1/alarms/beep_short.ogg"
-
-);
-
-
-
-
-
-
-
-
-
-// ======================
 // CALCUL TOUR ACTUEL
-// ======================
+function updateCurrentTour() {
+  if(!startMs) {
+    currentTour = 0;
+    lastTourStartTime = null;
+    return;
+  }
+  const elapsed = (Date.now() - startMs) / 60000;
+  let cumul = 0;
+  let nouveauTour = 0;
 
+  for(let i = 1; i <= 10; i++) {
+    const limite = limites["t" + i];
+    if(!limite) break;
+    cumul += limite;
+    if(elapsed < cumul) {
+      nouveauTour = i;
+      break;
+    }
+  }
 
-function updateCurrentTour(){
+  if(nouveauTour === 0) nouveauTour = 10;
 
-
-
-if(!startMs){
-
-
-currentTour = 0;
-
-lastTourStartTime = null;
-
-return;
-
-
+  if(nouveauTour !== currentTour) {
+    let debut = 0;
+    for(let i = 1; i < nouveauTour; i++) {
+      debut += (limites["t" + i] || 0) * 60000;
+    }
+    lastTourStartTime = startMs + debut;
+    currentTour = nouveauTour;
+  }
 }
 
-
-
-
-const elapsed =
-
-(Date.now()-startMs)/60000;
-
-
-
-let cumul = 0;
-
-
-let nouveauTour = 0;
-
-
-
-
-
-for(let i=1;i<=10;i++){
-
-
-const limite = limites["t"+i];
-
-
-
-if(!limite)
-break;
-
-
-
-cumul += limite;
-
-
-
-
-if(elapsed < cumul){
-
-
-nouveauTour = i;
-
-break;
-
-
-}
-
-
-
-}
-
-
-
-
-
-if(nouveauTour===0){
-
-
-nouveauTour = 10;
-
-
-}
-
-
-
-
-
-if(nouveauTour!==currentTour){
-
-
-
-let debut = 0;
-
-
-
-for(
-let i=1;
-i<nouveauTour;
-i++
-){
-
-
-debut +=
-
-(limites["t"+i] || 0)
-*
-60000;
-
-
-}
-
-
-
-lastTourStartTime =
-
-startMs + debut;
-
-
-
-currentTour = nouveauTour;
-
-
-
-}
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// ======================
 // VERIFICATION HORS DELAI
-// ======================
-
-
-async function isHorsDelai(tour){
-
-
-
-if(!startMs)
-return false;
-
-
-
-let cumul = 0;
-
-
-
-for(
-let i=1;
-i<=tour;
-i++
-){
-
-
-cumul += limites["t"+i] || 0;
-
-
+async function isHorsDelai(tour) {
+  if(!startMs) return false;
+  let cumul = 0;
+  for(let i = 1; i <= tour; i++) {
+    cumul += limites["t" + i] || 0;
+  }
+  return (Date.now() - startMs) > cumul * 60000;
 }
 
-
-
-
-
-return (
-
-Date.now()-startMs
-
->
-
-cumul*60000
-
-);
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// ======================
-// LISTENER DEPART
-// ======================
-
-
-onSnapshot(
-
-doc(
-db,
-"course",
-"depart"
-),
-
-snap=>{
-
-
-if(snap.exists()){
-
-
-startMs =
-
-snap.data().startMs;
-
-
-
-updateCurrentTour();
-
-
-}
-
-else{
-
-
-startMs = null;
-
-currentTour = 0;
-
-lastTourStartTime = null;
-
-
-}
-
-
-
-}
-
-);
-
-
-
-
-
-
-
-
-
-// ======================
-// LISTENER LIMITES
-// ======================
-
-
-onSnapshot(
-
-doc(
-db,
-"course",
-"limitesTours"
-),
-
-snap=>{
-
-
-if(snap.exists()){
-
-
-limites = snap.data();
-
-
-updateCurrentTour();
-
-
-}
-
-
-
-}
-
-);
-
-
-
-
-
-
-
-
-
-// ======================
-// LISTENER COUREURS
-// ======================
-
-
-onSnapshot(
-
-collection(
-db,
-"coureurs"
-),
-
-snap=>{
-
-
-runnerStatuses = {};
-
-
-
-snap.forEach(d=>{
-
-
-const data = d.data();
-
-
-
-if(data.dossard){
-
-
-runnerStatuses[data.dossard]
-
-=
-
-data.statut;
-
-
-}
-
-
-
+// LISTENERS FIREBASE
+onSnapshot(doc(db, "course", "depart"), snap => {
+  if(snap.exists()) {
+    startMs = snap.data().startMs;
+    updateCurrentTour();
+  } else {
+    startMs = null;
+    currentTour = 0;
+    lastTourStartTime = null;
+  }
 });
 
+onSnapshot(doc(db, "course", "limitesTours"), snap => {
+  if(snap.exists()) {
+    limites = snap.data();
+    updateCurrentTour();
+  }
+});
 
-}
+onSnapshot(collection(db, "coureurs"), snap => {
+  runnerStatuses = {};
+  snap.forEach(d => {
+    const data = d.data();
+    if(data.dossard) runnerStatuses[data.dossard] = data.statut;
+  });
+});
 
-);
-
-
-
-
-
-
-
-// ======================
 // AFFICHAGE MESSAGE
-// ======================
+window.feedback = function(message, couleur) {
+  const zone = document.getElementById("feedback");
+  zone.innerHTML = message;
+  zone.style.color = couleur;
+};
 
+// TRAITEMENT ARRIVEE
+async function traiterArrivee(dossard, source) {
+  if(!startMs) {
+    feedback("⛔ Course non démarrée", "red");
+    beepError.play();
+    return;
+  }
 
-window.feedback = function(message,couleur){
+  if(!dossard) {
+    feedback("❌ Dossard invalide", "red");
+    return;
+  }
 
+  // Recherche coureur
+  const snap = await getDocs(
+    query(collection(db, "coureurs"), where("dossard", "==", String(dossard)))
+  );
 
+  if(snap.empty) {
+    feedback("❌ Dossard inconnu", "red");
+    beepError.play();
+    return;
+  }
 
-const zone =
+  const coureurDoc = snap.docs[0];
+  const coureur = coureurDoc.data();
 
-document.getElementById("feedback");
+  // Blocage statut
+  if(["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
+    feedback(`⛔ ${coureur.statut}`, "red");
+    return;
+  }
 
+  // Calcul prochain tour
+  const resultats = await getDocs(
+    query(collection(db, "resultats"), where("dossard", "==", dossard))
+  );
 
+  let prochainTour = 1;
+  resultats.forEach(r => {
+    const data = r.data();
+    if(data.tour && data.tour >= prochainTour) {
+      prochainTour = data.tour + 1;
+    }
+  });
 
-zone.innerHTML = message;
+  if(prochainTour > currentTour) {
+    feedback(`⛔ Tour ${prochainTour} fermé`, "orange");
+    return;
+  }
 
+  // VERROU ANTI DOUBLE SCAN
+  const lockRef = doc(db, "scansLocks", `${dossard}_t${prochainTour}`);
 
-zone.style.color = couleur;
+  try {
+    await runTransaction(db, async(transaction) => {
+      const lock = await transaction.get(lockRef);
+      if(lock.exists()) throw new Error("LOCK");
+      transaction.set(lockRef, {
+        dossard,
+        tour: prochainTour,
+        source,
+        createdAt: serverTimestamp()
+      });
+    });
+  } catch(e) {
+    feedback("⛔ Déjà enregistré", "orange");
+    return;
+  }
 
+  // HORS DELAI
+  const horsDelai = await isHorsDelai(prochainTour);
+  if(horsDelai) {
+    await addDoc(collection(db, "resultats"), {
+      dossard,
+      tour: prochainTour,
+      horsDelai: true,
+      source,
+      timestamp: serverTimestamp()
+    });
+    await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "ELIMINE" });
+    feedback(`🚨 ${dossard} HORS DELAI`, "red");
+    beepError.play();
+    return;
+  }
 
+  // ENREGISTREMENT NORMAL
+  await addDoc(collection(db, "resultats"), {
+    dossard,
+    tour: prochainTour,
+    horsDelai: false,
+    source,
+    timestamp: serverTimestamp()
+  });
 
+  let couleur = "lime";
+  const sexe = (coureur.sexe || coureur.categorie || "").toUpperCase();
+  if(sexe === "F") couleur = "violet";
+  if(sexe === "H") couleur = "cyan";
+
+  feedback(`✅ ${dossard} - TOUR ${prochainTour}`, couleur);
+  beepOk.play();
 }
 
-
-// =======================================
-// 🏁 TRAITEMENT ARRIVEE
-// =======================================
-
-
-async function traiterArrivee(dossard, source){
-
-
-if(!startMs){
-
-
-feedback(
-"⛔ Course non démarrée",
-"red"
-);
-
-
-beepError.play();
-
-return;
-
-}
-
-
-
-if(!dossard){
-
-
-feedback(
-"❌ Dossard invalide",
-"red"
-);
-
-
-return;
-
-}
-
-
-
-
-
-
-// Recherche coureur
-
-
-const snap = await getDocs(
-
-query(
-
-collection(db,"coureurs"),
-
-where(
-"dossard",
-"==",
-Strin(dossard)
-)
-
-)
-
-);
-
-
-
-
-if(snap.empty){
-
-
-feedback(
-"❌ Dossard inconnu",
-"red"
-);
-
-
-beepError.play();
-
-
-return;
-
-
-}
-
-
-
-
-const coureurDoc = snap.docs[0];
-
-
-const coureur = coureurDoc.data();
-
-
-
-
-
-
-
-// Blocage statut
-
-
-if(
-
-[
-"DNS",
-"DNF",
-"ELIMINE"
-
-]
-
-.includes(coureur.statut)
-
-){
-
-
-feedback(
-
-`⛔ ${coureur.statut}`,
-
-"red"
-
-);
-
-
-return;
-
-}
-
-
-
-
-
-
-
-// Calcul prochain tour
-
-
-const resultats = await getDocs(
-
-query(
-
-collection(db,"resultats"),
-
-where(
-"dossard",
-"==",
-dossard
-)
-
-)
-
-);
-
-
-
-
-
-let prochainTour = 1;
-
-
-
-resultats.forEach(r=>{
-
-
-const data = r.data();
-
-
-
-if(
-
-data.tour &&
-data.tour >= prochainTour
-
-){
-
-
-prochainTour =
-data.tour + 1;
-
-
-}
-
-
-
+// SCANNER QR
+const scanner = new Html5QrcodeScanner("reader", { fps:10, qrbox:220 });
+scanner.render(async(text) => {
+  const dossard = Number(text.replace(/\D/g, ""));
+  if(!dossard) {
+    feedback("❌ QR invalide", "red");
+    return;
+  }
+  const now = Date.now();
+  if(dossard === lastScan && now - lastScanTime < 3000) return;
+  if(processing) return;
+
+  lastScan = dossard;
+  lastScanTime = now;
+  processing = true;
+  try {
+    await traiterArrivee(dossard, "SCAN");
+  } finally {
+    setTimeout(() => { processing = false; }, 1500);
+  }
 });
 
-
-
-
-
-
-
-if(prochainTour > currentTour){
-
-
-feedback(
-
-`⛔ Tour ${prochainTour} fermé`,
-
-"orange"
-
-);
-
-
-return;
-
-}
-
-
-
-
-
-
-
-// ===============================
-// VERROU ANTI DOUBLE SCAN
-// ===============================
-
-
-const lockRef = doc(
-
-db,
-
-"scansLocks",
-
-`${dossard}_tour_${prochainTour}`
-
-);
-
-
-
-
-
-try{
-
-
-await runTransaction(
-
-db,
-
-async(transaction)=>{
-
-
-const lock =
-
-await transaction.get(lockRef);
-
-
-
-if(lock.exists()){
-
-
-throw new Error("LOCK");
-
-}
-
-
-
-transaction.set(
-
-lockRef,
-
-{
-
-dossard,
-
-tour:prochainTour,
-
-source,
-
-createdAt:serverTimestamp()
-
-}
-
-);
-
-
-}
-
-);
-
-
-}
-
-catch(e){
-
-
-feedback(
-
-"⛔ Déjà enregistré",
-
-"orange"
-
-);
-
-
-return;
-
-
-}
-
-
-
-
-
-
-
-
-
-// ===============================
-// HORS DELAI
-// ===============================
-
-
-const horsDelai =
-
-await isHorsDelai(prochainTour);
-
-
-
-
-
-
-if(horsDelai){
-
-
-
-await addDoc(
-
-collection(db,"resultats"),
-
-{
-
-
-dossard,
-
-tour:prochainTour,
-
-horsDelai:true,
-
-source,
-
-timestamp:serverTimestamp()
-
-
-}
-
-);
-
-
-
-
-
-await updateDoc(
-
-doc(
-
-db,
-
-"coureurs",
-
-coureurDoc.id
-
-),
-
-{
-
-statut:"ELIMINE"
-
-}
-
-);
-
-
-
-
-feedback(
-
-`🚨 ${dossard} HORS DELAI`,
-
-"red"
-
-);
-
-
-
-beepError.play();
-
-
-return;
-
-
-}
-
-
-
-
-
-
-
-
-
-// ===============================
-// ENREGISTREMENT NORMAL
-// ===============================
-
-
-await addDoc(
-
-collection(db,"resultats"),
-
-{
-
-
-dossard,
-
-tour:prochainTour,
-
-horsDelai:false,
-
-source,
-
-timestamp:serverTimestamp()
-
-
-}
-
-);
-
-
-
-
-
-
-let couleur="lime";
-
-
-
-const sexe =
-
-(
-coureur.sexe ||
-
-coureur.categorie ||
-
-""
-
-)
-.toUpperCase();
-
-
-
-
-if(sexe==="F")
-couleur="violet";
-
-
-
-if(sexe==="H")
-couleur="cyan";
-
-
-
-
-
-
-
-feedback(
-
-`✅ ${dossard} - TOUR ${prochainTour}`,
-
-couleur
-
-);
-
-
-
-beepOk.play();
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// =======================================
-// 📷 SCANNER QR
-// =======================================
-
-
-const scanner =
-
-new Html5QrcodeScanner(
-
-"reader",
-
-{
-
-fps:10,
-
-qrbox:220
-
-}
-
-);
-
-
-
-
-
-scanner.render(
-
-async(text)=>{
-
-
-
-const dossard =
-Number(
-document
-.getElementById("arrivee-manuel")
-.value
-.replace(/\D/g,"")
-);
-
-
-
-
-
-if(!dossard){
-
-
-feedback(
-
-"❌ QR invalide",
-
-"red"
-
-);
-
-
-return;
-
-}
-
-
-
-
-
-const now = Date.now();
-
-
-
-
-
-if(
-
-dossard===lastScan &&
-
-now-lastScanTime<3000
-
-)
-
-return;
-
-
-
-
-
-if(processing)
-
-return;
-
-
-
-
-
-lastScan=dossard;
-
-lastScanTime=now;
-
-processing=true;
-
-
-
-
-
-
-try{
-
-
-await traiterArrivee(
-
-dossard,
-
-"SCAN"
-
-);
-
-
-
-}
-
-finally{
-
-
-setTimeout(()=>{
-
-
-processing=false;
-
-
-},1500);
-
-
-}
-
-
-
-}
-
-);
-
-
-
-
-
-
-
-
-
-// =======================================
-// 🔘 ARRIVEE MANUELLE
-// =======================================
-
-
-document
-
-.getElementById("btn-arrivee")
-
-.onclick = async()=>{
-
-
-const dossard =
-Number(
-text
-.split("-")
-.pop()
-.replace(/\D/g,"")
-);
-
-
-await traiterArrivee(
-
-dossard,
-
-"MANUEL"
-
-);
-
-
-
+// ARRIVEE MANUELLE
+document.getElementById("btn-arrivee").onclick = async() => {
+  const dossard = Number(document.getElementById("arrivee-manuel").value.replace(/\D/g, ""));
+  await traiterArrivee(dossard, "MANUEL");
+  document.getElementById("arrivee-manuel").value = "";
 };
 
-
-
-
-
-
-
-
-
-// =======================================
-// 🏳️ DNF
-// =======================================
-
-
-document
-
-.getElementById("btn-dnf")
-
-.onclick = async()=>{
-
-
-const dossard =
-
-document
-
-.getElementById("dossard-dnf")
-
-.value
-
-.replace(/\D/g,"");
-
-
-
-
-if(!dossard){
-
-feedback(
-"❌ Dossard invalide",
-"red"
-);
-
-return;
-
-}
-
-
-
-
-await changerStatut(
-
-dossard,
-
-"DNF"
-
-);
-
-
+// DNF
+document.getElementById("btn-dnf").onclick = async() => {
+  const dossard = document.getElementById("dossard-dnf").value.replace(/\D/g, "");
+  if(!dossard) {
+    feedback("❌ Dossard invalide", "red");
+    return;
+  }
+  await changerStatut(dossard, "DNF");
+  document.getElementById("dossard-dnf").value = "";
 };
 
-
-
-
-
-
-
-
-
-// =======================================
-// 🚫 DNS
-// =======================================
-
-
-document
-
-.getElementById("btn-dns")
-
-.onclick = async()=>{
-
-
-const dossard =
-
-document
-
-.getElementById("dossard-dns")
-
-.value
-
-.replace(/\D/g,"");
-
-
-
-
-if(!dossard){
-
-feedback(
-"❌ Dossard invalide",
-"red"
-);
-
-return;
-
-}
-
-
-
-
-await changerStatut(
-
-dossard,
-
-"DNS"
-
-);
-
-
+// DNS
+document.getElementById("btn-dns").onclick = async() => {
+  const dossard = document.getElementById("dossard-dns").value.replace(/\D/g, "");
+  if(!dossard) {
+    feedback("❌ Dossard invalide", "red");
+    return;
+  }
+  await changerStatut(dossard, "DNS");
+  document.getElementById("dossard-dns").value = "";
 };
 
-
-
-
-
-
-
-
-
-// =======================================
 // CHANGEMENT STATUT DNF / DNS
-// =======================================
+async function changerStatut(dossard, type) {
+  const snap = await getDocs(
+    query(collection(db, "coureurs"), where("dossard", "==", dossard))
+  );
 
+  if(snap.empty) {
+    feedback("❌ Dossard inconnu", "red");
+    return;
+  }
 
-async function changerStatut(dossard,type){
+  const coureurDoc = snap.docs[0];
+  const coureur = coureurDoc.data();
 
+  if(["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+    feedback(`⛔ Déjà ${coureur.statut}`, "red");
+    return;
+  }
 
+  await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: type });
+  await addDoc(collection(db, "resultats"), {
+    dossard,
+    type,
+    source: "MANUEL",
+    timestamp: serverTimestamp()
+  });
 
-const snap = await getDocs(
-
-query(
-
-collection(db,"coureurs"),
-
-where(
-"dossard",
-"==",
-dossard
-)
-
-)
-
-);
-
-
-
-
-
-if(snap.empty){
-
-
-feedback(
-
-"❌ Dossard inconnu",
-
-"red"
-
-);
-
-
-return;
-
+  feedback(
+    type === "DNF" ? `🏳️ DNF ${dossard}` : `🚫 DNS ${dossard}`,
+    "orange"
+  );
+  beepError.play();
 }
-
-
-
-
-
-const coureurDoc = snap.docs[0];
-
-
-
-const coureur = coureurDoc.data();
-
-
-
-
-
-
-if(
-
-["DNF","DNS","ELIMINE"]
-
-.includes(coureur.statut)
-
-){
-
-
-feedback(
-
-`⛔ Déjà ${coureur.statut}`,
-
-"red"
-
-);
-
-
-return;
-
-}
-
-
-
-
-
-
-
-
-await updateDoc(
-
-doc(
-
-db,
-
-"coureurs",
-
-coureurDoc.id
-
-),
-
-{
-
-statut:type
-
-}
-
-);
-
-
-
-
-
-
-
-await addDoc(
-
-collection(db,"resultats"),
-
-{
-
-
-dossard,
-
-type,
-
-source:"MANUEL",
-
-timestamp:serverTimestamp()
-
-
-}
-
-);
-
-
-
-
-
-
-feedback(
-
-type==="DNF"
-
-?
-
-`🏳️ DNF ${dossard}`
-
-:
-
-`🚫 DNS ${dossard}`,
-
-"orange"
-
-);
-
-
-
-
-
-beepError.play();
-
-
-
-}
-
-
-
 </script>
+</body>
+</html>
