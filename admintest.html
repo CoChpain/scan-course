@@ -315,6 +315,12 @@
       <button onclick="resetResultats()" class="btn-danger">⚠️ Supprimer TOUS les résultats</button>
     </div>
     <div id="reset-resultats-status" class="message warning"></div>
+    <hr>
+    <h3>🔄 Réinitialiser complètement la course</h3>
+    <div class="action-buttons">
+      <button onclick="resetCompleteCourse()" class="btn-danger">⚠️ Réinitialiser TOUTE la course</button>
+    </div>
+    <div id="reset-course-status" class="message warning"></div>
   </div>
 
   <div id="tours-tab" class="tab-content">
@@ -409,6 +415,8 @@
         runnerStatuses = {};
         buttonsInitialized = false;
         currentTour = 0;
+        scanCache.locks = {};
+        scanCache.scans = {};
 
         initLimites().then(async () => {
           await new Promise(resolve => {
@@ -420,9 +428,12 @@
             }, 100);
           });
 
+          // Réinitialiser startMs, currentTour et lastTourStartTime
           const departDoc = await getDoc(doc(db, "course", "depart"));
           if (departDoc.exists()) {
             startMs = departDoc.data().startMs;
+          } else {
+            startMs = null;
           }
 
           if (startMs) {
@@ -435,6 +446,9 @@
               }
               lastTourStartTime = startMs + cumulMs;
             }
+          } else {
+            currentTour = 0;
+            lastTourStartTime = null;
           }
 
           loadAllRunners();
@@ -1495,6 +1509,68 @@
       } catch (error) {
         document.getElementById("reset-resultats-status").innerHTML = `❌ Erreur : ${error.message}`;
         document.getElementById("reset-resultats-status").className = "message error";
+      }
+    };
+
+    // NOUVELLE FONCTION : Réinitialiser complètement la course
+    window.resetCompleteCourse = async function() {
+      if (!confirm("⚠️ Réinitialiser COMPLÈTEMENT la course ? Tous les coureurs, résultats, verrous et le chrono seront réinitialisés.")) return;
+      if (!confirm("⚠️ Cette action est IRRÉVERSIBLE.")) return;
+      if (!confirm("⚠️ Dernière confirmation.")) return;
+
+      try {
+        // 1. Réinitialiser startMs (chrono)
+        await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
+
+        // 2. Réinitialiser currentTour et lastTourStartTime
+        currentTour = 0;
+        lastTourStartTime = null;
+        startMs = null;
+
+        // 3. Supprimer tous les verrous
+        const locksSnap = await getDocs(collection(db, "scansLocks"));
+        for (const docu of locksSnap.docs) {
+          await deleteDoc(doc(db, "scansLocks", docu.id));
+        }
+
+        // 4. Supprimer tous les résultats
+        const resultatsSnap = await getDocs(collection(db, "resultats"));
+        for (const docu of resultatsSnap.docs) {
+          await deleteDoc(doc(db, "resultats", docu.id));
+        }
+
+        // 5. Réinitialiser tous les coureurs (statut = "OK")
+        const coureursSnap = await getDocs(collection(db, "coureurs"));
+        for (const docu of coureursSnap.docs) {
+          await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
+        }
+
+        // 6. Réinitialiser le cache local
+        scanCache.locks = {};
+        scanCache.scans = {};
+        runnerStatuses = {};
+
+        // 7. Réinitialiser l'UI
+        afficherChrono();
+        updateChronoButtonState();
+
+        // 8. Réinitialiser tous les boutons
+        for (let i = 1; i <= 160; i++) {
+          const btn = document.getElementById(`dossard-btn-${i}`);
+          if (btn) {
+            btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
+            btn.disabled = true;
+            btn.title = "Chrono non lancé";
+          }
+        }
+
+        // 9. Afficher un message de confirmation
+        document.getElementById("reset-course-status").innerHTML = "🔄 Course complètement réinitialisée !";
+        document.getElementById("reset-course-status").className = "message success";
+
+      } catch (error) {
+        document.getElementById("reset-course-status").innerHTML = `❌ Erreur : ${error.message}`;
+        document.getElementById("reset-course-status").className = "message error";
       }
     };
 
