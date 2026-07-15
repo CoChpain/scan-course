@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ADMIN – APOLLO RUN</title>
   <style>
-    
     :root {
       --bg-primary: #000;
       --bg-secondary: #111;
@@ -323,6 +322,12 @@
       <button onclick="resetCompleteCourse()" class="btn-danger">⚠️ Réinitialiser TOUTE la course</button>
     </div>
     <div id="reset-course-status" class="message warning"></div>
+    <hr>
+    <h3>🔄 Réinitialiser le cache local</h3>
+    <div class="action-buttons">
+      <button onclick="resetLocalCache()" class="btn-warning">🔄 Réinitialiser le cache</button>
+    </div>
+    <div id="reset-cache-status" class="message"></div>
   </div>
 
   <div id="tours-tab" class="tab-content">
@@ -341,7 +346,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import {
       getFirestore, collection, query, where, getDocs,
-      doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp, getDoc
+      doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp, getDoc,
+      orderBy, writeBatch
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -362,7 +368,7 @@
     let buttonsInitialized = false;
     let resultsUnsubscribe = null;
 
-    // Cache local optimisé
+    // Cache local pour les verrous et scans
     const scanCache = {
       locks: {},
       scans: {},
@@ -400,7 +406,6 @@
         document.getElementById("lock").style.display = "none";
         document.getElementById("err").textContent = "";
 
-        // Réinitialisation complète
         runnerStatuses = {};
         buttonsInitialized = false;
         currentTour = 0;
@@ -418,10 +423,9 @@
             }, 100);
           });
 
-          // Charger l'état du chrono depuis Firebase
           const departDoc = await getDoc(doc(db, "course", "depart"));
           if (departDoc.exists()) {
-            startMs = departDoc.data().startMs || null;
+            startMs = departDoc.data().startMs;
           } else {
             startMs = null;
           }
@@ -480,30 +484,26 @@
       limites = docSnap.data() || DEFAULT_TOUR_DUREES;
     }
 
-    // Mise à jour optimisée du cache
     async function updateScanCacheForDossard(dossard) {
       const now = Date.now();
-      if (now - scanCache.lastUpdated < 1000) return;
+      if (now - scanCache.lastUpdated < 5000) return;
 
       scanCache.lastUpdated = now;
 
-      // Mettre à jour les verrous pour ce dossard
-      for (let t = 1; t <= 10; t++) {
-        const lockKey = `${dossard}_t${t}`;
-        if (scanCache.locks[lockKey] === undefined) {
-          const lockRef = doc(db, "scansLocks", lockKey);
-          const lockSnap = await getDoc(lockRef);
-          scanCache.locks[lockKey] = lockSnap.exists();
-        }
-      }
-
-      // Mettre à jour les scans pour ce dossard
       const resultsSnap = await getDocs(
         query(collection(db, "resultats"), where("dossard", "==", dossard))
       );
       resultsSnap.forEach(doc => {
         const data = doc.data();
         scanCache.scans[`${dossard}_t${data.tour}`] = data;
+      });
+
+      const locksSnap = await getDocs(
+        query(collection(db, "scansLocks"), where("dossard", "==", dossard))
+      );
+      locksSnap.forEach(doc => {
+        const data = doc.data();
+        scanCache.locks[`${dossard}_t${data.tour}`] = true;
       });
     }
 
@@ -534,42 +534,37 @@
     }
 
     function updateCurrentTour(elapsedMs) {
+      if (!startMs) {
+        currentTour = 0;
+        lastTourStartTime = null;
+        return;
+      }
+
       const diffMin = elapsedMs / 60000;
       let cumul = 0;
       let newTour = 0;
 
       for (let i = 1; i <= 10; i++) {
-        const limite = limites["t" + i];
-        if (!limite) break;
+        const limite = limites[`t${i}`];
+        if (limite === undefined) break;
         cumul += limite;
-        if (diffMin < cumul) {
+        if (diffMin <= cumul) {
           newTour = i;
           break;
         }
       }
 
-      if (newTour === 0 && Object.keys(limites).length > 0) {
-        newTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
+      if (newTour === 0) {
+        newTour = 10;
       }
 
-      if (newTour !== currentTour || !lastTourStartTime) {
+      if (newTour !== currentTour) {
         let cumulMs = 0;
         for (let i = 1; i < newTour; i++) {
           cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
         }
         lastTourStartTime = startMs + cumulMs;
         currentTour = newTour;
-
-        // Réinitialiser les boutons après 3 minutes
-        setTimeout(() => {
-          for(let i = 1; i <= 160; i++) {
-            const btn = document.getElementById(`dossard-btn-${i}`);
-            if(btn) {
-              btn.classList.remove("valid");
-            }
-          }
-          updateDossardButtonsState();
-        }, 180000);
       }
     }
 
@@ -586,7 +581,6 @@
       }
     }
 
-    // Écouteurs Firebase
     onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
         startMs = snap.data().startMs ?? null;
@@ -621,12 +615,13 @@
         return;
       }
       if (!confirm("⚠️ Lancer le chrono ? Cette action est irréversible.")) return;
+
       try {
         const now = Date.now();
         await setDoc(doc(db, "course", "depart"), { startMs: now }, { merge: true });
         startMs = now;
-        lastTourStartTime = now;
         currentTour = 1;
+        lastTourStartTime = now;
         afficherChrono();
         updateChronoButtonState();
         setTimeout(() => updateDossardButtonsState(), 200);
@@ -638,11 +633,12 @@
     window.resetChrono = async function() {
       if (!confirm("⚠️ Réinitialiser le chrono ? Tous les chronos repartiront de zéro.")) return;
       if (!confirm("⚠️ Dernière confirmation.")) return;
+
       try {
         await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
         startMs = null;
-        lastTourStartTime = null;
         currentTour = 0;
+        lastTourStartTime = null;
         afficherChrono();
         updateChronoButtonState();
         setTimeout(() => updateDossardButtonsState(), 200);
@@ -811,7 +807,6 @@
       }, 200);
     }
 
-    // Fonction centralisée pour les scans
     async function performScan(dossard, statusDiv = null) {
       if (!startMs) {
         if (statusDiv) {
@@ -1279,7 +1274,9 @@
       if (!confirm("⚠️ Dernière confirmation.")) return;
       try {
         const snap = await getDocs(collection(db, "coureurs"));
-        for (const docu of snap.docs) await deleteDoc(doc(db, "coureurs", docu.id));
+        const batch = writeBatch(db);
+        snap.forEach(docu => batch.delete(docu.ref));
+        await batch.commit();
         runnerStatuses = {};
         scanCache.locks = {};
         scanCache.scans = {};
@@ -1297,14 +1294,18 @@
       if (!confirm("⚠️ Irréversible.")) return;
       if (!confirm("⚠️ Dernière confirmation.")) return;
       try {
+        const batch = writeBatch(db);
+
         const locksSnap = await getDocs(collection(db, "scansLocks"));
-        for (const docu of locksSnap.docs) await deleteDoc(doc(db, "scansLocks", docu.id));
+        locksSnap.forEach(docu => batch.delete(docu.ref));
 
         const resultatsSnap = await getDocs(collection(db, "resultats"));
-        for (const docu of resultatsSnap.docs) await deleteDoc(doc(db, "resultats", docu.id));
+        resultatsSnap.forEach(docu => batch.delete(docu.ref));
 
         const coureursSnap = await getDocs(collection(db, "coureurs"));
-        for (const docu of coureursSnap.docs) await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
+        coureursSnap.forEach(docu => batch.update(docu.ref, { statut: "OK" }));
+
+        await batch.commit();
 
         runnerStatuses = {};
         scanCache.locks = {};
@@ -1330,30 +1331,27 @@
       if (!confirm("⚠️ Dernière confirmation.")) return;
 
       try {
-        await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
+        const batch = writeBatch(db);
 
-        currentTour = 0;
-        lastTourStartTime = null;
-        startMs = null;
+        await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
+        batch.update(doc(db, "course", "depart"), { startMs: null });
 
         const locksSnap = await getDocs(collection(db, "scansLocks"));
-        for (const docu of locksSnap.docs) {
-          await deleteDoc(doc(db, "scansLocks", docu.id));
-        }
+        locksSnap.forEach(docu => batch.delete(docu.ref));
 
         const resultatsSnap = await getDocs(collection(db, "resultats"));
-        for (const docu of resultatsSnap.docs) {
-          await deleteDoc(doc(db, "resultats", docu.id));
-        }
+        resultatsSnap.forEach(docu => batch.delete(docu.ref));
 
         const coureursSnap = await getDocs(collection(db, "coureurs"));
-        for (const docu of coureursSnap.docs) {
-          await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
-        }
+        coureursSnap.forEach(docu => batch.update(docu.ref, { statut: "OK" }));
 
+        await batch.commit();
+
+        startMs = null;
+        currentTour = 0;
+        lastTourStartTime = null;
         scanCache.locks = {};
         scanCache.scans = {};
-        scanCache.lastUpdated = 0;
         runnerStatuses = {};
 
         afficherChrono();
@@ -1378,6 +1376,34 @@
       } catch (error) {
         document.getElementById("reset-course-status").innerHTML = `❌ Erreur : ${error.message}`;
         document.getElementById("reset-course-status").className = "message error";
+      }
+    };
+
+    window.resetLocalCache = function() {
+      if (!confirm("⚠️ Réinitialiser le cache local ? Cela peut résoudre des incohérences d'affichage.")) return;
+      try {
+        scanCache.locks = {};
+        scanCache.scans = {};
+        scanCache.lastUpdated = 0;
+
+        for (let i = 1; i <= 160; i++) {
+          const btn = document.getElementById(`dossard-btn-${i}`);
+          if (btn) {
+            btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
+            btn.disabled = !startMs;
+            if (!startMs) {
+              btn.title = "Chrono non lancé";
+            } else {
+              btn.title = `Prêt tour ${currentTour}`;
+            }
+          }
+        }
+
+        document.getElementById("reset-cache-status").innerHTML = "✅ Cache local réinitialisé !";
+        document.getElementById("reset-cache-status").className = "message success";
+      } catch (error) {
+        document.getElementById("reset-cache-status").innerHTML = `❌ Erreur : ${error.message}`;
+        document.getElementById("reset-cache-status").className = "message error";
       }
     };
 
@@ -1425,6 +1451,11 @@
     // ======================
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("pwd").focus();
+    });
+
+    window.addEventListener("beforeunload", () => {
+      if (chronoInterval) clearInterval(chronoInterval);
+      if (resultsUnsubscribe) resultsUnsubscribe();
     });
   </script>
 </body>
