@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
 
-  
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +15,6 @@ body{
   margin:0;
   padding:0;
 }
-  
 h1{
   margin-top:20px;
 }
@@ -153,7 +151,30 @@ const localScanCache = {
 
 // SONS
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
-const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+const beepError = new Audio("https://www.gstatic.com/sounds/v1/alarms/beep_short.ogg");
+
+// ======================
+// 💾 Gestion du localStorage
+// ======================
+function saveLocalScanCache() {
+  localStorage.setItem("scan_html_localScanCache", JSON.stringify(localScanCache));
+}
+
+function loadLocalScanCache() {
+  const savedCache = localStorage.getItem("scan_html_localScanCache");
+  if (savedCache) {
+    try {
+      const parsedCache = JSON.parse(savedCache);
+      Object.assign(localScanCache.locks, parsedCache.locks || {});
+      Object.assign(localScanCache.scans, parsedCache.scans || {});
+    } catch (e) {
+      console.error("Erreur chargement cache local:", e);
+    }
+  }
+}
+
+// Sauvegarder le cache toutes les 10 secondes
+setInterval(saveLocalScanCache, 10000);
 
 // Charger les coureurs une seule fois
 async function loadRunnersFromFirebase() {
@@ -167,7 +188,33 @@ async function loadRunnersFromFirebase() {
     console.error("Erreur chargement coureurs:", e);
   }
 }
-loadRunnersFromFirebase();
+
+// Charger les verrous et scans existants depuis Firebase
+async function loadExistingLocksAndScans() {
+  try {
+    const locksSnap = await getDocs(collection(db, "scansLocks"));
+    locksSnap.forEach(doc => {
+      const data = doc.data();
+      localScanCache.locks[`${data.dossard}_t${data.tour}`] = true;
+    });
+
+    const scansSnap = await getDocs(collection(db, "resultats"));
+    scansSnap.forEach(doc => {
+      const data = doc.data();
+      localScanCache.scans[`${data.dossard}_t${data.tour}`] = data;
+    });
+
+    console.log("Verrous et scans chargés depuis Firebase dans scan.html.");
+  } catch (error) {
+    console.error("Erreur chargement verrous/scans:", error);
+  }
+}
+
+// Charger les coureurs, verrous et scans au démarrage
+loadRunnersFromFirebase().then(() => {
+  loadLocalScanCache();
+  loadExistingLocksAndScans();
+});
 
 // CALCUL TOUR ACTUEL
 function updateCurrentTour() {
@@ -289,6 +336,16 @@ async function traiterArrivee(dossard, source) {
     return;
   }
 
+  // Vérifier le verrou dans Firebase (pour éviter les conflits entre onglets)
+  const lockRef = doc(db, "scansLocks", `${dossard}_t${prochainTour}`);
+  const lockSnap = await getDoc(lockRef);
+  if (lockSnap.exists()) {
+    localScanCache.locks[`${dossard}_t${prochainTour}`] = true;
+    feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
+    beepError.play();
+    return;
+  }
+
   // Vérifier le délai de 3 minutes si dernier scan = tour précédent
   if (dernierTour === currentTour - 1 && lastTourStartTime) {
     const timeSinceStart = Date.now() - lastTourStartTime;
@@ -301,7 +358,6 @@ async function traiterArrivee(dossard, source) {
   }
 
   // Créer le verrou dans Firebase
-  const lockRef = doc(db, "scansLocks", `${dossard}_t${prochainTour}`);
   try {
     await runTransaction(db, async(transaction) => {
       const lock = await transaction.get(lockRef);
