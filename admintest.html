@@ -19,7 +19,6 @@
       --btn-bg-warning: #ffaa00;
       --btn-bg-dark-red: #8B0000;
     }
-    
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -383,6 +382,30 @@
     };
 
     // ======================
+    // 💾 Gestion du localStorage
+    // ======================
+    function saveScanCacheToLocalStorage() {
+      localStorage.setItem("admintest_scanCache", JSON.stringify(scanCache));
+    }
+
+    function loadScanCacheFromLocalStorage() {
+      const savedCache = localStorage.getItem("admintest_scanCache");
+      if (savedCache) {
+        try {
+          const parsedCache = JSON.parse(savedCache);
+          Object.assign(scanCache.locks, parsedCache.locks || {});
+          Object.assign(scanCache.scans, parsedCache.scans || {});
+          scanCache.lastUpdated = parsedCache.lastUpdated || 0;
+        } catch (e) {
+          console.error("Erreur chargement cache local:", e);
+        }
+      }
+    }
+
+    // Sauvegarder le cache toutes les 10 secondes
+    setInterval(saveScanCacheToLocalStorage, 10000);
+
+    // ======================
     // 🎨 Fonctions UI
     // ======================
     window.openTab = function(tabId, btn) {
@@ -414,6 +437,9 @@
         scanCache.scans = {};
         scanCache.lastUpdated = 0;
 
+        // Charger le cache local
+        loadScanCacheFromLocalStorage();
+
         initLimites().then(async () => {
           await new Promise(resolve => {
             const checkLimites = setInterval(() => {
@@ -423,6 +449,9 @@
               }
             }, 100);
           });
+
+          // Charger les verrous et scans existants depuis Firebase
+          await loadExistingLocksAndScans();
 
           const departDoc = await getDoc(doc(db, "course", "depart"));
           if (departDoc.exists()) {
@@ -463,6 +492,27 @@
       }
     };
 
+    // Charger les verrous et scans existants depuis Firebase
+    async function loadExistingLocksAndScans() {
+      try {
+        const locksSnap = await getDocs(collection(db, "scansLocks"));
+        locksSnap.forEach(doc => {
+          const data = doc.data();
+          scanCache.locks[`${data.dossard}_t${data.tour}`] = true;
+        });
+
+        const scansSnap = await getDocs(collection(db, "resultats"));
+        scansSnap.forEach(doc => {
+          const data = doc.data();
+          scanCache.scans[`${data.dossard}_t${data.tour}`] = data;
+        });
+
+        console.log("Verrous et scans chargés depuis Firebase.");
+      } catch (error) {
+        console.error("Erreur chargement verrous/scans:", error);
+      }
+    }
+
     // ======================
     // 📊 Fonctions utilitaires
     // ======================
@@ -487,17 +537,19 @@
 
     async function updateScanCacheForDossard(dossard) {
       const now = Date.now();
-      if (now - scanCache.lastUpdated < 5000) return;
+      if (now - scanCache.lastUpdated < 1000) return;
 
       scanCache.lastUpdated = now;
 
-      const resultsSnap = await getDocs(
-        query(collection(db, "resultats"), where("dossard", "==", dossard))
-      );
-      resultsSnap.forEach(doc => {
-        const data = doc.data();
-        scanCache.scans[`${dossard}_t${data.tour}`] = data;
-      });
+      let hasLocks = false;
+      let hasScans = false;
+
+      for (let t = 1; t <= 10; t++) {
+        if (scanCache.locks[`${dossard}_t${t}`] !== undefined) hasLocks = true;
+        if (scanCache.scans[`${dossard}_t${t}`] !== undefined) hasScans = true;
+      }
+
+      if (hasLocks && hasScans) return;
 
       const locksSnap = await getDocs(
         query(collection(db, "scansLocks"), where("dossard", "==", dossard))
@@ -505,6 +557,14 @@
       locksSnap.forEach(doc => {
         const data = doc.data();
         scanCache.locks[`${dossard}_t${data.tour}`] = true;
+      });
+
+      const scansSnap = await getDocs(
+        query(collection(db, "resultats"), where("dossard", "==", dossard))
+      );
+      scansSnap.forEach(doc => {
+        const data = doc.data();
+        scanCache.scans[`${dossard}_t${data.tour}`] = data;
       });
     }
 
@@ -647,9 +707,7 @@
         document.getElementById("chrono-status").innerHTML = `❌ Erreur : ${error.message}`;
       }
     };
-  // ======================
-    // 👥 Gestion des coureurs
-    // ======================
+
     // ======================
     // 👥 Gestion des coureurs
     // ======================
@@ -875,7 +933,19 @@
         return false;
       }
 
+      // Vérifier le verrou dans Firebase (pour éviter les conflits entre onglets)
       const lockRef = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
+      const lockSnap = await getDoc(lockRef);
+      if (lockSnap.exists()) {
+        scanCache.locks[`${dossard}_t${nextTour}`] = true;
+        if (statusDiv) {
+          statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
+          statusDiv.className = "message error";
+        }
+        updateDossardButton(dossard);
+        return false;
+      }
+
       await setDoc(lockRef, {
         dossard: dossard,
         tour: nextTour,
@@ -1356,6 +1426,7 @@
         scanCache.locks = {};
         scanCache.scans = {};
         runnerStatuses = {};
+        localStorage.removeItem("admintest_scanCache");
 
         afficherChrono();
         updateChronoButtonState();
@@ -1388,6 +1459,7 @@
         scanCache.locks = {};
         scanCache.scans = {};
         scanCache.lastUpdated = 0;
+        localStorage.removeItem("admintest_scanCache");
 
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
