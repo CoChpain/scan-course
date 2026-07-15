@@ -7,63 +7,111 @@
 <title>SCAN COURSE</title>
 <script src="https://unpkg.com/html5-qrcode"></script>
 <style>
-body{
-  background:#000;
-  color:white;
-  font-family:Arial,Helvetica,sans-serif;
-  text-align:center;
-  margin:0;
-  padding:0;
+body {
+  background: #000;
+  color: white;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: center;
+  margin: 0;
+  padding: 20px;
+  min-height: 100vh;
 }
-h1{
-  margin-top:20px;
+
+h1 {
+  margin-top: 20px;
 }
-button{
-  padding:12px 20px;
-  font-size:18px;
-  margin:8px;
-  cursor:pointer;
-  border-radius:8px;
-  border:none;
+
+button {
+  padding: 12px 20px;
+  font-size: 18px;
+  margin: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  border: none;
+  background: #333;
+  color: white;
 }
-input{
-  padding:12px;
-  font-size:18px;
-  width:220px;
-  border-radius:8px;
-  border:none;
-  text-align:center;
+
+input {
+  padding: 12px;
+  font-size: 18px;
+  width: 220px;
+  border-radius: 8px;
+  border: none;
+  text-align: center;
+  background: #222;
+  color: white;
+  margin: 5px;
 }
-#feedback{
-  font-size:28px;
-  font-weight:bold;
-  margin-top:25px;
-  min-height:40px;
+
+#feedback {
+  font-size: 28px;
+  font-weight: bold;
+  margin-top: 25px;
+  min-height: 40px;
 }
-#reader{
-  width:320px;
-  height:320px;
-  margin:20px auto;
-  background:#111;
-  border-radius:10px;
+
+#reader {
+  width: 320px;
+  height: 240px;
+  margin: 20px auto;
+  background: #111;
+  border-radius: 10px;
+  border: 2px solid #444;
 }
-.zone{
-  margin:15px auto;
-  padding:10px;
+
+.zone {
+  margin: 15px auto;
+  padding: 10px;
+  max-width: 400px;
 }
-#lock{
-  position:fixed;
-  inset:0;
-  background:black;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  z-index:9999;
+
+#lock {
+  position: fixed;
+  inset: 0;
+  background: black;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
 }
-#err{
-  margin-top:15px;
-  font-weight:bold;
+
+#err {
+  margin-top: 15px;
+  font-weight: bold;
+  color: red;
+}
+
+/* Correction : Positionnement des champs sous le scanner */
+#scanner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+#input-zone {
+  margin-top: 20px;
+  width: 100%;
+  max-width: 400px;
+}
+
+@media (max-width: 768px) {
+  #reader {
+    width: 90%;
+    height: 200px;
+  }
+
+  input {
+    width: 90%;
+    max-width: 300px;
+  }
+
+  button {
+    width: 100%;
+    max-width: 300px;
+  }
 }
 </style>
 </head>
@@ -76,23 +124,27 @@ input{
   <div id="err"></div>
 </div>
 
-<h1>🏁 ARRIVÉES COURSE</h1>
-<div id="reader"></div>
-<div id="feedback"></div>
-
-<div class="zone">
-  <input id="arrivee-manuel" placeholder="Dossard arrivée">
-  <button id="btn-arrivee">✅ ARRIVÉE</button>
+<div id="scanner-container">
+  <h1>🏁 ARRIVÉES COURSE</h1>
+  <div id="reader"></div>
+  <div id="feedback"></div>
 </div>
 
-<div class="zone">
-  <input id="dossard-dnf" placeholder="Dossard DNF">
-  <button id="btn-dnf">🏳️ DNF</button>
-</div>
+<div id="input-zone">
+  <div class="zone">
+    <input id="arrivee-manuel" placeholder="Dossard arrivée">
+    <button id="btn-arrivee">✅ ARRIVÉE</button>
+  </div>
 
-<div class="zone">
-  <input id="dossard-dns" placeholder="Dossard DNS">
-  <button id="btn-dns">🚫 DNS</button>
+  <div class="zone">
+    <input id="dossard-dnf" placeholder="Dossard DNF">
+    <button id="btn-dnf">🏳️ DNF</button>
+  </div>
+
+  <div class="zone">
+    <input id="dossard-dns" placeholder="Dossard DNS">
+    <button id="btn-dns">🚫 DNS</button>
+  </div>
 </div>
 
 <script>
@@ -151,7 +203,7 @@ const localScanCache = {
 
 // SONS
 const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
-const beepError = new Audio("https://www.gstatic.com/sounds/v1/alarms/beep_short.ogg");
+const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
 // ======================
 // 💾 Gestion du localStorage
@@ -340,6 +392,7 @@ async function traiterArrivee(dossard, source) {
   const lockRef = doc(db, "scansLocks", `${dossard}_t${prochainTour}`);
   const lockSnap = await getDoc(lockRef);
   if (lockSnap.exists()) {
+    // Mettre à jour le cache local
     localScanCache.locks[`${dossard}_t${prochainTour}`] = true;
     feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
     beepError.play();
@@ -370,6 +423,8 @@ async function traiterArrivee(dossard, source) {
       });
     });
   } catch(e) {
+    // Mettre à jour le cache local en cas d'erreur
+    localScanCache.locks[`${dossard}_t${prochainTour}`] = true;
     feedback("⛔ Déjà enregistré", "orange");
     return;
   }
@@ -425,30 +480,63 @@ async function traiterArrivee(dossard, source) {
 }
 
 // SCANNER QR
-const scanner = new Html5QrcodeScanner("reader", { fps:10, qrbox:220 });
-scanner.render(async(text) => {
-  const dossard = Number(text.replace(/\D/g, ""));
-  if(!dossard) {
-    feedback("❌ QR invalide", "red");
-    return;
+let scanner;
+function initScanner() {
+  if (scanner) {
+    scanner.clear();
   }
-  const now = Date.now();
-  if(dossard === lastScan && now - lastScanTime < 3000) return;
-  if(processing) return;
+  scanner = new Html5QrcodeScanner("reader", {
+    fps: 10,
+    qrbox: 200,
+    rememberLastUsedCamera: true,
+    showTorchButtonIfSupported: true
+  });
+  scanner.render(async(text) => {
+    const dossard = Number(text.replace(/\D/g, ""));
+    if(!dossard) {
+      feedback("❌ QR invalide", "red");
+      beepError.play();
+      return;
+    }
+    const now = Date.now();
+    if(dossard === lastScan && now - lastScanTime < 3000) return;
+    if(processing) return;
 
-  lastScan = dossard;
-  lastScanTime = now;
-  processing = true;
-  try {
-    await traiterArrivee(dossard, "SCAN");
-  } finally {
-    setTimeout(() => { processing = false; }, 1500);
-  }
+    lastScan = dossard;
+    lastScanTime = now;
+    processing = true;
+    try {
+      await traiterArrivee(dossard, "SCAN");
+    } finally {
+      setTimeout(() => { processing = false; }, 1500);
+    }
+  });
+}
+
+// Initialiser le scanner après déverrouillage
+window.addEventListener("DOMContentLoaded", () => {
+  // Réinitialiser le scanner quand la page est visible
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.attributeName === "style") {
+        const lock = document.getElementById("lock");
+        if (lock.style.display === "none") {
+          initScanner();
+        }
+      }
+    });
+  });
+  observer.observe(document.getElementById("lock"), { attributes: true });
 });
 
 // ARRIVEE MANUELLE
 document.getElementById("btn-arrivee").onclick = async() => {
   const dossard = Number(document.getElementById("arrivee-manuel").value.replace(/\D/g, ""));
+  if (!dossard) {
+    feedback("❌ Dossard invalide", "red");
+    beepError.play();
+    return;
+  }
   await traiterArrivee(dossard, "MANUEL");
   document.getElementById("arrivee-manuel").value = "";
 };
@@ -513,6 +601,13 @@ async function changerStatut(dossard, type) {
   );
   beepError.play();
 }
+
+// Nettoyage à la fermeture
+window.addEventListener("beforeunload", () => {
+  if (scanner) {
+    scanner.clear();
+  }
+});
 </script>
 </body>
 </html>
