@@ -590,19 +590,10 @@
         }
 
         updateDossardButton(dossard);
-        feedback(`✅ Scan annulé pour le dossard ${dossard}`, "success");
         setTimeout(() => refreshScansHistory(), 500);
       } catch (error) {
-        feedback(`❌ Erreur : ${error.message}`, "error");
+        console.error("Erreur confirmCancelScan:", error);
       }
-    }
-
-    function feedback(message, type) {
-      const div = document.createElement("div");
-      div.className = `message ${type}`;
-      div.textContent = message;
-      document.body.prepend(div);
-      setTimeout(() => div.remove(), 3000);
     }
 
     // ======================
@@ -659,7 +650,7 @@
         currentTour = newTour;
 
         setTimeout(() => {
-          for(let i=1; i<=160; i++) {
+          for(let i = 1; i <= 160; i++) {
             const btn = document.getElementById(`dossard-btn-${i}`);
             if(btn) {
               btn.classList.remove("valid");
@@ -774,7 +765,6 @@
             <p>Statut : ${data.statut}</p>
           </div>
         `;
-        openTab('scans-tab', document.querySelector('.tab-btn[onclick*="scans-tab"]'));
       } catch (error) {
         document.getElementById("runner-info").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
       }
@@ -870,16 +860,6 @@
       });
     }
 
-    window.editRunner = async function(dossard, nom, prenom, sexe) {
-      document.getElementById("c-dossard").value = dossard;
-      document.getElementById("c-nom").value = nom;
-      document.getElementById("c-prenom").value = prenom;
-      document.getElementById("c-sexe").value = sexe;
-      document.getElementById("runner-save-status").innerHTML = `✏️ Modification du coureur ${dossard}`;
-      document.getElementById("runner-save-status").className = "message warning";
-      openTab('coureurs-tab', document.querySelector('.tab-btn[onclick*="coureurs-tab"]'));
-    };
-
     // ======================
     // 📡 Gestion des scans
     // ======================
@@ -918,7 +898,7 @@
       }, 200);
     }
 
-    // FONCTION CENTRALISÉE AVEC VERROU FIRESTORE
+    // FONCTION CENTRALISÉE POUR LES SCANS (bouton et saisie manuelle)
     async function performScan(dossard, statusDiv = null) {
       // 1. Vérifications basiques
       if (!startMs) {
@@ -937,7 +917,7 @@
         return false;
       }
 
-      // 2. Récupérer le dernier tour scanné
+      // 2. Récupérer le dernier tour scanné (via resultats OU verrous)
       const resultsSnap = await getDocs(
         query(collection(db, "resultats"), where("dossard", "==", dossard))
       );
@@ -950,10 +930,18 @@
         }
       });
 
+      // Vérifier aussi les verrous Firestore pour ce dossard
+      for (let t = 1; t <= 10; t++) {
+        const isLocked = await isScanLocked(dossard, t);
+        if (isLocked && t > lastScannedTour) {
+          lastScannedTour = t;
+        }
+      }
+
       // 3. Déterminer le prochain tour à scanner
       const nextTour = lastScannedTour + 1;
 
-      // 4. Vérifier si ce tour est déjà ouvert ou validé
+      // 4. Vérifier si ce tour est déjà ouvert
       if (nextTour > currentTour) {
         if (statusDiv) {
           statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
@@ -1041,19 +1029,10 @@
       if (!btn) return;
 
       btn.disabled = false;
-      btn.classList.remove(
-        "valid",
-        "invalid",
-        "waiting",
-        "scanned",
-        "banned"
-      );
+      btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
 
       // DNS / DNF / ELIMINE
-      if (
-        runnerStatuses[dossard] &&
-        ["DNF","DNS","ELIMINE"].includes(runnerStatuses[dossard])
-      ) {
+      if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
         btn.disabled = true;
         btn.classList.add("invalid");
         btn.title = runnerStatuses[dossard];
@@ -1067,54 +1046,57 @@
         return;
       }
 
-      // Recherche dernier scan
-      const snap = await getDocs(
-        query(collection(db,"resultats"), where("dossard","==",dossard))
+      // Récupérer le dernier tour scanné (via resultats OU verrous)
+      const resultsSnap = await getDocs(
+        query(collection(db, "resultats"), where("dossard", "==", dossard))
       );
 
       let dernierTour = 0;
       let horsDelai = false;
 
-      snap.forEach(doc=>{
+      resultsSnap.forEach(doc => {
         const data = doc.data();
-        if(data.tour > dernierTour)
-          dernierTour=data.tour;
-        if(data.horsDelai)
-          horsDelai=true;
+        if (data.tour > dernierTour) dernierTour = data.tour;
+        if (data.horsDelai) horsDelai = true;
       });
 
+      // Vérifier aussi les verrous Firestore
+      for (let t = 1; t <= 10; t++) {
+        const isLocked = await isScanLocked(dossard, t);
+        if (isLocked && t > dernierTour) {
+          dernierTour = t;
+        }
+      }
+
       // Hors délai
-      if(horsDelai){
-        btn.disabled=true;
+      if (horsDelai) {
+        btn.disabled = true;
         btn.classList.add("invalid");
-        btn.title="Hors délai";
+        btn.title = "Hors délai";
         return;
       }
 
-      // Déjà passé ce tour
+      // Déjà passé ce tour (vérifier verrou pour currentTour)
       const verrou = await isScanLocked(dossard, currentTour);
-      if(verrou){
-        btn.disabled=true;
+      if (verrou) {
+        btn.disabled = true;
         btn.classList.add("valid");
-        btn.title=`Tour ${currentTour} validé`;
+        btn.title = `Tour ${currentTour} validé`;
         return;
       }
 
-      // Attente 3 minutes
-      if(
-        dernierTour === currentTour-1 &&
-        lastTourStartTime
-      ){
-        const attente = Date.now()-lastTourStartTime;
-        if(attente < 180000){
-          btn.disabled=true;
+      // Attente 3 minutes si dernier tour = currentTour - 1
+      if (dernierTour === currentTour - 1 && lastTourStartTime) {
+        const attente = Date.now() - lastTourStartTime;
+        if (attente < 180000) {
+          btn.disabled = true;
           btn.classList.add("waiting");
-          btn.title = `Disponible dans ${Math.ceil((180000-attente)/1000)}s`;
+          btn.title = `Disponible dans ${Math.ceil((180000 - attente) / 1000)}s`;
           return;
         }
       }
 
-      btn.title=`Prêt tour ${currentTour}`;
+      btn.title = `Prêt tour ${currentTour}`;
     }
 
     async function updateDossardButtonsState() {
@@ -1134,8 +1116,10 @@
         statusDiv.className = "message error";
         return;
       }
-      await performScan(dossard, statusDiv);
-      document.getElementById("quick-scan-dossard").value = "";
+      const success = await performScan(dossard, statusDiv);
+      if (success) {
+        document.getElementById("quick-scan-dossard").value = "";
+      }
     };
 
     window.buttonScan = async function(dossard) {
@@ -1179,6 +1163,13 @@
           timestamp: new Date(),
           type: "DNF",
           source: "admintest"
+        });
+        // Créer un verrou pour éviter les scans futurs
+        const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
+        await setDoc(lockRef, {
+          dossard: dossard,
+          tour: currentTour,
+          createdAt: serverTimestamp()
         });
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF !`;
@@ -1226,6 +1217,13 @@
           timestamp: new Date(),
           type: "DNS",
           source: "admintest"
+        });
+        // Créer un verrou pour éviter les scans futurs
+        const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
+        await setDoc(lockRef, {
+          dossard: dossard,
+          tour: currentTour,
+          createdAt: serverTimestamp()
         });
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS !`;
@@ -1417,7 +1415,7 @@
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
           if (btn) {
-            btn.classList.remove("scanned", "banned");
+            btn.classList.remove("scanned", "banned", "valid", "invalid", "waiting");
             btn.disabled = !startMs;
           }
         }
