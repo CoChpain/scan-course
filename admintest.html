@@ -364,6 +364,13 @@
     let resultsUnsubscribe = null;
     let scansHistoryUnsubscribe = null;
 
+    // Cache local pour les verrous et scans
+    const scanCache = {
+      locks: {},
+      scans: {},
+      lastUpdated: 0
+    };
+
     // Durées par défaut (en minutes)
     const DEFAULT_TOUR_DUREES = {
       t1: 40, t2: 37, t3: 34, t4: 31, t5: 28,
@@ -475,6 +482,33 @@
       limites = docSnap.data() || DEFAULT_TOUR_DUREES;
     }
 
+    // Fonction pour mettre à jour le cache local
+    async function updateScanCacheForDossard(dossard) {
+      const now = Date.now();
+      // Mettre à jour le cache toutes les 1 seconde max pour éviter les requêtes inutiles
+      if (now - scanCache.lastUpdated < 1000) return;
+
+      scanCache.lastUpdated = now;
+
+      // Récupérer tous les verrous pour ce dossard
+      for (let t = 1; t <= 10; t++) {
+        const lockKey = `${dossard}_t${t}`;
+        if (scanCache.locks[lockKey] === undefined) {
+          const isLocked = await isScanLocked(dossard, t);
+          scanCache.locks[lockKey] = isLocked;
+        }
+      }
+
+      // Récupérer tous les scans pour ce dossard
+      const resultsSnap = await getDocs(
+        query(collection(db, "resultats"), where("dossard", "==", dossard))
+      );
+      resultsSnap.forEach(doc => {
+        const data = doc.data();
+        scanCache.scans[`${dossard}_t${data.tour}`] = data;
+      });
+    }
+
     // ======================
     // 📜 HISTORIQUE DES SCANS
     // ======================
@@ -577,6 +611,9 @@
         if (tour) {
           const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
           await deleteDoc(lockRef);
+          // Mettre à jour le cache
+          delete scanCache.locks[`${dossard}_t${tour}`];
+          delete scanCache.scans[`${dossard}_t${tour}`];
         }
 
         if (type === "DNF" || type === "DNS" || type === "ELIMINE") {
@@ -641,6 +678,7 @@
         newTour = Math.max(...Object.keys(limites).map(k => parseInt(k.replace("t", ""))));
       }
 
+      // Si le tour change, mettre à jour lastTourStartTime et currentTour
       if (newTour !== currentTour || !lastTourStartTime) {
         let cumulMs = 0;
         for (let i = 1; i < newTour; i++) {
@@ -649,6 +687,7 @@
         lastTourStartTime = startMs + cumulMs;
         currentTour = newTour;
 
+        // Mettre à jour tous les boutons après 3 minutes (règle conservée)
         setTimeout(() => {
           for(let i = 1; i <= 160; i++) {
             const btn = document.getElementById(`dossard-btn-${i}`);
@@ -657,7 +696,7 @@
             }
           }
           updateDossardButtonsState();
-        }, 180000);
+        }, 180000); // 3 minutes
       }
     }
 
@@ -917,24 +956,22 @@
         return false;
       }
 
-      // 2. Récupérer le dernier tour scanné (via resultats OU verrous)
-      const resultsSnap = await getDocs(
-        query(collection(db, "resultats"), where("dossard", "==", dossard))
-      );
+      // 2. Récupérer le dernier tour scanné (via cache ou Firestore)
+      await updateScanCacheForDossard(dossard);
 
       let lastScannedTour = 0;
-      resultsSnap.forEach(docu => {
-        const data = docu.data();
-        if (data.tour && data.tour > lastScannedTour) {
-          lastScannedTour = data.tour;
+      // Vérifier les scans dans le cache
+      for (const key in scanCache.scans) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          if (tour > lastScannedTour) lastScannedTour = tour;
         }
-      });
-
-      // Vérifier aussi les verrous Firestore pour ce dossard
-      for (let t = 1; t <= 10; t++) {
-        const isLocked = await isScanLocked(dossard, t);
-        if (isLocked && t > lastScannedTour) {
-          lastScannedTour = t;
+      }
+      // Vérifier les verrous dans le cache
+      for (const key in scanCache.locks) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          if (tour > lastScannedTour) lastScannedTour = tour;
         }
       }
 
@@ -964,7 +1001,7 @@
       }
 
       // 6. Vérifier le verrou Firestore pour (dossard, nextTour)
-      const isLocked = await isScanLocked(dossard, nextTour);
+      const isLocked = scanCache.locks[`${dossard}_t${nextTour}`];
       if (isLocked) {
         if (statusDiv) {
           statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
@@ -981,6 +1018,8 @@
         tour: nextTour,
         createdAt: serverTimestamp()
       });
+      // Mettre à jour le cache local
+      scanCache.locks[`${dossard}_t${nextTour}`] = true;
 
       // 8. Vérifier hors délai
       const horsDelai = await isHorsDelai(dossard, nextTour);
@@ -988,6 +1027,8 @@
         await addDoc(collection(db, "resultats"), {
           dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
         });
+        // Mettre à jour le cache local
+        scanCache.scans[`${dossard}_t${nextTour}`] = { dossard, tour: nextTour, horsDelai: true };
 
         // Mettre à jour le statut du coureur
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
@@ -1013,9 +1054,11 @@
       await addDoc(collection(db, "resultats"), {
         dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest"
       });
+      // Mettre à jour le cache local
+      scanCache.scans[`${dossard}_t${nextTour}`] = { dossard, tour: nextTour, horsDelai: false };
 
-      // Synchroniser l'UI immédiatement
-      updateDossardButtonsState();
+      // Mettre à jour uniquement le bouton concerné
+      updateDossardButton(dossard);
 
       if (statusDiv) {
         statusDiv.innerHTML = `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
@@ -1046,25 +1089,28 @@
         return;
       }
 
-      // Récupérer le dernier tour scanné (via resultats OU verrous)
-      const resultsSnap = await getDocs(
-        query(collection(db, "resultats"), where("dossard", "==", dossard))
-      );
+      // Mettre à jour le cache pour ce dossard
+      await updateScanCacheForDossard(dossard);
 
+      // Récupérer le dernier tour scanné depuis le cache
       let dernierTour = 0;
       let horsDelai = false;
 
-      resultsSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.tour > dernierTour) dernierTour = data.tour;
-        if (data.horsDelai) horsDelai = true;
-      });
+      // Vérifier les scans
+      for (const key in scanCache.scans) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          const data = scanCache.scans[key];
+          if (tour > dernierTour) dernierTour = tour;
+          if (data.horsDelai) horsDelai = true;
+        }
+      }
 
-      // Vérifier aussi les verrous Firestore
-      for (let t = 1; t <= 10; t++) {
-        const isLocked = await isScanLocked(dossard, t);
-        if (isLocked && t > dernierTour) {
-          dernierTour = t;
+      // Vérifier les verrous
+      for (const key in scanCache.locks) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          if (tour > dernierTour) dernierTour = tour;
         }
       }
 
@@ -1077,8 +1123,8 @@
       }
 
       // Déjà passé ce tour (vérifier verrou pour currentTour)
-      const verrou = await isScanLocked(dossard, currentTour);
-      if (verrou) {
+      const verrouKey = `${dossard}_t${currentTour}`;
+      if (scanCache.locks[verrouKey]) {
         btn.disabled = true;
         btn.classList.add("valid");
         btn.title = `Tour ${currentTour} validé`;
@@ -1102,9 +1148,14 @@
     async function updateDossardButtonsState() {
       if (isUpdatingButtons) return;
       isUpdatingButtons = true;
+
+      // Mettre à jour tous les boutons en parallèle
+      const updatePromises = [];
       for (let i = 1; i <= 160; i++) {
-        await updateDossardButton(i);
+        updatePromises.push(updateDossardButton(i));
       }
+      await Promise.all(updatePromises);
+
       isUpdatingButtons = false;
     }
 
@@ -1171,6 +1222,10 @@
           tour: currentTour,
           createdAt: serverTimestamp()
         });
+        // Mettre à jour le cache
+        scanCache.locks[`${dossard}_t${currentTour}`] = true;
+        scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNF" };
+
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF !`;
         statusDiv.className = "message success";
@@ -1225,6 +1280,10 @@
           tour: currentTour,
           createdAt: serverTimestamp()
         });
+        // Mettre à jour le cache
+        scanCache.locks[`${dossard}_t${currentTour}`] = true;
+        scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNS" };
+
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS !`;
         statusDiv.className = "message success";
@@ -1272,8 +1331,8 @@
         return;
       }
 
-      // Vérifier le verrou Firestore
-      const isLocked = await isScanLocked(dossard, tour);
+      // Vérifier le verrou Firestore (via cache)
+      const isLocked = scanCache.locks[`${dossard}_t${tour}`];
       if (isLocked) {
         statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${tour}.`;
         statusDiv.className = "message error";
@@ -1287,6 +1346,8 @@
         tour: tour,
         createdAt: serverTimestamp()
       });
+      // Mettre à jour le cache
+      scanCache.locks[`${dossard}_t${tour}`] = true;
 
       const [h, m, s] = time.split(":").map(Number);
       const ms = (h * 3600 + m * 60 + s) * 1000;
@@ -1295,6 +1356,8 @@
       await addDoc(collection(db, "resultats"), {
         dossard, tour, timestamp, horsDelai: false, source: "admintest"
       });
+      // Mettre à jour le cache
+      scanCache.scans[`${dossard}_t${tour}`] = { dossard, tour, horsDelai: false };
 
       updateDossardButton(dossard);
       statusDiv.innerHTML = "✅ Scan ajouté avec succès !";
@@ -1356,6 +1419,8 @@
           timestamp: newTimestamp,
           source: "admintest (modifié)"
         });
+        // Mettre à jour le cache
+        scanCache.scans[`${dossard}_t${tour}`] = { dossard, tour, timestamp: newTimestamp };
 
         statusDiv.innerHTML = `✅ Temps mis à jour pour le dossard ${dossard} (Tour ${tour}) !`;
         statusDiv.className = "message success";
@@ -1384,6 +1449,9 @@
         const snap = await getDocs(collection(db, "coureurs"));
         for (const docu of snap.docs) await deleteDoc(doc(db, "coureurs", docu.id));
         runnerStatuses = {};
+        // Réinitialiser le cache
+        scanCache.locks = {};
+        scanCache.scans = {};
         updateDossardButtonsState();
         document.getElementById("reset-coureurs-status").innerHTML = "🗑️ Coureurs supprimés.";
         document.getElementById("reset-coureurs-status").className = "message success";
@@ -1411,6 +1479,9 @@
         for (const docu of coureursSnap.docs) await updateDoc(doc(db, "coureurs", docu.id), { statut: "OK" });
 
         runnerStatuses = {};
+        // Réinitialiser le cache
+        scanCache.locks = {};
+        scanCache.scans = {};
         // Réinitialiser tous les boutons
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
