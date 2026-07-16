@@ -113,6 +113,56 @@ input {
     max-width: 300px;
   }
 }
+
+  /* ===== NOUVEAUX STYLES POUR ÉVITER LE CHEVAUCHEMENT ===== */
+  #scanner-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+    /* Ajout : Empêche le chevauchement avec les éléments suivants */
+    position: relative;
+    z-index: 1;
+  }
+
+  #reader {
+    width: 320px;
+    height: 240px;
+    margin: 20px auto;
+    background: #111;
+    border-radius: 10px;
+    border: 2px solid #444;
+    /* Ajout : Limite la taille maximale pour éviter l'expansion */
+    max-width: 100%;
+    max-height: 50vh; /* ou une valeur fixe comme 300px */
+    overflow: hidden; /* Masque tout débordement */
+  }
+
+  #input-zone {
+    margin-top: 20px;
+    width: 100%;
+    max-width: 400px;
+    /* Ajout : Force un positionnement sous le scanner */
+    position: relative;
+    z-index: 2; /* Supérieur à celui du scanner */
+    background: rgba(0, 0, 0, 0.7); /* Fond semi-transparent pour mieux voir */
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #444;
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 768px) {
+    #reader {
+      width: 90%;
+      height: 200px;
+      max-height: 30vh; /* Limite stricte en mobile */
+    }
+
+    #input-zone {
+      margin-top: 10px; /* Réduit l'espace en mobile */
+      padding: 10px;
+    }
 </style>
 </head>
 
