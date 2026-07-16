@@ -367,6 +367,7 @@
     let lastTourStartTime = null;
     let buttonsInitialized = false;
     let resultsUnsubscribe = null;
+    let currentCourseId = null; // ID unique pour la course actuelle
 
     // Cache local pour les verrous et scans
     const scanCache = {
@@ -456,8 +457,10 @@
           const departDoc = await getDoc(doc(db, "course", "depart"));
           if (departDoc.exists()) {
             startMs = departDoc.data().startMs;
+            currentCourseId = departDoc.data().courseId; // Récupérer l'ID de course
           } else {
             startMs = null;
+            currentCourseId = null;
           }
 
           if (startMs) {
@@ -492,22 +495,31 @@
       }
     };
 
-    // Charger les verrous et scans existants depuis Firebase
+    // Charger les verrous et scans existants depuis Firebase (filtrés par courseId)
     async function loadExistingLocksAndScans() {
       try {
+        if (!currentCourseId) {
+          console.log("Aucune course active, cache vide.");
+          return;
+        }
+
         const locksSnap = await getDocs(collection(db, "scansLocks"));
         locksSnap.forEach(doc => {
           const data = doc.data();
-          scanCache.locks[`${data.dossard}_t${data.tour}`] = true;
+          if (data.courseId === currentCourseId) {
+            scanCache.locks[`${data.dossard}_t${data.tour}`] = true;
+          }
         });
 
         const scansSnap = await getDocs(collection(db, "resultats"));
         scansSnap.forEach(doc => {
           const data = doc.data();
-          scanCache.scans[`${data.dossard}_t${data.tour}`] = data;
+          if (data.courseId === currentCourseId) {
+            scanCache.scans[`${data.dossard}_t${data.tour}`] = data;
+          }
         });
 
-        console.log("Verrous et scans chargés depuis Firebase.");
+        console.log("Verrous et scans chargés pour la course actuelle.");
       } catch (error) {
         console.error("Erreur chargement verrous/scans:", error);
       }
@@ -552,7 +564,7 @@
       if (hasLocks && hasScans) return;
 
       const locksSnap = await getDocs(
-        query(collection(db, "scansLocks"), where("dossard", "==", dossard))
+        query(collection(db, "scansLocks"), where("dossard", "==", dossard), where("courseId", "==", currentCourseId))
       );
       locksSnap.forEach(doc => {
         const data = doc.data();
@@ -560,7 +572,7 @@
       });
 
       const scansSnap = await getDocs(
-        query(collection(db, "resultats"), where("dossard", "==", dossard))
+        query(collection(db, "resultats"), where("dossard", "==", dossard), where("courseId", "==", currentCourseId))
       );
       scansSnap.forEach(doc => {
         const data = doc.data();
@@ -645,8 +657,10 @@
     onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
         startMs = snap.data().startMs ?? null;
+        currentCourseId = snap.data().courseId ?? null;
       } else {
         startMs = null;
+        currentCourseId = null;
       }
       afficherChrono();
       updateChronoButtonState();
@@ -679,8 +693,14 @@
 
       try {
         const now = Date.now();
-        await setDoc(doc(db, "course", "depart"), { startMs: now }, { merge: true });
+        const courseId = `course_${now}`; // ID unique pour cette course
+        await setDoc(doc(db, "course", "depart"), {
+          startMs: now,
+          courseId: courseId
+        }, { merge: true });
+
         startMs = now;
+        currentCourseId = courseId;
         currentTour = 1;
         lastTourStartTime = now;
         afficherChrono();
@@ -696,8 +716,9 @@
       if (!confirm("⚠️ Dernière confirmation.")) return;
 
       try {
-        await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
+        await setDoc(doc(db, "course", "depart"), { startMs: null, courseId: null }, { merge: true });
         startMs = null;
+        currentCourseId = null;
         currentTour = 0;
         lastTourStartTime = null;
         afficherChrono();
@@ -837,16 +858,19 @@
       if (resultsUnsubscribe) {
         resultsUnsubscribe();
       }
-      resultsUnsubscribe = onSnapshot(collection(db, "resultats"), snap => {
-        snap.docChanges().forEach(change => {
-          if (change.type === "added" || change.type === "modified") {
-            const data = change.doc.data();
-            if (data.dossard) {
-              updateDossardButton(data.dossard);
+      resultsUnsubscribe = onSnapshot(
+        query(collection(db, "resultats"), where("courseId", "==", currentCourseId)),
+        snap => {
+          snap.docChanges().forEach(change => {
+            if (change.type === "added" || change.type === "modified") {
+              const data = change.doc.data();
+              if (data.dossard) {
+                updateDossardButton(data.dossard);
+              }
             }
-          }
-        });
-      });
+          });
+        }
+      );
     }
 
     function generateDossardButtons() {
@@ -949,14 +973,15 @@
       await setDoc(lockRef, {
         dossard: dossard,
         tour: nextTour,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        courseId: currentCourseId // Ajout de l'ID de course
       });
       scanCache.locks[`${dossard}_t${nextTour}`] = true;
 
       const horsDelai = await isHorsDelai(dossard, nextTour);
       if (horsDelai) {
         await addDoc(collection(db, "resultats"), {
-          dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
+          dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest", courseId: currentCourseId
         });
         scanCache.scans[`${dossard}_t${nextTour}`] = { dossard, tour: nextTour, horsDelai: true };
 
@@ -980,7 +1005,7 @@
       const formattedTime = formatTime(elapsedTime);
 
       await addDoc(collection(db, "resultats"), {
-        dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest"
+        dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest", courseId: currentCourseId
       });
       scanCache.scans[`${dossard}_t${nextTour}`] = { dossard, tour: nextTour, horsDelai: false };
 
@@ -1128,13 +1153,15 @@
           dossard,
           timestamp: new Date(),
           type: "DNF",
-          source: "admintest"
+          source: "admintest",
+          courseId: currentCourseId
         });
         const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
         await setDoc(lockRef, {
           dossard: dossard,
           tour: currentTour,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          courseId: currentCourseId
         });
         scanCache.locks[`${dossard}_t${currentTour}`] = true;
         scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNF" };
@@ -1183,13 +1210,15 @@
           dossard,
           timestamp: new Date(),
           type: "DNS",
-          source: "admintest"
+          source: "admintest",
+          courseId: currentCourseId
         });
         const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
         await setDoc(lockRef, {
           dossard: dossard,
           tour: currentTour,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          courseId: currentCourseId
         });
         scanCache.locks[`${dossard}_t${currentTour}`] = true;
         scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNS" };
@@ -1253,7 +1282,8 @@
       await setDoc(lockRef, {
         dossard: dossard,
         tour: tour,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        courseId: currentCourseId
       });
       scanCache.locks[`${dossard}_t${tour}`] = true;
 
@@ -1262,7 +1292,7 @@
       const timestamp = new Date(startMs + ms);
 
       await addDoc(collection(db, "resultats"), {
-        dossard, tour, timestamp, horsDelai: false, source: "admintest"
+        dossard, tour, timestamp, horsDelai: false, source: "admintest", courseId: currentCourseId
       });
       scanCache.scans[`${dossard}_t${tour}`] = { dossard, tour, horsDelai: false };
 
@@ -1303,7 +1333,8 @@
         const q = query(
           collection(db, "resultats"),
           where("dossard", "==", dossard),
-          where("tour", "==", tour)
+          where("tour", "==", tour),
+          where("courseId", "==", currentCourseId)
         );
         const snap = await getDocs(q);
 
@@ -1369,10 +1400,10 @@
       try {
         const batch = writeBatch(db);
 
-        const locksSnap = await getDocs(collection(db, "scansLocks"));
+        const locksSnap = await getDocs(query(collection(db, "scansLocks"), where("courseId", "==", currentCourseId)));
         locksSnap.forEach(docu => batch.delete(docu.ref));
 
-        const resultatsSnap = await getDocs(collection(db, "resultats"));
+        const resultatsSnap = await getDocs(query(collection(db, "resultats"), where("courseId", "==", currentCourseId)));
         resultatsSnap.forEach(docu => batch.delete(docu.ref));
 
         const coureursSnap = await getDocs(collection(db, "coureurs"));
@@ -1406,8 +1437,8 @@
       try {
         const batch = writeBatch(db);
 
-        await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
-        batch.update(doc(db, "course", "depart"), { startMs: null });
+        await setDoc(doc(db, "course", "depart"), { startMs: null, courseId: null }, { merge: true });
+        batch.update(doc(db, "course", "depart"), { startMs: null, courseId: null });
 
         const locksSnap = await getDocs(collection(db, "scansLocks"));
         locksSnap.forEach(docu => batch.delete(docu.ref));
@@ -1423,10 +1454,12 @@
         startMs = null;
         currentTour = 0;
         lastTourStartTime = null;
+        currentCourseId = null;
         scanCache.locks = {};
         scanCache.scans = {};
         runnerStatuses = {};
         localStorage.removeItem("admintest_scanCache");
+        localStorage.removeItem("scan_html_localScanCache");
 
         afficherChrono();
         updateChronoButtonState();
@@ -1460,6 +1493,7 @@
         scanCache.scans = {};
         scanCache.lastUpdated = 0;
         localStorage.removeItem("admintest_scanCache");
+        localStorage.removeItem("scan_html_localScanCache");
 
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
