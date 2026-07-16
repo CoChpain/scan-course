@@ -376,14 +376,32 @@ async function isHorsDelai(tour) {
 }
 
 // LISTENERS FIREBASE
-onSnapshot(doc(db, "course", "depart"), snap => {
-  if(snap.exists()) {
+onSnapshot(doc(db, "course", "depart"), async (snap) => {
+  if (snap.exists()) {
     startMs = snap.data().startMs;
     updateCurrentTour();
+
+    // Réinitialiser les caches et statuts
+    localScanCache.locks = {};
+    localScanCache.scans = {};
+    runnerStatuses = {};
+    localStorage.removeItem("scan_html_localScanCache"); // Supprime le cache local
+
+    // Recharger les coureurs et verrous depuis Firebase
+    await loadRunnersFromFirebase();
+    await loadExistingLocksAndScans();
+
+    feedback("✅ Nouvelle course démarrée", "lime");
   } else {
     startMs = null;
     currentTour = 0;
     lastTourStartTime = null;
+    // Réinitialiser aussi ici si la course est supprimée
+    localScanCache.locks = {};
+    localScanCache.scans = {};
+    runnerStatuses = {};
+    localStorage.removeItem("scan_html_localScanCache");
+    feedback("⚠️ Course terminée ou non démarrée", "orange");
   }
 });
 
