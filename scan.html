@@ -374,10 +374,34 @@ onSnapshot(doc(db, "course", "depart"), snap => {
 });
 
 onSnapshot(doc(db, "course", "limitesTours"), snap => {
-  if(snap.exists()) {
-    limites = snap.data();
-    updateCurrentTour();
+
+  console.log("Document limitesTours trouvé :", snap.exists());
+
+  if (!snap.exists()) {
+    console.error("course/limitesTours introuvable");
+    return;
   }
+
+  const data = snap.data();
+
+  limites = {
+    t1: Number(data.t1 || 0),
+    t2: Number(data.t2 || 0),
+    t3: Number(data.t3 || 0),
+    t4: Number(data.t4 || 0),
+    t5: Number(data.t5 || 0),
+    t6: Number(data.t6 || 0),
+    t7: Number(data.t7 || 0),
+    t8: Number(data.t8 || 0),
+    t9: Number(data.t9 || 0),
+    t10: Number(data.t10 || 0)
+  };
+
+  console.log("Limites chargées depuis Firebase :", limites);
+
+  updateCurrentTour();
+
+  console.log("Tour actuel recalculé :", currentTour);
 });
 
 onSnapshot(collection(db, "coureurs"), snap => {
