@@ -51,15 +51,6 @@ input {
   min-height: 40px;
 }
 
-#reader {
-  width: 320px;
-  height: 240px;
-  margin: 20px auto;
-  background: #111;
-  border-radius: 10px;
-  border: 2px solid #444;
-}
-
 .zone {
   margin: 15px auto;
   padding: 10px;
@@ -88,29 +79,52 @@ input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 10px; /* Réduit l'espace sous le scanner */
+  position: relative;
+  z-index: 1;
+}
+
+#reader {
+  width: 280px; /* Réduit la largeur */
+  height: 200px; /* Réduit la hauteur */
+  margin: 10px auto;
+  background: #111;
+  border-radius: 10px;
+  border: 2px solid #444;
+  max-width: 90%; /* S'adapte à l'écran */
+  max-height: 30vh; /* Limite la hauteur en mobile */
+  overflow: hidden;
 }
 
 #input-zone {
-  margin-top: 20px;
+  margin-top: 10px; /* Réduit l'espace entre le scanner et les champs */
   width: 100%;
-  max-width: 400px;
+  max-width: 300px; /* Aligné avec la largeur du scanner */
+  position: relative;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #444;
 }
 
 @media (max-width: 768px) {
   #reader {
     width: 90%;
-    height: 200px;
+    height: 180px; /* Encore plus compact en mobile */
+    max-height: 25vh;
   }
-
+  #input-zone {
+    margin-top: 5px;
+    padding: 8px;
+  }
   input {
-    width: 90%;
-    max-width: 300px;
+    width: 100%;
+    max-width: 280px;
   }
-
   button {
     width: 100%;
-    max-width: 300px;
+    max-width: 280px;
   }
 }
 
