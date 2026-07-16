@@ -97,10 +97,51 @@ input {
   max-width: 400px;
 }
 
+/* ===== NOUVEAUX STYLES POUR ÉVITER LE CHEVAUCHEMENT ===== */
+#scanner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+#reader {
+  width: 320px;
+  height: 240px;
+  margin: 20px auto;
+  background: #111;
+  border-radius: 10px;
+  border: 2px solid #444;
+  max-width: 100%;
+  max-height: 50vh;
+  overflow: hidden;
+}
+
+#input-zone {
+  margin-top: 20px;
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #444;
+}
+
+/* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
   #reader {
     width: 90%;
     height: 200px;
+    max-height: 30vh;
+  }
+
+  #input-zone {
+    margin-top: 10px;
+    padding: 10px;
   }
 
   input {
@@ -113,56 +154,6 @@ input {
     max-width: 300px;
   }
 }
-
-  /* ===== NOUVEAUX STYLES POUR ÉVITER LE CHEVAUCHEMENT ===== */
-  #scanner-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-bottom: 20px;
-    /* Ajout : Empêche le chevauchement avec les éléments suivants */
-    position: relative;
-    z-index: 1;
-  }
-
-  #reader {
-    width: 320px;
-    height: 240px;
-    margin: 20px auto;
-    background: #111;
-    border-radius: 10px;
-    border: 2px solid #444;
-    /* Ajout : Limite la taille maximale pour éviter l'expansion */
-    max-width: 100%;
-    max-height: 50vh; /* ou une valeur fixe comme 300px */
-    overflow: hidden; /* Masque tout débordement */
-  }
-
-  #input-zone {
-    margin-top: 20px;
-    width: 100%;
-    max-width: 400px;
-    /* Ajout : Force un positionnement sous le scanner */
-    position: relative;
-    z-index: 2; /* Supérieur à celui du scanner */
-    background: rgba(0, 0, 0, 0.7); /* Fond semi-transparent pour mieux voir */
-    padding: 15px;
-    border-radius: 10px;
-    border: 1px solid #444;
-  }
-
-  /* ===== RESPONSIVE ===== */
-  @media (max-width: 768px) {
-    #reader {
-      width: 90%;
-      height: 200px;
-      max-height: 30vh; /* Limite stricte en mobile */
-    }
-
-    #input-zone {
-      margin-top: 10px; /* Réduit l'espace en mobile */
-      padding: 10px;
-    }
 </style>
 </head>
 
@@ -244,6 +235,7 @@ let runnerStatuses = {};
 let lastScan = null;
 let lastScanTime = 0;
 let processing = false;
+let currentCourseId = null; // ID unique pour la course actuelle
 
 // Cache local pour les verrous et scans
 const localScanCache = {
@@ -291,22 +283,31 @@ async function loadRunnersFromFirebase() {
   }
 }
 
-// Charger les verrous et scans existants depuis Firebase
+// Charger les verrous et scans existants depuis Firebase (filtrés par courseId)
 async function loadExistingLocksAndScans() {
   try {
+    if (!currentCourseId) {
+      console.log("Aucune course active, cache vide.");
+      return;
+    }
+
     const locksSnap = await getDocs(collection(db, "scansLocks"));
     locksSnap.forEach(doc => {
       const data = doc.data();
-      localScanCache.locks[`${data.dossard}_t${data.tour}`] = true;
+      if (data.courseId === currentCourseId) {
+        localScanCache.locks[`${data.dossard}_t${data.tour}`] = true;
+      }
     });
 
     const scansSnap = await getDocs(collection(db, "resultats"));
     scansSnap.forEach(doc => {
       const data = doc.data();
-      localScanCache.scans[`${data.dossard}_t${data.tour}`] = data;
+      if (data.courseId === currentCourseId) {
+        localScanCache.scans[`${data.dossard}_t${data.tour}`] = data;
+      }
     });
 
-    console.log("Verrous et scans chargés depuis Firebase dans scan.html.");
+    console.log("Verrous et scans chargés pour la course actuelle dans scan.html.");
   } catch (error) {
     console.error("Erreur chargement verrous/scans:", error);
   }
@@ -315,7 +316,14 @@ async function loadExistingLocksAndScans() {
 // Charger les coureurs, verrous et scans au démarrage
 loadRunnersFromFirebase().then(() => {
   loadLocalScanCache();
-  loadExistingLocksAndScans();
+  // Récupérer l'ID de course actuel
+  getDoc(doc(db, "course", "depart")).then(departDoc => {
+    if (departDoc.exists()) {
+      startMs = departDoc.data().startMs;
+      currentCourseId = departDoc.data().courseId;
+    }
+    loadExistingLocksAndScans();
+  });
 });
 
 // CALCUL TOUR ACTUEL
@@ -365,9 +373,11 @@ async function isHorsDelai(tour) {
 onSnapshot(doc(db, "course", "depart"), snap => {
   if(snap.exists()) {
     startMs = snap.data().startMs;
+    currentCourseId = snap.data().courseId;
     updateCurrentTour();
   } else {
     startMs = null;
+    currentCourseId = null;
     currentTour = 0;
     lastTourStartTime = null;
   }
@@ -469,7 +479,8 @@ async function traiterArrivee(dossard, source) {
         dossard,
         tour: prochainTour,
         source,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        courseId: currentCourseId // Ajout de l'ID de course
       });
     });
   } catch(e) {
@@ -490,7 +501,8 @@ async function traiterArrivee(dossard, source) {
       tour: prochainTour,
       horsDelai: true,
       source,
-      timestamp: serverTimestamp()
+      timestamp: serverTimestamp(),
+      courseId: currentCourseId // Ajout de l'ID de course
     });
 
     // Trouver le document du coureur pour le marquer comme ELIMINE
@@ -514,7 +526,8 @@ async function traiterArrivee(dossard, source) {
     tour: prochainTour,
     horsDelai: false,
     source,
-    timestamp: serverTimestamp()
+    timestamp: serverTimestamp(),
+    courseId: currentCourseId // Ajout de l'ID de course
   });
 
   localScanCache.scans[`${dossard}_t${prochainTour}`] = { horsDelai: false };
@@ -639,7 +652,8 @@ async function changerStatut(dossard, type) {
     dossard,
     type,
     source: "MANUEL",
-    timestamp: serverTimestamp()
+    timestamp: serverTimestamp(),
+    courseId: currentCourseId // Ajout de l'ID de course
   });
 
   // Créer un verrou local pour éviter les scans futurs
