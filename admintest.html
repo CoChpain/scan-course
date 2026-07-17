@@ -367,7 +367,6 @@
     let lastTourStartTime = null;
     let buttonsInitialized = false;
     let resultsUnsubscribe = null;
-    let locksUnsubscribe = null;
 
     // Cache local pour les verrous et scans
     const scanCache = {
@@ -542,7 +541,16 @@
 
       scanCache.lastUpdated = now;
 
-      // Charger les verrous pour ce dossard
+      let hasLocks = false;
+      let hasScans = false;
+
+      for (let t = 1; t <= 10; t++) {
+        if (scanCache.locks[`${dossard}_t${t}`] !== undefined) hasLocks = true;
+        if (scanCache.scans[`${dossard}_t${t}`] !== undefined) hasScans = true;
+      }
+
+      if (hasLocks && hasScans) return;
+
       const locksSnap = await getDocs(
         query(collection(db, "scansLocks"), where("dossard", "==", dossard))
       );
@@ -551,7 +559,6 @@
         scanCache.locks[`${dossard}_t${data.tour}`] = true;
       });
 
-      // Charger les scans pour ce dossard
       const scansSnap = await getDocs(
         query(collection(db, "resultats"), where("dossard", "==", dossard))
       );
@@ -722,10 +729,10 @@
         currentRunnerDossard = dossard;
         document.getElementById("runner-info").innerHTML = `
           <div class="message success">
-            <h3>\${data.nom} \${data.prenom}</h3>
-            <p>Dossard : \${data.dossard}</p>
-            <p>Catégorie : \${data.categorie === "H" ? "Homme" : "Femme"}</p>
-            <p>Statut : \${data.statut}</p>
+            <h3>${data.nom} ${data.prenom}</h3>
+            <p>Dossard : ${data.dossard}</p>
+            <p>Catégorie : ${data.categorie === "H" ? "Homme" : "Femme"}</p>
+            <p>Statut : ${data.statut}</p>
           </div>
         `;
       } catch (error) {
@@ -830,11 +837,6 @@
       if (resultsUnsubscribe) {
         resultsUnsubscribe();
       }
-      if (locksUnsubscribe) {
-        locksUnsubscribe();
-      }
-
-      // Écouter les résultats
       resultsUnsubscribe = onSnapshot(collection(db, "resultats"), snap => {
         snap.docChanges().forEach(change => {
           if (change.type === "added" || change.type === "modified") {
@@ -845,29 +847,6 @@
           }
         });
       });
-
-      // Écouter les verrous (scansLocks)
-      locksUnsubscribe = onSnapshot(collection(db, "scansLocks"), snap => {
-        snap.docChanges().forEach(change => {
-          if (change.type === "added" || change.type === "modified") {
-            const data = change.doc.data();
-            const key = `${data.dossard}_t${data.tour}`;
-            scanCache.locks[key] = true;
-            if (data.dossard) {
-              updateDossardButton(data.dossard);
-            }
-          }
-        });
-      });
-
-      // Rafraîchir les boutons toutes les 3 minutes
-      if (!window.refreshInterval) {
-        window.refreshInterval = setInterval(() => {
-          if (buttonsInitialized && !isUpdatingButtons) {
-            updateDossardButtonsState();
-          }
-        }, 180000); // 3 minutes
-      }
     }
 
     function generateDossardButtons() {
@@ -954,7 +933,7 @@
         return false;
       }
 
-      // Vérifier le verrou dans Firebase
+      // Vérifier le verrou dans Firebase (pour éviter les conflits entre onglets)
       const lockRef = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
       const lockSnap = await getDoc(lockRef);
       if (lockSnap.exists()) {
@@ -1107,16 +1086,12 @@
       const success = await performScan(dossard, statusDiv);
       if (success) {
         document.getElementById("quick-scan-dossard").value = "";
-        setTimeout(() => updateDossardButtonsState(), 100);
       }
     };
 
     window.buttonScan = async function(dossard) {
       const statusDiv = document.getElementById("button-scan-status");
-      const success = await performScan(dossard, statusDiv);
-      if (success) {
-        setTimeout(() => updateDossardButtonsState(), 100);
-      }
+      await performScan(dossard, statusDiv);
     };
 
     window.quickDnfScan = async function() {
@@ -1165,7 +1140,6 @@
         scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNF" };
 
         updateDossardButton(dossard);
-        setTimeout(() => updateDossardButtonsState(), 100);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF !`;
         statusDiv.className = "message success";
         document.getElementById("quick-dnf-dossard").value = "";
@@ -1221,7 +1195,6 @@
         scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNS" };
 
         updateDossardButton(dossard);
-        setTimeout(() => updateDossardButtonsState(), 100);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS !`;
         statusDiv.className = "message success";
         document.getElementById("quick-dns-dossard").value = "";
@@ -1243,7 +1216,7 @@
         return;
       }
 
-      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})\$/;
+      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
       if (!timeRegex.test(time)) {
         statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
         statusDiv.className = "message error";
@@ -1294,7 +1267,6 @@
       scanCache.scans[`${dossard}_t${tour}`] = { dossard, tour, horsDelai: false };
 
       updateDossardButton(dossard);
-      setTimeout(() => updateDossardButtonsState(), 100);
       statusDiv.innerHTML = "✅ Scan ajouté avec succès !";
       statusDiv.className = "message success";
       document.getElementById("add-dossard").value = "";
@@ -1314,7 +1286,7 @@
         return;
       }
 
-      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})\$/;
+      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
       if (!timeRegex.test(time)) {
         statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
         statusDiv.className = "message error";
@@ -1342,7 +1314,7 @@
         }
 
         const [h, m, s] = time.split(":").map(Number);
-                const ms = (h * 3600 + m * 60 + s) * 1000;
+        const ms = (h * 3600 + m * 60 + s) * 1000;
         const newTimestamp = new Date(startMs + ms);
 
         const docRef = snap.docs[0].ref;
@@ -1360,7 +1332,6 @@
         document.getElementById("edit-scan-time").value = "";
 
         updateDossardButton(dossard);
-        setTimeout(() => updateDossardButtonsState(), 100);
       } catch (error) {
         statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
         statusDiv.className = "message error";
@@ -1560,8 +1531,6 @@
     window.addEventListener("beforeunload", () => {
       if (chronoInterval) clearInterval(chronoInterval);
       if (resultsUnsubscribe) resultsUnsubscribe();
-      if (locksUnsubscribe) locksUnsubscribe();
-      if (window.refreshInterval) clearInterval(window.refreshInterval);
     });
   </script>
 </body>
