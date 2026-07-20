@@ -228,7 +228,7 @@
     setInterval(updateGlobalCache, 60000);
 
     /* -------------------------------------------
-       🔥 Charger startMs
+       🔥 Charger startMs--
     --------------------------------------------*/
     unsubscribeDepart = onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
