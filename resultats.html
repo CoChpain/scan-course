@@ -239,6 +239,30 @@
     limites = globalCache.limites;
     coureursMap = globalCache.coureurs;
 
+    // Charge tous les tours existants au démarrage (pour afficher les onglets)
+    async function loadAllTours() {
+      try {
+        const resultatsSnap = await getDocs(query(collection(db, "resultats"), orderBy("timestamp", "asc")));
+        resultatsSnap.forEach(doc => {
+          const r = doc.data();
+          if (!r.tour || r.tour < 1 || r.tour > 10) return;
+          const ts = r.timestamp?.toDate().getTime() ?? null;
+          if (!tours[r.tour]) tours[r.tour] = [];
+          tours[r.tour].push({ ...r, timestamp: ts });
+          if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
+          tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
+        });
+        processResultsData();
+        construireOnglets();
+        rafraichir();
+      } catch (error) {
+        console.error("Erreur chargement des tours :", error);
+      }
+    }
+
+    // Charge tous les tours au démarrage
+    loadAllTours();
+
     // Met à jour le cache périodiquement
     setInterval(updateGlobalCache, 60000); // Toutes les minutes
 
@@ -387,8 +411,8 @@
        🔥 AFFICHAGE TOUR
     --------------------------------------------*/
     window.afficherTour = function(tour) {
-      recalculerDepartTours();
       ongletActif = tour;
+      recalculerDepartTours();
 
       // Reconfigure l'écoute pour le tour sélectionné
       currentTour = tour;
@@ -678,23 +702,6 @@
         }
         totalParTour[t] = total;
       });
-
-      // Détermine automatiquement le tour actif
-      let tourActifAuto = 1;
-      Object.keys(tours).forEach(t => {
-        const num = Number(t);
-        if (num > tourActifAuto && num <= 10) tourActifAuto = num;
-      });
-
-      // Si on est sur l'onglet "general", on ne change pas
-      if (ongletActif === "general") {
-        // Mais on met à jour currentTour pour les écoutes
-        currentTour = tourActifAuto;
-        setupResultatsListener();
-      } else {
-        // Sinon, on bascule automatiquement sur le tour actif
-        ongletActif = tourActifAuto;
-      }
     }
 
     /* -------------------------------------------
