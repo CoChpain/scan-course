@@ -341,18 +341,126 @@
 
   <script type="module">
     // ======================
-    // 🔥 Firebase Configuration
+    // 🔥 Firebase Configuration + Persistence
     // ======================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import {
       getFirestore, collection, query, where, getDocs,
       doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp, getDoc,
-      orderBy, writeBatch
+      orderBy, writeBatch, enableIndexedDbPersistence
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
+    // Active la persistance locale (cache IndexedDB)
+    enableIndexedDbPersistence(db)
+      .catch((err) => {
+        if (err.code == 'failed-precondition') {
+          console.log("Persistance désactivée : plusieurs onglets ouverts.");
+        } else {
+          console.log("Persistance non supportée :", err);
+        }
+      });
+
+    // ======================
+    // 💾 Cache global partagé entre onglets
+    // ======================
+    const GLOBAL_CACHE_KEY = "apolloRunGlobalCache";
+    let globalCache = {
+      locks: {},       // { "dossard_t1": true, ... }
+      scans: {},       // { "dossard_t1": { dossard, tour, horsDelai, ... }, ... }
+      coureurs: {},    // { dossard: { nom, prenom, statut, ... }, ... }
+      limites: {},     // { t1: 40, t2: 37, ... }
+      startMs: null,   // Temps de départ de la course
+      lastUpdated: 0   // Timestamp de la dernière mise à jour du cache
+    };
+
+    // Charge le cache global depuis localStorage
+    function loadGlobalCache() {
+      const saved = localStorage.getItem(GLOBAL_CACHE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          globalCache = { ...globalCache, ...parsed };
+          console.log("Cache global chargé depuis localStorage.");
+        } catch (e) {
+          console.error("Erreur chargement cache global :", e);
+        }
+      }
+    }
+
+    // Sauvegarde le cache global dans localStorage
+    function saveGlobalCache() {
+      localStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(globalCache));
+    }
+
+    // Met à jour le cache global depuis Firebase
+    async function updateGlobalCache() {
+      const now = Date.now();
+      if (now - globalCache.lastUpdated < 30000) return; // 30 secondes max
+
+      try {
+        // 1. Charger les limites
+        const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
+        if (limitesDoc.exists()) {
+          globalCache.limites = limitesDoc.data();
+        }
+
+        // 2. Charger le départ
+        const departDoc = await getDoc(doc(db, "course", "depart"));
+        if (departDoc.exists()) {
+          globalCache.startMs = departDoc.data().startMs;
+        }
+
+        // 3. Charger les coureurs
+        const coureursSnap = await getDocs(collection(db, "coureurs"));
+        globalCache.coureurs = {};
+        coureursSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.dossard) {
+            globalCache.coureurs[data.dossard] = data;
+          }
+        });
+
+        // 4. Charger les verrous et scans (uniquement pour le tour actuel)
+        const currentTour = calculateCurrentTour(globalCache.startMs, globalCache.limites);
+        if (currentTour > 0) {
+          const locksSnap = await getDocs(query(collection(db, "scansLocks"), where("tour", "==", currentTour)));
+          locksSnap.forEach(doc => {
+            const data = doc.data();
+            globalCache.locks[`${data.dossard}_t${data.tour}`] = true;
+          });
+
+          const scansSnap = await getDocs(query(collection(db, "resultats"), where("tour", "==", currentTour)));
+          scansSnap.forEach(doc => {
+            const data = doc.data();
+            globalCache.scans[`${data.dossard}_t${data.tour}`] = data;
+          });
+        }
+
+        globalCache.lastUpdated = now;
+        saveGlobalCache();
+        console.log("Cache global mis à jour depuis Firebase.");
+      } catch (error) {
+        console.error("Erreur mise à jour cache global :", error);
+      }
+    }
+
+    // Calcule le tour actuel
+    function calculateCurrentTour(startMs, limites) {
+      if (!startMs || !limites) return 0;
+      const elapsedMin = (Date.now() - startMs) / 60000;
+      let cumul = 0;
+      for (let i = 1; i <= 10; i++) {
+        const limite = limites[`t${i}`];
+        if (limite === undefined) break;
+        cumul += limite;
+        if (elapsedMin <= cumul) return i;
+      }
+      return 10;
+    }
 
     // ======================
     // ⏳ Variables globales
@@ -367,43 +475,9 @@
     let lastTourStartTime = null;
     let buttonsInitialized = false;
     let resultsUnsubscribe = null;
-
-    // Cache local pour les verrous et scans
-    const scanCache = {
-      locks: {},
-      scans: {},
-      lastUpdated: 0
-    };
-
-    // Durées par défaut (en minutes)
-    const DEFAULT_TOUR_DUREES = {
-      t1: 40, t2: 37, t3: 34, t4: 31, t5: 28,
-      t6: 25, t7: 22, t8: 19, t9: 16, t10: 13
-    };
-
-    // ======================
-    // 💾 Gestion du localStorage
-    // ======================
-    function saveScanCacheToLocalStorage() {
-      localStorage.setItem("admintest_scanCache", JSON.stringify(scanCache));
-    }
-
-    function loadScanCacheFromLocalStorage() {
-      const savedCache = localStorage.getItem("admintest_scanCache");
-      if (savedCache) {
-        try {
-          const parsedCache = JSON.parse(savedCache);
-          Object.assign(scanCache.locks, parsedCache.locks || {});
-          Object.assign(scanCache.scans, parsedCache.scans || {});
-          scanCache.lastUpdated = parsedCache.lastUpdated || 0;
-        } catch (e) {
-          console.error("Erreur chargement cache local:", e);
-        }
-      }
-    }
-
-    // Sauvegarder le cache toutes les 10 secondes
-    setInterval(saveScanCacheToLocalStorage, 10000);
+    let coureursUnsubscribe = null;
+    let departUnsubscribe = null;
+    let limitesUnsubscribe = null;
 
     // ======================
     // 🎨 Fonctions UI
@@ -413,6 +487,17 @@
       document.querySelectorAll(".tab-btn").forEach(button => button.classList.remove("active"));
       document.getElementById(tabId).classList.add("active");
       btn.classList.add("active");
+
+      // Désabonnez-vous des écoutes inutiles
+      if (tabId !== "scans-tab") {
+        if (resultsUnsubscribe) {
+          resultsUnsubscribe();
+          resultsUnsubscribe = null;
+        }
+      } else {
+        // Réabonnez-vous uniquement si l'onglet "scans" est ouvert
+        setupRealtimeListeners();
+      }
     };
 
     window.toggleCoureurs = function() {
@@ -423,95 +508,56 @@
     // ======================
     // 🔐 Vérification mot de passe
     // ======================
-    window.checkPwd = function() {
+    window.checkPwd = async function() {
       const good = "ApolloRun2026!";
       const val = document.getElementById("pwd").value;
-      if (val === good) {
-        document.getElementById("lock").style.display = "none";
-        document.getElementById("err").textContent = "";
-
-        runnerStatuses = {};
-        buttonsInitialized = false;
-        currentTour = 0;
-        scanCache.locks = {};
-        scanCache.scans = {};
-        scanCache.lastUpdated = 0;
-
-        // Charger le cache local
-        loadScanCacheFromLocalStorage();
-
-        initLimites().then(async () => {
-          await new Promise(resolve => {
-            const checkLimites = setInterval(() => {
-              if (Object.keys(limites).length > 0) {
-                clearInterval(checkLimites);
-                resolve();
-              }
-            }, 100);
-          });
-
-          // Charger les verrous et scans existants depuis Firebase
-          await loadExistingLocksAndScans();
-
-          const departDoc = await getDoc(doc(db, "course", "depart"));
-          if (departDoc.exists()) {
-            startMs = departDoc.data().startMs;
-          } else {
-            startMs = null;
-          }
-
-          if (startMs) {
-            const elapsedMs = Date.now() - startMs;
-            updateCurrentTour(elapsedMs);
-            if (currentTour > 0) {
-              let cumulMs = 0;
-              for (let i = 1; i < currentTour; i++) {
-                cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
-              }
-              lastTourStartTime = startMs + cumulMs;
-            }
-          } else {
-            currentTour = 0;
-            lastTourStartTime = null;
-          }
-
-          loadAllRunners();
-          setupRealtimeListeners();
-
-          const waitForStatuses = setInterval(() => {
-            if (Object.keys(runnerStatuses).length > 0 || !startMs) {
-              clearInterval(waitForStatuses);
-              generateDossardButtons();
-            }
-          }, 100);
-        });
-      } else {
+      if (val !== good) {
         document.getElementById("err").textContent = "Mot de passe incorrect";
         document.getElementById("pwd").value = "";
         document.getElementById("pwd").focus();
+        return;
       }
+
+      document.getElementById("lock").style.display = "none";
+      document.getElementById("err").textContent = "";
+
+      // Charge le cache global
+      loadGlobalCache();
+
+      // Met à jour le cache depuis Firebase
+      await updateGlobalCache();
+
+      // Initialise les variables globales
+      startMs = globalCache.startMs;
+      limites = globalCache.limites;
+      currentTour = calculateCurrentTour(startMs, limites);
+      runnerStatuses = {};
+      Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
+        runnerStatuses[dossard] = data.statut;
+      });
+
+      // Calcule lastTourStartTime si nécessaire
+      if (startMs && currentTour > 0) {
+        let cumulMs = 0;
+        for (let i = 1; i < currentTour; i++) {
+          cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
+        }
+        lastTourStartTime = startMs + cumulMs;
+      }
+
+      // Initialise les boutons des dossards
+      generateDossardButtons();
+
+      // Lance les écoutes en temps réel
+      setupRealtimeListeners();
+
+      // Met à jour le chrono
+      afficherChrono();
+      updateChronoButtonState();
+
+      // Met à jour le cache toutes les 30 secondes
+      setInterval(updateGlobalCache, 30000);
     };
-
-    // Charger les verrous et scans existants depuis Firebase
-    async function loadExistingLocksAndScans() {
-      try {
-        const locksSnap = await getDocs(collection(db, "scansLocks"));
-        locksSnap.forEach(doc => {
-          const data = doc.data();
-          scanCache.locks[`${data.dossard}_t${data.tour}`] = true;
-        });
-
-        const scansSnap = await getDocs(collection(db, "resultats"));
-        scansSnap.forEach(doc => {
-          const data = doc.data();
-          scanCache.scans[`${data.dossard}_t${data.tour}`] = data;
-        });
-
-        console.log("Verrous et scans chargés depuis Firebase.");
-      } catch (error) {
-        console.error("Erreur chargement verrous/scans:", error);
-      }
-    }
 
     // ======================
     // 📊 Fonctions utilitaires
@@ -524,48 +570,6 @@
       }
       const limiteMs = cumulMin * 60 * 1000;
       return (Date.now() - startMs) > limiteMs;
-    }
-
-    async function initLimites() {
-      const docRef = doc(db, "course", "limitesTours");
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        await setDoc(docRef, DEFAULT_TOUR_DUREES);
-      }
-      limites = docSnap.data() || DEFAULT_TOUR_DUREES;
-    }
-
-    async function updateScanCacheForDossard(dossard) {
-      const now = Date.now();
-      if (now - scanCache.lastUpdated < 1000) return;
-
-      scanCache.lastUpdated = now;
-
-      let hasLocks = false;
-      let hasScans = false;
-
-      for (let t = 1; t <= 10; t++) {
-        if (scanCache.locks[`${dossard}_t${t}`] !== undefined) hasLocks = true;
-        if (scanCache.scans[`${dossard}_t${t}`] !== undefined) hasScans = true;
-      }
-
-      if (hasLocks && hasScans) return;
-
-      const locksSnap = await getDocs(
-        query(collection(db, "scansLocks"), where("dossard", "==", dossard))
-      );
-      locksSnap.forEach(doc => {
-        const data = doc.data();
-        scanCache.locks[`${dossard}_t${data.tour}`] = true;
-      });
-
-      const scansSnap = await getDocs(
-        query(collection(db, "resultats"), where("dossard", "==", dossard))
-      );
-      scansSnap.forEach(doc => {
-        const data = doc.data();
-        scanCache.scans[`${dossard}_t${data.tour}`] = data;
-      });
     }
 
     // ======================
@@ -582,7 +586,14 @@
       chronoInterval = setInterval(() => {
         const diff = Date.now() - startMs;
         zone.innerHTML = `⏱ Temps écoulé : <b>${formatTime(diff)}</b>`;
-        updateCurrentTour(diff);
+        currentTour = calculateCurrentTour(startMs, limites);
+        if (currentTour > 0 && lastTourStartTime) {
+          let cumulMs = 0;
+          for (let i = 1; i < currentTour; i++) {
+            cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
+          }
+          lastTourStartTime = startMs + cumulMs;
+        }
       }, 1000);
     }
 
@@ -592,41 +603,6 @@
       const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
       const sec = String(s % 60).padStart(2, "0");
       return `${h}:${m}:${sec}`;
-    }
-
-    function updateCurrentTour(elapsedMs) {
-      if (!startMs) {
-        currentTour = 0;
-        lastTourStartTime = null;
-        return;
-      }
-
-      const diffMin = elapsedMs / 60000;
-      let cumul = 0;
-      let newTour = 0;
-
-      for (let i = 1; i <= 10; i++) {
-        const limite = limites[`t${i}`];
-        if (limite === undefined) break;
-        cumul += limite;
-        if (diffMin <= cumul) {
-          newTour = i;
-          break;
-        }
-      }
-
-      if (newTour === 0) {
-        newTour = 10;
-      }
-
-      if (newTour !== currentTour) {
-        let cumulMs = 0;
-        for (let i = 1; i < newTour; i++) {
-          cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
-        }
-        lastTourStartTime = startMs + cumulMs;
-        currentTour = newTour;
-      }
     }
 
     function updateChronoButtonState() {
@@ -642,30 +618,37 @@
       }
     }
 
-    onSnapshot(doc(db, "course", "depart"), snap => {
+    // Écoute du départ
+    departUnsubscribe = onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
-        startMs = snap.data().startMs ?? null;
+        startMs = snap.data().startMs;
+        globalCache.startMs = startMs;
+        saveGlobalCache();
       } else {
         startMs = null;
+        globalCache.startMs = null;
+        saveGlobalCache();
       }
       afficherChrono();
       updateChronoButtonState();
-
+      currentTour = calculateCurrentTour(startMs, limites);
       if (!isUpdatingButtons && buttonsInitialized) {
         isUpdatingButtons = true;
         setTimeout(() => {
           updateDossardButtonsState();
           isUpdatingButtons = false;
-        }, 1000);
+        }, 100);
       }
     });
 
-    onSnapshot(doc(db, "course", "limitesTours"), snap => {
+    // Écoute des limites
+    limitesUnsubscribe = onSnapshot(doc(db, "course", "limitesTours"), snap => {
       if (snap.exists()) {
         limites = snap.data();
+        globalCache.limites = limites;
+        saveGlobalCache();
         if (startMs) {
-          const elapsedMs = Date.now() - startMs;
-          updateCurrentTour(elapsedMs);
+          currentTour = calculateCurrentTour(startMs, limites);
         }
       }
     });
@@ -681,6 +664,8 @@
         const now = Date.now();
         await setDoc(doc(db, "course", "depart"), { startMs: now }, { merge: true });
         startMs = now;
+        globalCache.startMs = now;
+        saveGlobalCache();
         currentTour = 1;
         lastTourStartTime = now;
         afficherChrono();
@@ -698,6 +683,8 @@
       try {
         await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
         startMs = null;
+        globalCache.startMs = null;
+        saveGlobalCache();
         currentTour = 0;
         lastTourStartTime = null;
         afficherChrono();
@@ -717,27 +704,24 @@
         document.getElementById("runner-info").innerHTML = "<p class='message error'>⚠️ Veuillez entrer un numéro de dossard.</p>";
         return;
       }
-      try {
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          document.getElementById("runner-info").innerHTML = "<p class='message error'>❌ Coureur introuvable</p>";
-          currentRunnerDossard = null;
-          return;
-        }
-        const data = snap.docs[0].data();
-        currentRunnerDossard = dossard;
-        document.getElementById("runner-info").innerHTML = `
-          <div class="message success">
-            <h3>${data.nom} ${data.prenom}</h3>
-            <p>Dossard : ${data.dossard}</p>
-            <p>Catégorie : ${data.categorie === "H" ? "Homme" : "Femme"}</p>
-            <p>Statut : ${data.statut}</p>
-          </div>
-        `;
-      } catch (error) {
-        document.getElementById("runner-info").innerHTML = `<p class='message error'>❌ Erreur : ${error.message}</p>`;
+
+      // Utilise le cache global
+      const coureur = globalCache.coureurs[dossard];
+      if (!coureur) {
+        document.getElementById("runner-info").innerHTML = "<p class='message error'>❌ Coureur introuvable</p>";
+        currentRunnerDossard = null;
+        return;
       }
+
+      currentRunnerDossard = dossard;
+      document.getElementById("runner-info").innerHTML = `
+        <div class="message success">
+          <h3>${coureur.nom} ${coureur.prenom}</h3>
+          <p>Dossard : ${coureur.dossard}</p>
+          <p>Catégorie : ${coureur.categorie === "H" ? "Homme" : "Femme"}</p>
+          <p>Statut : ${coureur.statut}</p>
+        </div>
+      `;
     };
 
     window.saveRunner = async function() {
@@ -761,18 +745,21 @@
           await addDoc(collection(db, "coureurs"), {
             dossard, nom, prenom, categorie: sexe, statut: "OK"
           });
+          globalCache.coureurs[dossard] = { dossard, nom, prenom, categorie: sexe, statut: "OK" };
+          saveGlobalCache();
           statusDiv.innerHTML = "✅ Coureur ajouté avec succès.";
           statusDiv.className = "message success";
         } else {
           const id = snap.docs[0].id;
           await updateDoc(doc(db, "coureurs", id), { nom, prenom, categorie: sexe });
+          globalCache.coureurs[dossard] = { ...globalCache.coureurs[dossard], nom, prenom, categorie: sexe };
+          saveGlobalCache();
           statusDiv.innerHTML = "✏️ Coureur mis à jour.";
           statusDiv.className = "message success";
         }
         document.getElementById("c-dossard").value = "";
         document.getElementById("c-nom").value = "";
         document.getElementById("c-prenom").value = "";
-        loadAllRunners();
       } catch (error) {
         statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
         statusDiv.className = "message error";
@@ -794,6 +781,13 @@
       }
 
       try {
+        const coureur = globalCache.coureurs[dossard];
+        if (!coureur) {
+          alert("❌ Coureur introuvable");
+          return;
+        }
+
+        // Trouvez l'ID du document du coureur
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
         if (snap.empty) {
@@ -802,51 +796,59 @@
         }
         const id = snap.docs[0].id;
         await updateDoc(doc(db, "coureurs", id), { statut });
+        globalCache.coureurs[dossard].statut = statut;
+        saveGlobalCache();
         runnerStatuses[dossard] = statut;
         alert("✅ Statut mis à jour !");
-        loadAllRunners();
         updateDossardButton(dossard);
       } catch (error) {
         alert(`❌ Erreur : ${error.message}`);
       }
     };
 
-    function loadAllRunners() {
-      onSnapshot(collection(db, "coureurs"), snap => {
-        try {
-          runnerStatuses = {};
-          snap.forEach(docu => {
-            const c = docu.data();
-            if (c.dossard) {
-              runnerStatuses[c.dossard] = c.statut;
-            }
-          });
-          if (buttonsInitialized) {
-            updateDossardButtonsState();
-          }
-        } catch (error) {
-          console.error("Erreur loadAllRunners:", error);
-        }
-      });
-    }
-
     // ======================
     // 📡 Gestion des scans
     // ======================
     function setupRealtimeListeners() {
-      if (resultsUnsubscribe) {
-        resultsUnsubscribe();
-      }
-      resultsUnsubscribe = onSnapshot(collection(db, "resultats"), snap => {
-        snap.docChanges().forEach(change => {
-          if (change.type === "added" || change.type === "modified") {
-            const data = change.doc.data();
-            if (data.dossard) {
-              updateDossardButton(data.dossard);
-            }
+      // Désabonnez-vous des écoutes précédentes
+      if (resultsUnsubscribe) resultsUnsubscribe();
+      if (coureursUnsubscribe) coureursUnsubscribe();
+
+      // Écoute des coureurs
+      coureursUnsubscribe = onSnapshot(collection(db, "coureurs"), snap => {
+        runnerStatuses = {};
+        snap.forEach(doc => {
+          const data = doc.data();
+          if (data.dossard) {
+            runnerStatuses[data.dossard] = data.statut;
+            globalCache.coureurs[data.dossard] = data;
           }
         });
+        saveGlobalCache();
+        if (buttonsInitialized) {
+          updateDossardButtonsState();
+        }
       });
+
+      // Écoute des résultats (uniquement pour le tour actuel)
+      const currentTour = calculateCurrentTour(startMs, limites);
+      if (currentTour > 0) {
+        resultsUnsubscribe = onSnapshot(
+          query(collection(db, "resultats"), where("tour", "==", currentTour)),
+          snap => {
+            snap.docChanges().forEach(change => {
+              if (change.type === "added" || change.type === "modified") {
+                const data = change.doc.data();
+                if (data.dossard) {
+                  globalCache.scans[`${data.dossard}_t${data.tour}`] = data;
+                  saveGlobalCache();
+                  updateDossardButton(data.dossard);
+                }
+              }
+            });
+          }
+        );
+      }
     }
 
     function generateDossardButtons() {
@@ -868,131 +870,6 @@
       }, 200);
     }
 
-    async function performScan(dossard, statusDiv = null) {
-      if (!startMs) {
-        if (statusDiv) {
-          statusDiv.innerHTML = "❌ Chrono non lancé.";
-          statusDiv.className = "message error";
-        }
-        return false;
-      }
-
-      if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-        if (statusDiv) {
-          statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]}`;
-          statusDiv.className = "message error";
-        }
-        return false;
-      }
-
-      await updateScanCacheForDossard(dossard);
-
-      let lastScannedTour = 0;
-      for (const key in scanCache.scans) {
-        if (key.startsWith(`${dossard}_t`)) {
-          const tour = parseInt(key.split('_t')[1]);
-          if (tour > lastScannedTour) lastScannedTour = tour;
-        }
-      }
-      for (const key in scanCache.locks) {
-        if (key.startsWith(`${dossard}_t`)) {
-          const tour = parseInt(key.split('_t')[1]);
-          if (tour > lastScannedTour) lastScannedTour = tour;
-        }
-      }
-
-      const nextTour = lastScannedTour + 1;
-
-      if (nextTour > currentTour) {
-        if (statusDiv) {
-          statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
-          statusDiv.className = "message error";
-        }
-        return false;
-      }
-
-      if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
-        const timeSinceStart = Date.now() - lastTourStartTime;
-        if (timeSinceStart < 180000) {
-          const remainingSeconds = Math.ceil((180000 - timeSinceStart) / 1000);
-          if (statusDiv) {
-            statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
-            statusDiv.className = "message error";
-          }
-          return false;
-        }
-      }
-
-      const isLocked = scanCache.locks[`${dossard}_t${nextTour}`];
-      if (isLocked) {
-        if (statusDiv) {
-          statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
-          statusDiv.className = "message error";
-        }
-        updateDossardButton(dossard);
-        return false;
-      }
-
-      // Vérifier le verrou dans Firebase (pour éviter les conflits entre onglets)
-      const lockRef = doc(db, "scansLocks", `${dossard}_t${nextTour}`);
-      const lockSnap = await getDoc(lockRef);
-      if (lockSnap.exists()) {
-        scanCache.locks[`${dossard}_t${nextTour}`] = true;
-        if (statusDiv) {
-          statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
-          statusDiv.className = "message error";
-        }
-        updateDossardButton(dossard);
-        return false;
-      }
-
-      await setDoc(lockRef, {
-        dossard: dossard,
-        tour: nextTour,
-        createdAt: serverTimestamp()
-      });
-      scanCache.locks[`${dossard}_t${nextTour}`] = true;
-
-      const horsDelai = await isHorsDelai(dossard, nextTour);
-      if (horsDelai) {
-        await addDoc(collection(db, "resultats"), {
-          dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
-        });
-        scanCache.scans[`${dossard}_t${nextTour}`] = { dossard, tour: nextTour, horsDelai: true };
-
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snap = await getDocs(q);
-        if (!snap.empty && !["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-          await updateDoc(doc(db, "coureurs", snap.docs[0].id), { statut: "ELIMINE" });
-          runnerStatuses[dossard] = "ELIMINE";
-        }
-
-        updateDossardButton(dossard);
-        if (statusDiv) {
-          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
-          statusDiv.className = "message warning";
-        }
-        return true;
-      }
-
-      const now = Date.now();
-      const elapsedTime = now - startMs;
-      const formattedTime = formatTime(elapsedTime);
-
-      await addDoc(collection(db, "resultats"), {
-        dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest"
-      });
-      scanCache.scans[`${dossard}_t${nextTour}`] = { dossard, tour: nextTour, horsDelai: false };
-
-      updateDossardButton(dossard);
-
-      if (statusDiv) {
-        statusDiv.innerHTML = `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
-        statusDiv.className = "message success";
-      }
-      return true;
-    }
-
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
@@ -1000,40 +877,48 @@
       btn.disabled = false;
       btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
 
-      if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
+      // 1. Vérifiez le statut du coureur (cache global)
+      const coureur = globalCache.coureurs[dossard];
+      if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
         btn.disabled = true;
         btn.classList.add("invalid");
-        btn.title = runnerStatuses[dossard];
+        btn.title = coureur.statut;
         return;
       }
 
+      // 2. Si le chrono n'est pas lancé, désactivez le bouton
       if (!startMs) {
         btn.disabled = true;
         btn.title = "Chrono non lancé";
         return;
       }
 
-      await updateScanCacheForDossard(dossard);
+      // 3. Calculez le tour actuel
+      currentTour = calculateCurrentTour(startMs, limites);
 
+      // 4. Vérifiez le cache global pour les verrous/scans
       let dernierTour = 0;
       let horsDelai = false;
 
-      for (const key in scanCache.scans) {
+      // Parcourez les scans du coureur
+      for (const key in globalCache.scans) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
-          const data = scanCache.scans[key];
+          const data = globalCache.scans[key];
           if (tour > dernierTour) dernierTour = tour;
           if (data.horsDelai) horsDelai = true;
         }
       }
 
-      for (const key in scanCache.locks) {
+      // Parcourez les verrous du coureur
+      for (const key in globalCache.locks) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
           if (tour > dernierTour) dernierTour = tour;
         }
       }
 
+      // 5. Mettez à jour l'état du bouton
       if (horsDelai) {
         btn.disabled = true;
         btn.classList.add("invalid");
@@ -1042,7 +927,7 @@
       }
 
       const verrouKey = `${dossard}_t${currentTour}`;
-      if (scanCache.locks[verrouKey]) {
+      if (globalCache.locks[verrouKey]) {
         btn.disabled = true;
         btn.classList.add("valid");
         btn.title = `Tour ${currentTour} validé`;
@@ -1051,7 +936,7 @@
 
       if (dernierTour === currentTour - 1 && lastTourStartTime) {
         const attente = Date.now() - lastTourStartTime;
-        if (attente < 180000) {
+        if (attente < 180000) { // 3 minutes
           btn.disabled = true;
           btn.classList.add("waiting");
           btn.title = `Disponible dans ${Math.ceil((180000 - attente) / 1000)}s`;
@@ -1066,13 +951,173 @@
       if (isUpdatingButtons) return;
       isUpdatingButtons = true;
 
-      const updatePromises = [];
+      // Met à jour le tour actuel
+      currentTour = calculateCurrentTour(startMs, limites);
+
+      // Met à jour tous les boutons (en utilisant le cache)
       for (let i = 1; i <= 160; i++) {
-        updatePromises.push(updateDossardButton(i));
+        await updateDossardButton(i);
       }
-      await Promise.all(updatePromises);
 
       isUpdatingButtons = false;
+    }
+
+    // Appel initial + toutes les 2 secondes (au lieu de 100 ms)
+    setTimeout(() => {
+      if (buttonsInitialized) {
+        updateDossardButtonsState();
+        setInterval(updateDossardButtonsState, 2000);
+      }
+    }, 500);
+
+    async function performScan(dossard, statusDiv = null) {
+      if (!startMs) {
+        if (statusDiv) {
+          statusDiv.innerHTML = "❌ Chrono non lancé.";
+          statusDiv.className = "message error";
+        }
+        return false;
+      }
+
+      // 1. Vérifiez le statut du coureur (cache global)
+      const coureur = globalCache.coureurs[dossard];
+      if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+        if (statusDiv) {
+          statusDiv.innerHTML = `❌ Coureur ${coureur.statut}`;
+          statusDiv.className = "message error";
+        }
+        return false;
+      }
+
+      // 2. Calculez le tour actuel
+      currentTour = calculateCurrentTour(startMs, limites);
+
+      // 3. Trouvez le dernier tour scanné (via cache global)
+      let lastScannedTour = 0;
+      for (const key in globalCache.scans) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          if (tour > lastScannedTour) lastScannedTour = tour;
+        }
+      }
+      for (const key in globalCache.locks) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          if (tour > lastScannedTour) lastScannedTour = tour;
+        }
+      }
+
+      const nextTour = lastScannedTour + 1;
+
+      // 4. Vérifiez si le tour est valide
+      if (nextTour > currentTour) {
+        if (statusDiv) {
+          statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
+          statusDiv.className = "message error";
+        }
+        return false;
+      }
+
+      // 5. Vérifiez le délai de 3 minutes si dernier scan = tour précédent
+      if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
+        const timeSinceStart = Date.now() - lastTourStartTime;
+        if (timeSinceStart < 180000) {
+          const remainingSeconds = Math.ceil((180000 - timeSinceStart) / 1000);
+          if (statusDiv) {
+            statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
+            statusDiv.className = "message error";
+          }
+          return false;
+        }
+      }
+
+      // 6. Vérifiez le verrou dans le cache global
+      const lockKey = `${dossard}_t${nextTour}`;
+      if (globalCache.locks[lockKey]) {
+        if (statusDiv) {
+          statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
+          statusDiv.className = "message error";
+        }
+        updateDossardButton(dossard);
+        return false;
+      }
+
+      // 7. Vérifiez le verrou dans Firebase (pour éviter les conflits entre onglets)
+      const lockRef = doc(db, "scansLocks", lockKey);
+      const lockSnap = await getDoc(lockRef);
+      if (lockSnap.exists()) {
+        globalCache.locks[lockKey] = true;
+        saveGlobalCache();
+        if (statusDiv) {
+          statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${nextTour}.`;
+          statusDiv.className = "message error";
+        }
+        updateDossardButton(dossard);
+        return false;
+      }
+
+      // 8. Créez le verrou dans Firebase
+      try {
+        await setDoc(lockRef, {
+          dossard: dossard,
+          tour: nextTour,
+          createdAt: serverTimestamp()
+        });
+        globalCache.locks[lockKey] = true;
+        saveGlobalCache();
+      } catch (error) {
+        if (statusDiv) {
+          statusDiv.innerHTML = `❌ Erreur verrou : ${error.message}`;
+          statusDiv.className = "message error";
+        }
+        return false;
+      }
+
+      // 9. Vérifiez hors délai
+      const horsDelai = await isHorsDelai(dossard, nextTour);
+      if (horsDelai) {
+        await addDoc(collection(db, "resultats"), {
+          dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admintest"
+        });
+        globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: true };
+        saveGlobalCache();
+
+        // Marquez le coureur comme ELIMINE
+        if (coureur && !["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+          const coureurRef = doc(db, "coureurs", Object.keys(globalCache.coureurs).find(id => globalCache.coureurs[id].dossard == dossard));
+          if (coureurRef) {
+            await updateDoc(coureurRef, { statut: "ELIMINE" });
+            globalCache.coureurs[dossard].statut = "ELIMINE";
+            saveGlobalCache();
+          }
+        }
+
+        updateDossardButton(dossard);
+        if (statusDiv) {
+          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ).`;
+          statusDiv.className = "message warning";
+        }
+        return true;
+      }
+
+      // 10. Enregistrez le scan
+      const now = Date.now();
+      const elapsedTime = now - startMs;
+      const formattedTime = formatTime(elapsedTime);
+
+      await addDoc(collection(db, "resultats"), {
+        dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admintest"
+      });
+      globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: false };
+      saveGlobalCache();
+
+      updateDossardButton(dossard);
+
+      if (statusDiv) {
+        statusDiv.innerHTML = `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
+        statusDiv.className = "message success";
+      }
+      return true;
     }
 
     window.quickScan = async function() {
@@ -1108,6 +1153,19 @@
         return;
       }
       try {
+        const coureur = globalCache.coureurs[dossard];
+        if (!coureur) {
+          statusDiv.innerHTML = "❌ Coureur introuvable";
+          statusDiv.className = "message error";
+          return;
+        }
+        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+          statusDiv.className = "message error";
+          return;
+        }
+
+        // Trouvez l'ID du document du coureur
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
         if (snap.empty) {
@@ -1116,28 +1174,26 @@
           return;
         }
         const docRef = snap.docs[0];
-        const currentStatut = docRef.data().statut;
-        if (["DNF", "DNS", "ELIMINE"].includes(currentStatut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${currentStatut}`;
-          statusDiv.className = "message error";
-          return;
-        }
         await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
+        globalCache.coureurs[dossard].statut = "DNF";
+        saveGlobalCache();
         runnerStatuses[dossard] = "DNF";
+
         await addDoc(collection(db, "resultats"), {
           dossard,
           timestamp: new Date(),
           type: "DNF",
           source: "admintest"
         });
+
         const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
         await setDoc(lockRef, {
           dossard: dossard,
           tour: currentTour,
           createdAt: serverTimestamp()
         });
-        scanCache.locks[`${dossard}_t${currentTour}`] = true;
-        scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNF" };
+        globalCache.locks[`${dossard}_t${currentTour}`] = true;
+        saveGlobalCache();
 
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF !`;
@@ -1163,6 +1219,19 @@
         return;
       }
       try {
+        const coureur = globalCache.coureurs[dossard];
+        if (!coureur) {
+          statusDiv.innerHTML = "❌ Coureur introuvable";
+          statusDiv.className = "message error";
+          return;
+        }
+        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+          statusDiv.className = "message error";
+          return;
+        }
+
+        // Trouvez l'ID du document du coureur
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
         if (snap.empty) {
@@ -1171,28 +1240,26 @@
           return;
         }
         const docRef = snap.docs[0];
-        const currentStatut = docRef.data().statut;
-        if (["DNF", "DNS", "ELIMINE"].includes(currentStatut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${currentStatut}`;
-          statusDiv.className = "message error";
-          return;
-        }
         await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
+        globalCache.coureurs[dossard].statut = "DNS";
+        saveGlobalCache();
         runnerStatuses[dossard] = "DNS";
+
         await addDoc(collection(db, "resultats"), {
           dossard,
           timestamp: new Date(),
           type: "DNS",
           source: "admintest"
         });
+
         const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
         await setDoc(lockRef, {
           dossard: dossard,
           tour: currentTour,
           createdAt: serverTimestamp()
         });
-        scanCache.locks[`${dossard}_t${currentTour}`] = true;
-        scanCache.scans[`${dossard}_t${currentTour}`] = { dossard, tour: currentTour, type: "DNS" };
+        globalCache.locks[`${dossard}_t${currentTour}`] = true;
+        saveGlobalCache();
 
         updateDossardButton(dossard);
         statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS !`;
@@ -1229,8 +1296,9 @@
         return;
       }
 
-      if (runnerStatuses[dossard] && ["DNF", "DNS", "ELIMINE"].includes(runnerStatuses[dossard])) {
-        statusDiv.innerHTML = `❌ Coureur ${runnerStatuses[dossard]}`;
+      const coureur = globalCache.coureurs[dossard];
+      if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+        statusDiv.innerHTML = `❌ Coureur ${coureur.statut}`;
         statusDiv.className = "message error";
         return;
       }
@@ -1241,21 +1309,33 @@
         return;
       }
 
-      await updateScanCacheForDossard(dossard);
-      const isLocked = scanCache.locks[`${dossard}_t${tour}`];
-      if (isLocked) {
+      // Vérifiez le cache global pour les verrous
+      const lockKey = `${dossard}_t${tour}`;
+      if (globalCache.locks[lockKey]) {
         statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${tour}.`;
         statusDiv.className = "message error";
         return;
       }
 
-      const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
+      // Vérifiez le verrou dans Firebase
+      const lockRef = doc(db, "scansLocks", lockKey);
+      const lockSnap = await getDoc(lockRef);
+      if (lockSnap.exists()) {
+        globalCache.locks[lockKey] = true;
+        saveGlobalCache();
+        statusDiv.innerHTML = `❌ Déjà scanné pour le tour ${tour}.`;
+        statusDiv.className = "message error";
+        return;
+      }
+
+      // Créez le verrou dans Firebase
       await setDoc(lockRef, {
         dossard: dossard,
         tour: tour,
         createdAt: serverTimestamp()
       });
-      scanCache.locks[`${dossard}_t${tour}`] = true;
+      globalCache.locks[lockKey] = true;
+      saveGlobalCache();
 
       const [h, m, s] = time.split(":").map(Number);
       const ms = (h * 3600 + m * 60 + s) * 1000;
@@ -1264,7 +1344,8 @@
       await addDoc(collection(db, "resultats"), {
         dossard, tour, timestamp, horsDelai: false, source: "admintest"
       });
-      scanCache.scans[`${dossard}_t${tour}`] = { dossard, tour, horsDelai: false };
+      globalCache.scans[lockKey] = { dossard, tour, horsDelai: false };
+      saveGlobalCache();
 
       updateDossardButton(dossard);
       statusDiv.innerHTML = "✅ Scan ajouté avec succès !";
@@ -1322,7 +1403,8 @@
           timestamp: newTimestamp,
           source: "admintest (modifié)"
         });
-        scanCache.scans[`${dossard}_t${tour}`] = { dossard, tour, timestamp: newTimestamp };
+        globalCache.scans[`${dossard}_t${tour}`] = { dossard, tour, timestamp: newTimestamp };
+        saveGlobalCache();
 
         statusDiv.innerHTML = `✅ Temps mis à jour pour le dossard ${dossard} (Tour ${tour}) !`;
         statusDiv.className = "message success";
@@ -1350,9 +1432,9 @@
         const batch = writeBatch(db);
         snap.forEach(docu => batch.delete(docu.ref));
         await batch.commit();
+        globalCache.coureurs = {};
+        saveGlobalCache();
         runnerStatuses = {};
-        scanCache.locks = {};
-        scanCache.scans = {};
         updateDossardButtonsState();
         document.getElementById("reset-coureurs-status").innerHTML = "🗑️ Coureurs supprimés.";
         document.getElementById("reset-coureurs-status").className = "message success";
@@ -1380,9 +1462,10 @@
 
         await batch.commit();
 
+        globalCache.locks = {};
+        globalCache.scans = {};
+        saveGlobalCache();
         runnerStatuses = {};
-        scanCache.locks = {};
-        scanCache.scans = {};
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
           if (btn) {
@@ -1423,10 +1506,11 @@
         startMs = null;
         currentTour = 0;
         lastTourStartTime = null;
-        scanCache.locks = {};
-        scanCache.scans = {};
+        globalCache.locks = {};
+        globalCache.scans = {};
+        globalCache.startMs = null;
+        saveGlobalCache();
         runnerStatuses = {};
-        localStorage.removeItem("admintest_scanCache");
 
         afficherChrono();
         updateChronoButtonState();
@@ -1456,10 +1540,10 @@
     window.resetLocalCache = function() {
       if (!confirm("⚠️ Réinitialiser le cache local ? Cela peut résoudre des incohérences d'affichage.")) return;
       try {
-        scanCache.locks = {};
-        scanCache.scans = {};
-        scanCache.lastUpdated = 0;
-        localStorage.removeItem("admintest_scanCache");
+        globalCache.locks = {};
+        globalCache.scans = {};
+        globalCache.lastUpdated = 0;
+        saveGlobalCache();
 
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
@@ -1513,6 +1597,8 @@
           newData[key] = Number(input.value);
         });
         await setDoc(doc(db, "course", "limitesTours"), newData, { merge: true });
+        globalCache.limites = newData;
+        saveGlobalCache();
         document.getElementById("tour-save-status").innerHTML = "✅ Durées enregistrées !";
         document.getElementById("tour-save-status").className = "message success";
       } catch (error) {
@@ -1531,6 +1617,9 @@
     window.addEventListener("beforeunload", () => {
       if (chronoInterval) clearInterval(chronoInterval);
       if (resultsUnsubscribe) resultsUnsubscribe();
+      if (coureursUnsubscribe) coureursUnsubscribe();
+      if (departUnsubscribe) departUnsubscribe();
+      if (limitesUnsubscribe) limitesUnsubscribe();
     });
   </script>
 </body>
