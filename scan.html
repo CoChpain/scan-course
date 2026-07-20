@@ -17,7 +17,6 @@
     }
 
     h1 {
-      
       margin: 10px 0;
       font-size: 20px;
     }
@@ -89,7 +88,7 @@
       z-index: 9999;
     }
 
-    /* MOBILE- */
+    /* MOBILE */
     @media (max-width: 600px) {
       #reader {
         max-width: 260px;
@@ -130,7 +129,7 @@
   </div>
 
   <script>
-    // AUTHENTIFICATION LOCALE-
+    // AUTHENTIFICATION LOCALE
     const SESSION_DURATION = 30 * 60 * 1000;
 
     window.checkPwd = function() {
@@ -167,7 +166,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Active la persistance locale
     enableIndexedDbPersistence(db)
       .catch((err) => {
         if (err.code == 'failed-precondition') {
@@ -188,6 +186,9 @@
       lastUpdated: 0
     };
 
+    // BroadcastChannel pour synchroniser entre onglets
+    const cacheChannel = new BroadcastChannel('apollo-run-cache');
+
     // Charge le cache global
     function loadGlobalCache() {
       const saved = localStorage.getItem(GLOBAL_CACHE_KEY);
@@ -204,6 +205,7 @@
     // Sauvegarde le cache global
     function saveGlobalCache() {
       localStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(globalCache));
+      cacheChannel.postMessage({ type: 'cache-updated', data: globalCache });
     }
 
     // Met à jour le cache global depuis Firebase
@@ -212,19 +214,19 @@
       if (now - globalCache.lastUpdated < 30000) return; // 30 secondes
 
       try {
-        // Charger les limites
+        // Charger les limites (1 lecture)
         const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
         if (limitesDoc.exists()) {
           globalCache.limites = limitesDoc.data();
         }
 
-        // Charger le départ
+        // Charger le départ (1 lecture)
         const departDoc = await getDoc(doc(db, "course", "depart"));
         if (departDoc.exists()) {
           globalCache.startMs = departDoc.data().startMs;
         }
 
-        // Charger les coureurs
+        // Charger les coureurs (1 lecture)
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         globalCache.coureurs = {};
         coureursSnap.forEach(doc => {
@@ -234,7 +236,7 @@
           }
         });
 
-        // Charger les verrous et scans (uniquement pour le tour actuel)
+        // Charger les verrous et scans pour le tour actuel (2 lectures)
         const currentTour = calculateCurrentTour(globalCache.startMs, globalCache.limites);
         if (currentTour > 0) {
           const locksSnap = await getDocs(query(collection(db, "scansLocks"), where("tour", "==", currentTour)));
@@ -282,6 +284,27 @@
     let lastScanTime = 0;
     let processing = false;
 
+    // Écoute des mises à jour du cache via BroadcastChannel
+    cacheChannel.onmessage = (e) => {
+      if (e.data.type === 'cache-updated') {
+        globalCache = e.data.data;
+        startMs = globalCache.startMs;
+        limites = globalCache.limites;
+        currentTour = calculateCurrentTour(startMs, limites);
+        runnerStatuses = {};
+        Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
+          runnerStatuses[dossard] = data.statut;
+        });
+        if (startMs && currentTour > 0) {
+          let cumulMs = 0;
+          for (let i = 1; i < currentTour; i++) {
+            cumulMs += (limites[`t${i}`] || 0) * 60000;
+          }
+          lastTourStartTime = startMs + cumulMs;
+        }
+      }
+    };
+
     // SONS
     const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
     const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
@@ -316,7 +339,7 @@
         return;
       }
 
-      // 1. Vérifiez le statut du coureur (cache global)
+      // 1. Vérifiez le statut du coureur
       const coureur = globalCache.coureurs[dossard];
       if (coureur && ["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
         feedback(`⛔ ${coureur.statut}`, "red");
@@ -324,12 +347,18 @@
         return;
       }
 
-      // 2. Calculez le tour actuel
+      // 2. Recalculez le tour actuel
       currentTour = calculateCurrentTour(startMs, limites);
 
-      // 3. Trouvez le dernier tour scanné (via cache global)
+      // 3. Trouvez le dernier tour scanné
       let dernierTour = 0;
       for (const key in globalCache.scans) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split("_t")[1]);
+          if (tour > dernierTour) dernierTour = tour;
+        }
+      }
+      for (const key in globalCache.locks) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split("_t")[1]);
           if (tour > dernierTour) dernierTour = tour;
@@ -363,7 +392,7 @@
         return;
       }
 
-      // 7. Vérifiez le verrou dans Firebase (pour éviter les conflits entre onglets)
+      // 7. Vérifiez le verrou dans Firebase (1 lecture)
       const lockRef = doc(db, "scansLocks", lockKey);
       const lockSnap = await getDoc(lockRef);
       if (lockSnap.exists()) {
@@ -374,7 +403,7 @@
         return;
       }
 
-      // 8. Créez le verrou dans Firebase
+      // 8. Créez le verrou dans Firebase (1 écriture)
       try {
         await runTransaction(db, async(transaction) => {
           const lock = await transaction.get(lockRef);
@@ -418,7 +447,7 @@
         return;
       }
 
-      // 11. Enregistrez le scan
+      // 11. Enregistrez le scan (1 écriture)
       await addDoc(collection(db, "resultats"), {
         dossard, tour: prochainTour, horsDelai: false, source, timestamp: serverTimestamp()
       });
@@ -511,7 +540,7 @@
           lastTourStartTime = startMs + cumulMs;
         }
 
-        // Lance les écoutes en temps réel
+        // Écoute des changements en temps réel
         onSnapshot(doc(db, "course", "depart"), async (snap) => {
           if (snap.exists()) {
             startMs = snap.data().startMs;
@@ -560,6 +589,13 @@
 
         // Met à jour le cache toutes les 30 secondes
         setInterval(updateGlobalCache, 30000);
+
+        // Recalcule currentTour toutes les 5 secondes
+        setInterval(() => {
+          if (startMs) {
+            currentTour = calculateCurrentTour(startMs, limites);
+          }
+        }, 5000);
       });
 
       // Réinitialiser le scanner quand la page est visible
@@ -667,6 +703,7 @@
       if (scanner) {
         scanner.clear();
       }
+      cacheChannel.close();
     });
   </script>
 </body>
