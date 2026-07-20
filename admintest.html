@@ -20,7 +20,6 @@
       --btn-bg-dark-red: #8B0000;
     }
 
-    
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg-primary);
@@ -286,16 +285,14 @@
       <div id="quick-scan-status" class="message"></div>
     </div>
 
-    <!-- Dans la section "Gestion des scans" -->
-<div class="section">
-  <div class="section-title">🔢 Scan manuel (boutons 1 à 160)</div>
-  <!-- NOUVEAU BOUTON -->
-  <div style="margin-bottom: 10px; text-align: center;">
-    <button onclick="forceRefreshDossardButtons()" class="btn-success">🔄 Rafraîchir les boutons</button>
-  </div>
-  <div id="dossard-buttons-grid" class="dossard-grid"></div>
-  <div id="button-scan-status" class="message"></div>
-</div>
+    <div class="section">
+      <div class="section-title">🔢 Scan manuel (boutons 1 à 160)</div>
+      <div style="margin-bottom: 10px; text-align: center;">
+        <button onclick="forceRefreshDossardButtons()" class="btn-success">🔄 Rafraîchir les boutons</button>
+      </div>
+      <div id="dossard-buttons-grid" class="dossard-grid"></div>
+      <div id="button-scan-status" class="message"></div>
+    </div>
 
     <div class="section">
       <div class="section-title">✏️ Ajouter un scan manuellement</div>
@@ -347,7 +344,7 @@
 
   <script type="module">
     // ======================
-    // 🔥 Firebase Configuration + Persistence--
+    // 🔥 Firebase Configuration + Persistence
     // ======================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import {
@@ -402,7 +399,7 @@
       localStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(globalCache));
     }
 
-    // Met à jour le cache global depuis Firebase
+    // Met à jour le cache global depuis Firebase (pour tous les tours)
     async function updateGlobalCache() {
       const now = Date.now();
       if (now - globalCache.lastUpdated < 30000) return; // 30 secondes max
@@ -430,16 +427,15 @@
           }
         });
 
-        // 4. Charger les verrous et scans (uniquement pour le tour actuel)
-        const currentTour = calculateCurrentTour(globalCache.startMs, globalCache.limites);
-        if (currentTour > 0) {
-          const locksSnap = await getDocs(query(collection(db, "scansLocks"), where("tour", "==", currentTour)));
+        // 4. Charger TOUS les verrous et scans (pour tous les tours 1-10)
+        for (let tour = 1; tour <= 10; tour++) {
+          const locksSnap = await getDocs(query(collection(db, "scansLocks"), where("tour", "==", tour)));
           locksSnap.forEach(doc => {
             const data = doc.data();
             globalCache.locks[`${data.dossard}_t${data.tour}`] = true;
           });
 
-          const scansSnap = await getDocs(query(collection(db, "resultats"), where("tour", "==", currentTour)));
+          const scansSnap = await getDocs(query(collection(db, "resultats"), where("tour", "==", tour)));
           scansSnap.forEach(doc => {
             const data = doc.data();
             globalCache.scans[`${data.dossard}_t${data.tour}`] = data;
@@ -448,7 +444,7 @@
 
         globalCache.lastUpdated = now;
         saveGlobalCache();
-        console.log("Cache global mis à jour depuis Firebase.");
+        console.log("Cache global mis à jour depuis Firebase (tous les tours).");
       } catch (error) {
         console.error("Erreur mise à jour cache global :", error);
       }
@@ -530,7 +526,7 @@
       // Charge le cache global
       loadGlobalCache();
 
-      // Met à jour le cache depuis Firebase
+      // Met à jour le cache depuis Firebase (tous les tours)
       await updateGlobalCache();
 
       // Initialise les variables globales
@@ -563,6 +559,14 @@
 
       // Met à jour le cache toutes les 30 secondes
       setInterval(updateGlobalCache, 30000);
+
+      // Écoute des changements dans localStorage (pour synchroniser entre onglets)
+      window.addEventListener("storage", (e) => {
+        if (e.key === GLOBAL_CACHE_KEY) {
+          loadGlobalCache();
+          updateDossardButtonsState();
+        }
+      });
     };
 
     // ======================
@@ -836,25 +840,22 @@
         }
       });
 
-      // Écoute des résultats (uniquement pour le tour actuel)
-      const currentTour = calculateCurrentTour(startMs, limites);
-      if (currentTour > 0) {
-        resultsUnsubscribe = onSnapshot(
-          query(collection(db, "resultats"), where("tour", "==", currentTour)),
-          snap => {
-            snap.docChanges().forEach(change => {
-              if (change.type === "added" || change.type === "modified") {
-                const data = change.doc.data();
-                if (data.dossard) {
-                  globalCache.scans[`${data.dossard}_t${data.tour}`] = data;
-                  saveGlobalCache();
-                  updateDossardButton(data.dossard);
-                }
+      // Écoute des résultats (pour TOUS les tours 1-10)
+      resultsUnsubscribe = onSnapshot(
+        query(collection(db, "resultats"), where("tour", ">=", 1), where("tour", "<=", 10)),
+        snap => {
+          snap.docChanges().forEach(change => {
+            if (change.type === "added" || change.type === "modified") {
+              const data = change.doc.data();
+              if (data.dossard && data.tour >= 1 && data.tour <= 10) {
+                globalCache.scans[`${data.dossard}_t${data.tour}`] = data;
+                saveGlobalCache();
+                updateDossardButton(data.dossard);
               }
-            });
-          }
-        );
-      }
+            }
+          });
+        }
+      );
     }
 
     function generateDossardButtons() {
@@ -968,32 +969,30 @@
       isUpdatingButtons = false;
     }
 
-    // Appel initial + toutes les 2 secondes (au lieu de 100 ms)
+    // Appel initial + toutes les 2 secondes
     setTimeout(() => {
       if (buttonsInitialized) {
         updateDossardButtonsState();
         setInterval(updateDossardButtonsState, 2000);
       }
     }, 500);
-// Force le rafraîchissement des boutons des dossards (sans requêter Firebase)
-window.forceRefreshDossardButtons = async function() {
-  const statusDiv = document.getElementById("button-scan-status");
-  statusDiv.innerHTML = "🔄 Rafraîchissement en cours...";
-  statusDiv.className = "message";
 
-  // 1. Recharge le cache global depuis localStorage (au cas où un autre onglet l'a mis à jour)
-  loadGlobalCache();
+    // Force le rafraîchissement des boutons des dossards
+    window.forceRefreshDossardButtons = async function() {
+      const statusDiv = document.getElementById("button-scan-status");
+      statusDiv.innerHTML = "🔄 Rafraîchissement en cours...";
+      statusDiv.className = "message";
 
-  // 2. Met à jour l'affichage des boutons (en utilisant le cache)
-  await updateDossardButtonsState();
+      // 1. Recharge le cache global depuis localStorage
+      loadGlobalCache();
 
-  statusDiv.innerHTML = "✅ Boutons rafraîchis !";
-  statusDiv.className = "message success";
+      // 2. Met à jour l'affichage des boutons
+      await updateDossardButtonsState();
 
-  // 3. Optionnel : Recharge le cache depuis Firebase (si vous voulez être sûr d'avoir les dernières données)
-  //    Mais cela générera 2 lectures Firebase (scansLocks + resultats pour le tour actuel)
-  // await updateGlobalCache();
-};
+      statusDiv.innerHTML = "✅ Boutons rafraîchis !";
+      statusDiv.className = "message success";
+    };
+
     async function performScan(dossard, statusDiv = null) {
       if (!startMs) {
         if (statusDiv) {
@@ -1475,20 +1474,28 @@ window.forceRefreshDossardButtons = async function() {
       try {
         const batch = writeBatch(db);
 
+        // Supprimer tous les verrous
         const locksSnap = await getDocs(collection(db, "scansLocks"));
         locksSnap.forEach(docu => batch.delete(docu.ref));
 
+        // Supprimer tous les résultats
         const resultatsSnap = await getDocs(collection(db, "resultats"));
         resultatsSnap.forEach(docu => batch.delete(docu.ref));
 
+        // Réinitialiser le statut des coureurs à "OK"
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         coureursSnap.forEach(docu => batch.update(docu.ref, { statut: "OK" }));
 
         await batch.commit();
 
+        // Mettre à jour le cache global
         globalCache.locks = {};
         globalCache.scans = {};
+        Object.keys(globalCache.coureurs).forEach(dossard => {
+          globalCache.coureurs[dossard].statut = "OK";
+        });
         saveGlobalCache();
+
         runnerStatuses = {};
         for (let i = 1; i <= 160; i++) {
           const btn = document.getElementById(`dossard-btn-${i}`);
@@ -1513,29 +1520,38 @@ window.forceRefreshDossardButtons = async function() {
       try {
         const batch = writeBatch(db);
 
+        // Réinitialiser le chrono
         await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
         batch.update(doc(db, "course", "depart"), { startMs: null });
 
+        // Supprimer tous les verrous
         const locksSnap = await getDocs(collection(db, "scansLocks"));
         locksSnap.forEach(docu => batch.delete(docu.ref));
 
+        // Supprimer tous les résultats
         const resultatsSnap = await getDocs(collection(db, "resultats"));
         resultatsSnap.forEach(docu => batch.delete(docu.ref));
 
+        // Réinitialiser le statut des coureurs à "OK"
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         coureursSnap.forEach(docu => batch.update(docu.ref, { statut: "OK" }));
 
         await batch.commit();
 
+        // Mettre à jour les variables globales
         startMs = null;
         currentTour = 0;
         lastTourStartTime = null;
         globalCache.locks = {};
         globalCache.scans = {};
         globalCache.startMs = null;
+        Object.keys(globalCache.coureurs).forEach(dossard => {
+          globalCache.coureurs[dossard].statut = "OK";
+        });
         saveGlobalCache();
         runnerStatuses = {};
 
+        // Mettre à jour l'UI
         afficherChrono();
         updateChronoButtonState();
 
@@ -1644,6 +1660,16 @@ window.forceRefreshDossardButtons = async function() {
       if (coureursUnsubscribe) coureursUnsubscribe();
       if (departUnsubscribe) departUnsubscribe();
       if (limitesUnsubscribe) limitesUnsubscribe();
+    });
+
+    // Écoute des changements dans localStorage (pour synchroniser entre onglets)
+    window.addEventListener("storage", (e) => {
+      if (e.key === GLOBAL_CACHE_KEY) {
+        loadGlobalCache();
+        if (buttonsInitialized) {
+          updateDossardButtonsState();
+        }
+      }
     });
   </script>
 </body>
