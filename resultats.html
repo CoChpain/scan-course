@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Résultats</title>
-
+  <title>Résultats – APOLLO RUN</title>
   <style>
     body {
       background: #000;
@@ -76,7 +75,7 @@
       font-size: 14px;
     }
 
-    /* 🔻 SLIDER PARTENAIRES */
+    /* Slider partenaires */
     .partners-slider {
       position: fixed;
       bottom: 0;
@@ -113,7 +112,7 @@
 </head>
 
 <body>
-  <!-- 🔥 CHRONO GLOBAL -->
+  <!-- Chrono global -->
   <div id="chrono-global" style="font-size:28px;color:#ffcc00;margin-top:20px;">
     ⏱️ Chrono global : --:--:--
   </div>
@@ -151,6 +150,9 @@
       lastUpdated: 0
     };
 
+    // BroadcastChannel pour synchroniser entre onglets
+    const cacheChannel = new BroadcastChannel('apollo-run-cache');
+
     // Charge le cache global
     function loadGlobalCache() {
       const saved = localStorage.getItem(GLOBAL_CACHE_KEY);
@@ -167,6 +169,7 @@
     // Sauvegarde le cache global
     function saveGlobalCache() {
       localStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(globalCache));
+      cacheChannel.postMessage({ type: 'cache-updated', data: globalCache });
     }
 
     // Met à jour le cache global depuis Firebase
@@ -175,19 +178,19 @@
       if (now - globalCache.lastUpdated < 60000) return; // 1 minute
 
       try {
-        // Charger les limites
+        // Charger les limites (1 lecture)
         const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
         if (limitesDoc.exists()) {
           globalCache.limites = limitesDoc.data();
         }
 
-        // Charger le départ
+        // Charger le départ (1 lecture)
         const departDoc = await getDoc(doc(db, "course", "depart"));
         if (departDoc.exists()) {
           globalCache.startMs = departDoc.data().startMs;
         }
 
-        // Charger les coureurs
+        // Charger les coureurs (1 lecture)
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         globalCache.coureurs = {};
         coureursSnap.forEach(doc => {
@@ -195,6 +198,16 @@
           if (data.dossard) {
             globalCache.coureurs[data.dossard] = data;
           }
+        });
+
+        // Charger les résultats (1 lecture)
+        const resultatsSnap = await getDocs(query(collection(db, "resultats"), orderBy("timestamp", "asc")));
+        globalCache.resultats = {};
+        resultatsSnap.forEach(doc => {
+          const data = doc.data();
+          const ts = data.timestamp?.toDate?.()?.getTime?.() || data.timestamp;
+          const key = `${data.dossard}_${data.tour}_${ts}`;
+          globalCache.resultats[key] = data;
         });
 
         globalCache.lastUpdated = now;
@@ -206,7 +219,7 @@
 
     // Calcule le tour actuel
     function calculateCurrentTour(startMs, limites) {
-      if (!startMs || !limites) return 1; // Par défaut, tour 1
+      if (!startMs || !limites) return 1;
       const elapsedMin = (Date.now() - startMs) / 60000;
       let cumul = 0;
       for (let i = 1; i <= 10; i++) {
@@ -215,7 +228,7 @@
         cumul += limite;
         if (elapsedMin <= cumul) return i;
       }
-      return 10; // Max 10 tours
+      return 10;
     }
 
     const div = document.getElementById("contenu");
@@ -227,10 +240,6 @@
     let departTours = {};
     let ongletActif = "general";
     let totalParTour = {};
-    let unsubscribeCoureurs = null;
-    let unsubscribeResultats = null;
-    let unsubscribeDepart = null;
-    let unsubscribeLimites = null;
     let currentTour = 1;
 
     // Charge le cache global au démarrage
@@ -239,23 +248,39 @@
     limites = globalCache.limites;
     coureursMap = globalCache.coureurs;
 
-    // Charge tous les tours existants au démarrage (pour afficher les onglets)
+    // Écoute des mises à jour du cache via BroadcastChannel
+    cacheChannel.onmessage = (e) => {
+      if (e.data.type === 'cache-updated') {
+        globalCache = e.data.data;
+        startMs = globalCache.startMs;
+        limites = globalCache.limites;
+        coureursMap = globalCache.coureurs;
+        currentTour = calculateCurrentTour(startMs, limites);
+        recalculerDepartTours();
+        rafraichir();
+      }
+    };
+
+    // Charge tous les tours existants au démarrage
     async function loadAllTours() {
       try {
-        const resultatsSnap = await getDocs(query(collection(db, "resultats"), orderBy("timestamp", "asc")));
-        resultatsSnap.forEach(doc => {
-          const r = doc.data();
-          // 🔥 Limite stricte : 10 tours max
+        // Utilise le cache global pour éviter une lecture Firebase
+        Object.entries(globalCache.resultats).forEach(([key, r]) => {
           if (!r.tour || r.tour < 1 || r.tour > 10) return;
-          const ts = r.timestamp?.toDate().getTime() ?? null;
+          const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
           if (!tours[r.tour]) tours[r.tour] = [];
-          tours[r.tour].push({ ...r, timestamp: ts });
+          const exists = tours[r.tour].some(item => `${item.dossard}_${item.tour}_${item.timestamp}` === key);
+          if (!exists) {
+            tours[r.tour].push({ ...r, timestamp: ts });
+          }
           if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-          tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
+          const existsInAll = tousLesResultats[r.dossard].some(item => `${item.dossard}_${item.tour}_${item.timestamp}` === key);
+          if (!existsInAll) {
+            tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
+          }
         });
         processResultsData();
         construireOnglets();
-        // Afficher le classement général par défaut
         afficherGeneral();
       } catch (error) {
         console.error("Erreur chargement des tours :", error);
@@ -266,12 +291,67 @@
     loadAllTours();
 
     // Met à jour le cache périodiquement
-    setInterval(updateGlobalCache, 60000); // Toutes les minutes
+    setInterval(updateGlobalCache, 60000);
 
-    /* -------------------------------------------
-       🔥 Charger startMs
-    --------------------------------------------*/
-    unsubscribeDepart = onSnapshot(doc(db, "course", "depart"), snap => {
+    // Écoute des changements en temps réel (uniquement pour les nouvelles données)
+    let unsubscribeResultats = null;
+    unsubscribeResultats = onSnapshot(
+      query(collection(db, "resultats"), where("tour", ">=", 1), where("tour", "<=", 10), orderBy("timestamp", "asc")),
+      snap => {
+        snap.docChanges().forEach(change => {
+          const r = change.doc.data();
+          if (!r.tour || r.tour < 1 || r.tour > 10) return;
+
+          const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
+          const key = `${r.dossard}_${r.tour}_${ts}`;
+
+          // Gérer les suppressions
+          if (change.type === "removed") {
+            if (tours[r.tour]) {
+              tours[r.tour] = tours[r.tour].filter(item => `${item.dossard}_${item.tour}_${item.timestamp}` !== key);
+            }
+            if (tousLesResultats[r.dossard]) {
+              tousLesResultats[r.dossard] = tousLesResultats[r.dossard].filter(item => `${item.dossard}_${item.tour}_${item.timestamp}` !== key);
+            }
+            delete globalCache.resultats[key];
+          }
+          // Gérer les ajouts/modifications
+          else {
+            if (!tours[r.tour]) tours[r.tour] = [];
+            const exists = tours[r.tour].some(item => `${item.dossard}_${item.tour}_${item.timestamp}` === key);
+            if (!exists) {
+              tours[r.tour].push({ ...r, timestamp: ts });
+            }
+            if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
+            const existsInAll = tousLesResultats[r.dossard].some(item => `${item.dossard}_${item.tour}_${item.timestamp}` === key);
+            if (!existsInAll) {
+              tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
+            }
+            globalCache.resultats[key] = r;
+          }
+        });
+        saveGlobalCache();
+        processResultsData();
+        construireOnglets();
+        rafraichir();
+      }
+    );
+
+    // Écoute des coureurs
+    onSnapshot(collection(db, "coureurs"), snap => {
+      snap.docChanges().forEach(change => {
+        const data = change.doc.data();
+        if (!data.dossard || Number(data.dossard) <= 0) return;
+        globalCache.coureurs[data.dossard] = data;
+        coureursMap[data.dossard] = data;
+      });
+      saveGlobalCache();
+      construireOnglets();
+      rafraichir();
+    });
+
+    // Écoute du départ
+    onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
         startMs = snap.data().startMs;
         globalCache.startMs = startMs;
@@ -288,10 +368,8 @@
       }
     });
 
-    /* -------------------------------------------
-       🔥 Charger limites
-    --------------------------------------------*/
-    unsubscribeLimites = onSnapshot(doc(db, "course", "limitesTours"), snap => {
+    // Écoute des limites
+    onSnapshot(doc(db, "course", "limitesTours"), snap => {
       if (snap.exists()) {
         limites = snap.data();
         globalCache.limites = limites;
@@ -344,13 +422,10 @@
       if (!startMs) return;
 
       const now = Date.now();
-
-      // Chrono global
       const globalMs = now - startMs;
       document.getElementById("chrono-global").innerHTML =
         "⏱️ Chrono global : " + formatTemps(globalMs);
 
-      // Chrono du tour actif
       if (ongletActif !== "general" && departTours[ongletActif]) {
         const tourMs = now - departTours[ongletActif];
         const chronoTour = document.getElementById("chrono-tour");
@@ -583,73 +658,13 @@
     };
 
     /* -------------------------------------------
-       🔥 Écoute des coureurs (optimisée)
-    --------------------------------------------*/
-    unsubscribeCoureurs = onSnapshot(collection(db, "coureurs"), snap => {
-      snap.docChanges().forEach(change => {
-        const data = change.doc.data();
-        if (!data.dossard || Number(data.dossard) <= 0) return;
-        globalCache.coureurs[data.dossard] = data;
-        coureursMap[data.dossard] = data;
-      });
-      saveGlobalCache();
-      // Mettre à jour les onglets et l'affichage
-      construireOnglets();
-      rafraichir();
-    });
-
-    /* -------------------------------------------
-       🔥 Écoute des résultats (tous les tours, mais avec filtre)
-    --------------------------------------------*/
-    unsubscribeResultats = onSnapshot(
-      query(collection(db, "resultats"), where("tour", ">=", 1), where("tour", "<=", 10), orderBy("timestamp", "asc")),
-      snap => {
-        snap.docChanges().forEach(change => {
-          const r = change.doc.data();
-          if (!r.tour || r.tour < 1 || r.tour > 10) return;
-
-          const ts = r.timestamp?.toDate().getTime() ?? null;
-
-          // Gérer les suppressions
-          if (change.type === "removed") {
-            if (tours[r.tour]) {
-              tours[r.tour] = tours[r.tour].filter(item => item.timestamp !== ts);
-            }
-            if (tousLesResultats[r.dossard]) {
-              tousLesResultats[r.dossard] = tousLesResultats[r.dossard].filter(item => item.timestamp !== ts);
-            }
-          }
-          // Gérer les ajouts/modifications
-          else {
-            if (!tours[r.tour]) tours[r.tour] = [];
-            // Éviter les doublons
-            const exists = tours[r.tour].some(item => item.timestamp === ts);
-            if (!exists) {
-              tours[r.tour].push({ ...r, timestamp: ts });
-            }
-            if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-            const existsInAll = tousLesResultats[r.dossard].some(item => item.timestamp === ts);
-            if (!existsInAll) {
-              tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
-            }
-          }
-        });
-
-        // Traiter les données et rafraîchir l'affichage
-        processResultsData();
-        construireOnglets();
-        rafraichir(); // 🔥 Rafraîchir automatiquement l'affichage
-      }
-    );
-
-    /* -------------------------------------------
        🔥 Traite les données des résultats
     --------------------------------------------*/
     function processResultsData() {
       // Hors délais
       Object.keys(tours).forEach(t => {
         const tour = Number(t);
-        if (tour < 1 || tour > 10) return; // 🔥 Limite stricte : 10 tours max
+        if (tour < 1 || tour > 10) return;
         const limite = limites[`t${tour}`] || 0;
         const departTheorique = departTours[tour];
         if (!departTheorique) return;
@@ -663,7 +678,7 @@
 
       // Marquer ELIMINE
       Object.keys(tours).forEach(t => {
-        if (t < 1 || t > 10) return; // 🔥 Limite stricte : 10 tours max
+        if (t < 1 || t > 10) return;
         tours[t].forEach(r => {
           if (r.horsDelai) {
             const c = coureursMap[r.dossard];
@@ -677,9 +692,8 @@
         if (c.statut === "DNF" || c.statut === "DNS") {
           const scans = tousLesResultats[c.dossard] || [];
           const abandonTour = scans.length > 0 ? scans[scans.length - 1].tour + 1 : 1;
-          if (abandonTour < 1 || abandonTour > 10) return; // 🔥 Limite stricte : 10 tours max
+          if (abandonTour < 1 || abandonTour > 10) return;
           if (!tours[abandonTour]) tours[abandonTour] = [];
-          // Éviter les doublons
           const exists = tours[abandonTour].some(r => r.dossard === c.dossard && r.type === c.statut);
           if (!exists) {
             tours[abandonTour].push({
@@ -697,7 +711,7 @@
       // Totaux par tour
       Object.keys(limites).forEach(key => {
         const t = Number(key.replace("t", ""));
-        if (!t || t < 1 || t > 10) return; // 🔥 Limite stricte : 10 tours max
+        if (!t || t < 1 || t > 10) return;
         let total = 0;
         if (t === 1) {
           total = Object.values(coureursMap)
@@ -726,14 +740,12 @@
 
     // Désabonnement à la fermeture
     window.addEventListener("beforeunload", () => {
-      if (unsubscribeCoureurs) unsubscribeCoureurs();
       if (unsubscribeResultats) unsubscribeResultats();
-      if (unsubscribeDepart) unsubscribeDepart();
-      if (unsubscribeLimites) unsubscribeLimites();
+      cacheChannel.close();
     });
   </script>
 
-  <!-- 🔻 PARTENAIRES -->
+  <!-- Slider partenaires -->
   <div class="partners-slider">
     <div class="partners-track">
       <img src="Z1.png">
@@ -744,8 +756,7 @@
       <img src="Z6.png">
       <img src="Z7.png">
       <img src="Z8.png">
-
-      <!-- duplication pour boucle infinie -->
+      <!-- Duplication pour boucle infinie -->
       <img src="Z1.png">
       <img src="Z2.png">
       <img src="Z3.png">
@@ -754,16 +765,11 @@
       <img src="Z6.png">
       <img src="Z7.png">
       <img src="Z8.png">
-
-      <!-- duplication pour boucle infinie -->
+      <!-- Duplication pour boucle infinie -->
       <img src="Z1.png">
       <img src="Z2.png">
       <img src="Z3.png">
       <img src="Z4.png">
-      <img src="Z5.png">
-      <img src="Z6.png">
-      <img src="Z7.png">
-      <img src="Z8.png">
     </div>
   </div>
 
