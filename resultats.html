@@ -278,7 +278,6 @@
         saveGlobalCache();
         recalculerDepartTours();
         currentTour = calculateCurrentTour(startMs, limites);
-        // Ne pas reconfigurer l'écoute ici, on écoute tous les tours via loadAllTours
         rafraichir();
       } else {
         startMs = null;
@@ -608,24 +607,38 @@
         snap.docChanges().forEach(change => {
           const r = change.doc.data();
           if (!r.tour || r.tour < 1 || r.tour > 10) return;
+
           const ts = r.timestamp?.toDate().getTime() ?? null;
-          if (!tours[r.tour]) tours[r.tour] = [];
+
+          // Gérer les suppressions
           if (change.type === "removed") {
-            // Retirer le résultat supprimé
-            tours[r.tour] = tours[r.tour].filter(item => item.timestamp !== ts);
+            if (tours[r.tour]) {
+              tours[r.tour] = tours[r.tour].filter(item => item.timestamp !== ts);
+            }
             if (tousLesResultats[r.dossard]) {
               tousLesResultats[r.dossard] = tousLesResultats[r.dossard].filter(item => item.timestamp !== ts);
             }
-          } else {
-            // Ajouter ou mettre à jour le résultat
-            tours[r.tour].push({ ...r, timestamp: ts });
+          }
+          // Gérer les ajouts/modifications
+          else {
+            if (!tours[r.tour]) tours[r.tour] = [];
+            // Éviter les doublons
+            const exists = tours[r.tour].some(item => item.timestamp === ts);
+            if (!exists) {
+              tours[r.tour].push({ ...r, timestamp: ts });
+            }
             if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-            tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
+            const existsInAll = tousLesResultats[r.dossard].some(item => item.timestamp === ts);
+            if (!existsInAll) {
+              tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
+            }
           }
         });
+
+        // Traiter les données et rafraîchir l'affichage
         processResultsData();
         construireOnglets();
-        rafraichir();
+        rafraichir(); // 🔥 Rafraîchir automatiquement l'affichage
       }
     );
 
@@ -666,14 +679,18 @@
           const abandonTour = scans.length > 0 ? scans[scans.length - 1].tour + 1 : 1;
           if (abandonTour < 1 || abandonTour > 10) return; // 🔥 Limite stricte : 10 tours max
           if (!tours[abandonTour]) tours[abandonTour] = [];
-          tours[abandonTour].push({
-            dossard: c.dossard,
-            tour: abandonTour,
-            horsDelai: false,
-            dnf: c.statut === "DNF",
-            dns: c.statut === "DNS",
-            timestamp: departTours[abandonTour] ?? null
-          });
+          // Éviter les doublons
+          const exists = tours[abandonTour].some(r => r.dossard === c.dossard && r.type === c.statut);
+          if (!exists) {
+            tours[abandonTour].push({
+              dossard: c.dossard,
+              tour: abandonTour,
+              horsDelai: false,
+              dnf: c.statut === "DNF",
+              dns: c.statut === "DNS",
+              timestamp: departTours[abandonTour] ?? null
+            });
+          }
         }
       });
 
