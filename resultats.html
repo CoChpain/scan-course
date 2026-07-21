@@ -349,7 +349,7 @@
       }
     }
 
-    loadAllTours();
+    // loadAllTours(); // désactivé pour éviter doublons
     setInterval(updateGlobalCache, 60000);
 
     let unsubscribeResultats = null;
@@ -503,6 +503,7 @@
     }
 
     function updateChronos() {
+      recalculerDepartTours();
       if (!startMs) return;
       const now = Date.now();
       const globalMs = now - startMs;
