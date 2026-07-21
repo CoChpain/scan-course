@@ -75,7 +75,6 @@
       font-size: 14px;
     }
 
-    /* Slider partenaires */
     .partners-slider {
       position: fixed;
       bottom: 0;
@@ -112,7 +111,6 @@
 </head>
 
 <body>
-  <!-- Chrono global -->
   <div id="chrono-global" style="font-size:28px;color:#ffcc00;margin-top:20px;">
     ⏱️ Chrono global : --:--:--
   </div>
@@ -149,10 +147,8 @@
       lastUpdated: 0
     };
 
-    // BroadcastChannel pour synchroniser entre onglets
     const cacheChannel = new BroadcastChannel('apollo-run-cache');
 
-    // Charge le cache global
     function loadGlobalCache() {
       const saved = localStorage.getItem(GLOBAL_CACHE_KEY);
       if (saved) {
@@ -165,13 +161,11 @@
       }
     }
 
-    // Sauvegarde le cache global
     function saveGlobalCache() {
       localStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(globalCache));
       cacheChannel.postMessage({ type: 'cache-updated', data: globalCache });
     }
 
-    // Met à jour le cache global depuis Firebase
     async function updateGlobalCache() {
       const now = Date.now();
       if (now - globalCache.lastUpdated < 60000) return;
@@ -214,7 +208,6 @@
       }
     }
 
-    // Calcule le tour actuel
     function calculateCurrentTour(startMs, limites) {
       if (!startMs || !limites) return 1;
       const elapsedMin = (Date.now() - startMs) / 60000;
@@ -239,13 +232,11 @@
     let totalParTour = {};
     let currentTour = 1;
 
-    // Charge le cache global au démarrage
     loadGlobalCache();
     startMs = globalCache.startMs;
     limites = globalCache.limites;
     coureursMap = globalCache.coureurs;
 
-    // Écoute des mises à jour du cache via BroadcastChannel
     cacheChannel.onmessage = (e) => {
       if (e.data.type === 'cache-updated') {
         globalCache = e.data.data;
@@ -308,7 +299,6 @@
       }
     };
 
-    // Charge tous les tours existants au démarrage
     async function loadAllTours() {
       try {
         Object.entries(globalCache.resultats).forEach(([key, r]) => {
@@ -362,7 +352,6 @@
     loadAllTours();
     setInterval(updateGlobalCache, 60000);
 
-    // Écoute des changements en temps réel
     let unsubscribeResultats = null;
     unsubscribeResultats = onSnapshot(
       query(collection(db, "resultats"), orderBy("timestamp", "asc")),
@@ -420,19 +409,16 @@
             } else {
               if (!r.tour || r.tour < 1 || r.tour > 10) return;
               if (!tours[r.tour]) tours[r.tour] = [];
-              const exists = tours[r.tour].some(item =>
-                `${item.dossard}_${item.tour}_${item.timestamp}` === uniqueKey
+              // 🔥 Supprimer les doublons avant d'ajouter
+              tours[r.tour] = tours[r.tour].filter(item =>
+                `${item.dossard}_${item.tour}_${item.timestamp}` !== uniqueKey
               );
-              if (!exists) {
-                tours[r.tour].push({ ...r, timestamp: ts });
-              }
+              tousLesResultats[r.dossard] = (tousLesResultats[r.dossard] || []).filter(item =>
+                `${item.dossard}_${item.tour}_${item.timestamp}` !== uniqueKey
+              );
+              tours[r.tour].push({ ...r, timestamp: ts });
               if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-              const existsInAll = tousLesResultats[r.dossard].some(item =>
-                `${item.dossard}_${item.tour}_${item.timestamp}` === uniqueKey
-              );
-              if (!existsInAll) {
-                tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
-              }
+              tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
             }
             globalCache.resultats[uniqueKey] = r;
           }
@@ -496,7 +482,7 @@
     }
 
     function formatTemps(ms) {
-      if (!ms || ms < 0) return "--:--:--";
+      if (ms === null || ms === undefined || ms < 0) return "--:--:--";
       const s = Math.floor(ms / 1000);
       const h = String(Math.floor(s / 3600)).padStart(2, "0");
       const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
@@ -533,6 +519,7 @@
       }
     }
 
+    // 🔥 Mettre à jour le chrono toutes les secondes (pas toutes les 10 secondes)
     setInterval(updateChronos, 1000);
 
     function calculTempsTour(dossard, tour) {
@@ -589,11 +576,13 @@
         return true;
       });
 
-      // Supprimer les doublons dans la liste
+      // 🔥 Supprimer les doublons dans la liste
       const uniqueListe = [];
       const seen = new Set();
       liste.forEach(r => {
-        const key = `${r.dossard}_${r.tour}_${r.timestamp}`;
+        const key = r.type === "DNF" || r.type === "DNS"
+          ? `${r.dossard}_${r.type}`
+          : `${r.dossard}_${r.tour}_${r.timestamp}`;
         if (!seen.has(key)) {
           seen.add(key);
           uniqueListe.push(r);
@@ -614,7 +603,7 @@
             const c = coureursMap[r.dossard];
             return c && !["DNF", "DNS", "ELIMINE"].includes(c.statut);
           })
-          .filter(r => !r.horsDelai && !r.dnf && !r.dns).length;
+          .filter(r => !r.horsDelai).length;
       }
 
       arrives = liste.filter(r => !r.horsDelai).length;
@@ -650,8 +639,10 @@
           const tempsTour = calculTempsTour(r.dossard, tour);
           const classe = r.horsDelai ? "red fade" : (c.sexe === "F" ? "femme fade" : "fade");
 
-          // Afficher le temps en rouge si hors délai
-          const labelTemps = r.horsDelai ? `<span style="color:red">${formatTemps(tempsTour)}</span>` : formatTemps(tempsTour);
+          // 🔥 Afficher le temps en rouge si hors délai, sinon en normal
+          const labelTemps = r.horsDelai
+            ? `<span style="color:red">${formatTemps(tempsTour)}</span>`
+            : formatTemps(tempsTour);
 
           html += `
             <tr class="${classe}">
@@ -816,7 +807,7 @@
             .length;
         } else {
           total = (tours[t - 1] || [])
-            .filter(r => !r.horsDelai && !r.dnf && !r.dns)
+            .filter(r => !r.horsDelai)
             .filter(r => {
               const c = coureursMap[r.dossard];
               return c && !["DNF", "DNS", "ELIMINE"].includes(c.statut);
@@ -831,10 +822,11 @@
       else afficherTour(Number(ongletActif));
     }
 
-    setInterval(() => {
-      if (ongletActif === "general") afficherGeneral();
-      else if (ongletActif !== "general") afficherTour(Number(ongletActif));
-    }, 10000);
+    // 🔥 Supprimer le rafraîchissement forcé toutes les 10 secondes (inutile avec les écouteurs)
+    // setInterval(() => {
+    //   if (ongletActif === "general") afficherGeneral();
+    //   else if (ongletActif !== "general") afficherTour(Number(ongletActif));
+    // }, 10000);
 
     window.addEventListener("beforeunload", () => {
       if (unsubscribeResultats) unsubscribeResultats();
