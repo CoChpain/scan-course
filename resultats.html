@@ -197,7 +197,7 @@
           const ts = data.timestamp?.toDate?.()?.getTime?.() || data.timestamp;
           const key = data.type === "DNF" || data.type === "DNS"
             ? `${data.dossard}_${data.type}`
-            : `${data.dossard}_${data.tour || 0}_${ts}`;
+            : `${data.dossard}_${data.tour}`;
           globalCache.resultats[key] = data;
         });
 
@@ -253,7 +253,7 @@
             const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
             const uniqueKey = r.type === "DNF" || r.type === "DNS"
               ? `${r.dossard}_${r.type}`
-              : `${r.dossard}_${r.tour}_${ts}`;
+              : `${r.dossard}_${r.tour}`;
 
             if (r.type === "DNF" || r.type === "DNS") {
               const tour = r.tour || calculateCurrentTour(startMs, limites);
@@ -275,14 +275,14 @@
               if (!r.tour || r.tour < 1 || r.tour > 10) return;
               if (!tours[r.tour]) tours[r.tour] = [];
               const exists = tours[r.tour].some(item =>
-                `${item.dossard}_${item.tour}_${item.timestamp}` === uniqueKey
+                `${item.dossard}_${item.tour}` === uniqueKey
               );
               if (!exists) {
                 tours[r.tour].push({ ...r, timestamp: ts });
               }
               if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
               const existsInAll = tousLesResultats[r.dossard].some(item =>
-                `${item.dossard}_${item.tour}_${item.timestamp}` === uniqueKey
+                `${item.dossard}_${item.tour}` === uniqueKey
               );
               if (!existsInAll) {
                 tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
@@ -308,7 +308,7 @@
           const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
           const uniqueKey = r.type === "DNF" || r.type === "DNS"
             ? `${r.dossard}_${r.type}`
-            : `${r.dossard}_${r.tour}_${ts}`;
+            : `${r.dossard}_${r.tour}`;
 
           if (change.type === "removed") {
             if (r.type === "DNF" || r.type === "DNS") {
@@ -326,12 +326,12 @@
             } else {
               if (tours[r.tour]) {
                 tours[r.tour] = tours[r.tour].filter(item =>
-                  `${item.dossard}_${item.tour}_${item.timestamp}` !== uniqueKey
+                  `${item.dossard}_${item.tour}` !== uniqueKey
                 );
               }
               if (tousLesResultats[r.dossard]) {
                 tousLesResultats[r.dossard] = tousLesResultats[r.dossard].filter(item =>
-                  `${item.dossard}_${item.tour}_${item.timestamp}` !== uniqueKey
+                  `${item.dossard}_${item.tour}` !== uniqueKey
                 );
               }
             }
@@ -340,27 +340,24 @@
             if (r.type === "DNF" || r.type === "DNS") {
               const tour = r.tour || calculateCurrentTour(startMs, limites);
               if (!tours[tour]) tours[tour] = [];
-              const exists = tours[tour].some(item =>
-                (item.type === r.type && item.dossard === r.dossard)
+              tours[tour] = tours[tour].filter(item =>
+                !(item.type === r.type && item.dossard === r.dossard)
               );
-              if (!exists) {
-                tours[tour].push({ ...r, tour, horsDelai: false, timestamp: ts });
-              }
+              tours[tour].push({ ...r, tour, horsDelai: false, timestamp: ts });
+
               if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-              const existsInAll = tousLesResultats[r.dossard].some(item =>
-                (item.type === r.type && item.dossard === r.dossard)
+              tousLesResultats[r.dossard] = tousLesResultats[r.dossard].filter(item =>
+                !(item.type === r.type && item.dossard === r.dossard)
               );
-              if (!existsInAll) {
-                tousLesResultats[r.dossard].push({ ...r, tour, timestamp: ts });
-              }
+              tousLesResultats[r.dossard].push({ ...r, tour, timestamp: ts });
             } else {
               if (!r.tour || r.tour < 1 || r.tour > 10) return;
               if (!tours[r.tour]) tours[r.tour] = [];
               tours[r.tour] = tours[r.tour].filter(item =>
-                `${item.dossard}_${item.tour}_${item.timestamp}` !== uniqueKey
+                `${item.dossard}_${item.tour}` !== uniqueKey
               );
               tousLesResultats[r.dossard] = (tousLesResultats[r.dossard] || []).filter(item =>
-                `${item.dossard}_${item.tour}_${item.timestamp}` !== uniqueKey
+                `${item.dossard}_${item.tour}` !== uniqueKey
               );
               tours[r.tour].push({ ...r, timestamp: ts });
               if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
@@ -501,11 +498,10 @@
       ongletActif = tour;
       recalculerDepartTours();
 
-      // Récupérer tous les résultats pour ce tour, y compris DNF/DNS/Hors délais
+      // Récupérer tous les résultats pour ce tour, y compris DNF/DNS
       let liste = (tours[tour] || []).filter(r => {
         const coureur = coureursMap[r.dossard];
-        if (!coureur) return false;
-        return true;
+        return coureur !== undefined;
       });
 
       // Supprimer les doublons
@@ -514,7 +510,7 @@
       liste.forEach(r => {
         const key = r.type === "DNF" || r.type === "DNS"
           ? `${r.dossard}_${r.type}`
-          : `${r.dossard}_${r.tour}_${r.timestamp}`;
+          : `${r.dossard}_${r.tour}`;
         if (!seen.has(key)) {
           seen.add(key);
           uniqueListe.push(r);
@@ -563,16 +559,22 @@
       colonnes.forEach(col => {
         html += `
           <table>
-          <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th><th>Statut</th></tr>
+          <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th></tr>
         `;
         col.forEach(r => {
           const c = coureursMap[r.dossard] || {};
           const tempsTour = calculTempsTour(r.dossard, tour);
-          const classe = r.horsDelai ? "red fade" : (c.sexe === "F" ? "femme fade" : "fade");
+          const classe = (r.type === "DNF" || r.type === "DNS" || r.horsDelai) ? "red fade" : (c.sexe === "F" ? "femme fade" : "fade");
 
-          // Afficher le statut (DNF/DNS/Hors délai)
-          const statut = r.type === "DNF" ? "DNF" : r.type === "DNS" ? "DNS" : r.horsDelai ? "Hors délai" : "";
-          const labelTemps = tempsTour !== null ? formatTemps(tempsTour) : "--:--:--";
+          // Afficher le temps ou "DNS"/"DNF" en rouge
+          let labelTemps;
+          if (r.type === "DNF") {
+            labelTemps = "DNF";
+          } else if (r.type === "DNS") {
+            labelTemps = "DNS";
+          } else {
+            labelTemps = tempsTour !== null ? formatTemps(tempsTour) : "--:--:--";
+          }
 
           html += `
             <tr class="${classe}">
@@ -580,7 +582,6 @@
               <td>${r.dossard}</td>
               <td>${c.nom || ""} ${c.prenom || ""}</td>
               <td>${labelTemps}</td>
-              <td>${statut}</td>
             </tr>`;
         });
         html += "</table>";
@@ -610,21 +611,31 @@
           tourAtteint = 1;
         }
 
+        // Vérifier si le coureur est hors délai dans un tour
+        let horsDelaiTour = null;
+        if (scans.length > 0) {
+          scans.forEach(scan => {
+            if (scan.horsDelai && !horsDelaiTour) {
+              horsDelaiTour = scan.tour;
+            }
+          });
+        }
+
         let statutTxt = "", statutOrdre = 0;
 
         if (c.statut === "DNF") {
           statutTxt = `DNF T${tourAtteint}`;
           statutOrdre = 3;
-        }
-        else if (c.statut === "DNS") {
+        } else if (c.statut === "DNS") {
           statutTxt = `DNS T${tourAtteint}`;
           statutOrdre = 4;
-        }
-        else if (c.statut === "ELIMINE") {
-          statutTxt = `Hors délais T${tourAtteint}`;
+        } else if (horsDelaiTour) {
+          statutTxt = `Hors délai T${horsDelaiTour}`;
           statutOrdre = 2;
-        }
-        else {
+        } else if (c.statut === "ELIMINE") {
+          statutTxt = `Hors délai T${tourAtteint}`;
+          statutOrdre = 2;
+        } else {
           statutTxt = `En course T${tourAtteint}`;
           statutOrdre = 1;
         }
@@ -680,7 +691,7 @@
         `;
         col.forEach(r => {
           const c = coureursMap[r.dossard] || {};
-          const classe = ["DNF", "DNS", "ELIMINE"].includes(r.statut)
+          const classe = ["DNF", "DNS", "ELIMINE"].includes(r.statut) || r.statutTxt.includes("Hors délai")
             ? "red fade"
             : (c.sexe === "F" ? "femme fade" : "fade");
 
@@ -703,6 +714,7 @@
     function processResultsData() {
       totalParTour = {};
 
+      // Marquer les coureurs hors délai
       Object.keys(tours).forEach(t => {
         const tour = Number(t);
         if (tour < 1 || tour > 10) return;
@@ -713,10 +725,12 @@
         tours[tour] = tours[tour].map(r => {
           if (!r.timestamp) return r;
           const diffMin = (r.timestamp - departTheorique) / 60000;
-          return { ...r, horsDelai: diffMin > limite };
+          const horsDelai = diffMin > limite;
+          return { ...r, horsDelai };
         });
       });
 
+      // Mettre à jour le statut des coureurs hors délai
       Object.keys(tours).forEach(t => {
         if (t < 1 || t > 10) return;
         tours[t].forEach(r => {
@@ -727,6 +741,7 @@
         });
       });
 
+      // Calculer le total de coureurs par tour
       Object.keys(limites).forEach(key => {
         const t = Number(key.replace("t", ""));
         if (!t || t < 1 || t > 10) return;
