@@ -498,7 +498,7 @@
       ongletActif = tour;
       recalculerDepartTours();
 
-      // Récupérer tous les résultats pour ce tour, y compris DNF/DNS
+      // Récupérer tous les résultats pour ce tour
       let liste = (tours[tour] || []).filter(r => {
         const coureur = coureursMap[r.dossard];
         return coureur !== undefined;
@@ -517,6 +517,27 @@
         }
       });
       liste = uniqueListe;
+
+      // Filtrer les coureurs éliminés dans les tours précédents
+      liste = liste.filter(r => {
+        if (r.type === "DNF" || r.type === "DNS" || r.horsDelai) {
+          const scans = tousLesResultats[r.dossard] || [];
+          const lastValidScan = scans.find(s => s.tour === tour || s.tour === tour - 1);
+          return lastValidScan && (lastValidScan.type === r.type || lastValidScan.horsDelai);
+        }
+        return true;
+      });
+
+      // Trier la liste : arrivés, hors délai, DNF, DNS
+      liste.sort((a, b) => {
+        if (a.type === "DNS" && b.type !== "DNS") return 1;
+        if (b.type === "DNS" && a.type !== "DNS") return -1;
+        if (a.type === "DNF" && b.type !== "DNF") return 1;
+        if (b.type === "DNF" && a.type !== "DNF") return -1;
+        if (a.horsDelai && !b.horsDelai) return 1;
+        if (b.horsDelai && !a.horsDelai) return -1;
+        return 0;
+      });
 
       // Calculer le total de coureurs pour ce tour
       let total = 0;
@@ -730,13 +751,17 @@
         });
       });
 
-      // Mettre à jour le statut des coureurs hors délai
+      // Mettre à jour le statut des coureurs hors délai ou DNF/DNS
       Object.keys(tours).forEach(t => {
         if (t < 1 || t > 10) return;
         tours[t].forEach(r => {
-          if (r.horsDelai) {
+          if (r.horsDelai || r.type === "DNF" || r.type === "DNS") {
             const c = coureursMap[r.dossard];
-            if (c) c.statut = "ELIMINE";
+            if (c) {
+              if (r.type === "DNF") c.statut = "DNF";
+              else if (r.type === "DNS") c.statut = "DNS";
+              else if (r.horsDelai) c.statut = "ELIMINE";
+            }
           }
         });
       });
@@ -752,7 +777,7 @@
             .length;
         } else {
           total = (tours[t - 1] || [])
-            .filter(r => !r.horsDelai)
+            .filter(r => !r.horsDelai && !r.type)
             .filter(r => {
               const c = coureursMap[r.dossard];
               return c && !["DNF", "DNS", "ELIMINE"].includes(c.statut);
