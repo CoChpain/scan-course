@@ -528,21 +528,28 @@
       });
       liste = uniqueListe;
 
-      // Filtrer les coureurs éliminés pour n'afficher que ceux du tour actuel
+      // Filtrer les coureurs éliminés dans les tours précédents
       liste = liste.filter(r => {
         if (r.type === "DNF" || r.type === "DNS" || r.horsDelai) {
-          return r.tour === tour; // Afficher uniquement dans le tour où ils ont été scannés
+          // Vérifier que le coureur a été éliminé dans ce tour (ou le précédent pour les hors délai)
+          const scans = tousLesResultats[r.dossard] || [];
+          const lastValidScan = scans.find(s => s.tour === tour);
+          if (r.type === "DNF" || r.type === "DNS") {
+            return lastValidScan && lastValidScan.tour === tour;
+          } else if (r.horsDelai) {
+            return lastValidScan && lastValidScan.tour === tour;
+          }
         }
         return true;
       });
 
       // Trier la liste : arrivés, hors délai, DNF, DNS
       liste.sort((a, b) => {
-        if (a.type === "DNS" && b.type !== "DNS") return 1; // DNS en dernier
+        if (a.type === "DNS" && b.type !== "DNS") return 1;
         if (b.type === "DNS" && a.type !== "DNS") return -1;
-        if (a.type === "DNF" && b.type !== "DNF") return 1; // DNF avant DNS
+        if (a.type === "DNF" && b.type !== "DNF") return 1;
         if (b.type === "DNF" && a.type !== "DNF") return -1;
-        if (a.horsDelai && !b.horsDelai) return 1; // Hors délai avant DNF
+        if (a.horsDelai && !b.horsDelai) return 1;
         if (b.horsDelai && !a.horsDelai) return -1;
         return 0;
       });
@@ -824,10 +831,6 @@
       <img src="Z6.png" />
       <img src="Z7.png" />
       <img src="Z8.png" />
-      <img src="Z1.png" />
-      <img src="Z2.png" />
-      <img src="Z3.png" />
-      <img src="Z4.png" />
     </div>
   </div>
 
