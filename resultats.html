@@ -504,121 +504,99 @@
       document.getElementById("onglets").innerHTML = html;
     }
 
-    window.afficherTour = function(tour) {
-      ongletActif = tour;
-      recalculerDepartTours();
+   window.afficherTour = function(tour) {
+  ongletActif = tour;
+  recalculerDepartTours();
 
-      // Récupérer tous les résultats pour ce tour
-      let liste = (tours[tour] || []).filter(r => {
-        const coureur = coureursMap[r.dossard];
-        return coureur !== undefined;
-      });
+  // 🔥 1. On prend UNIQUEMENT les scans valides
+  let liste = (tours[tour] || []).filter(r => {
+    const coureur = coureursMap[r.dossard];
+    return coureur !== undefined && r.timestamp; // ✅ FIX 1
+  });
 
-      // Supprimer les doublons
-      const uniqueListe = [];
-      const seen = new Set();
-      liste.forEach(r => {
-        const key = r.type === "DNF" || r.type === "DNS"
-          ? `${r.dossard}_${r.type}`
-          : `${r.dossard}_${r.tour}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          uniqueListe.push(r);
-        }
-      });
-      liste = uniqueListe;
+  // 🔥 2. Ajouter DNS/DNF même sans scan sur ce tour
+  Object.values(coureursMap).forEach(c => {
+    const scans = tousLesResultats[c.dossard] || [];
 
-      // Filtrer les coureurs éliminés pour n'afficher que ceux du tour actuel
-      liste = liste.filter(r => {
-        if (r.type === "DNF" || r.type === "DNS" || r.horsDelai) {
-          return r.tour === tour; // Afficher uniquement dans le tour où ils ont été scannés
-        }
-        return true;
-      });
+    const dejaPresent = liste.some(r => r.dossard == c.dossard);
 
-      // Trier la liste : arrivés, hors délai, DNF, DNS
-      liste.sort((a, b) => {
-        if (a.type === "DNS" && b.type !== "DNS") return 1; // DNS en dernier
-        if (b.type === "DNS" && a.type !== "DNS") return -1;
-        if (a.type === "DNF" && b.type !== "DNF") return 1; // DNF avant DNS
-        if (b.type === "DNF" && a.type !== "DNF") return -1;
-        if (a.horsDelai && !b.horsDelai) return 1; // Hors délai avant DNF
-        if (b.horsDelai && !a.horsDelai) return -1;
-        return 0;
-      });
+    if (!dejaPresent) {
+      const statutScan = scans.find(r =>
+        (r.type === "DNF" || r.type === "DNS") && r.tour === tour
+      );
 
-      // Calculer le total de coureurs pour ce tour
-      let total = 0;
-      if (tour === 1) {
-        total = Object.values(coureursMap)
-          .filter(c => c.dossard && Number(c.dossard) > 0)
-          .length;
-      } else {
-        total = (tours[tour - 1] || [])
-          .filter(r => {
-            const c = coureursMap[r.dossard];
-            return c && !["DNF", "DNS", "ELIMINE"].includes(c.statut);
-          })
-          .filter(r => !r.horsDelai).length;
-      }
-
-      const arrives = liste.filter(r => !r.horsDelai && !r.type).length;
-      const limite = limites["t" + tour] || 0;
-
-      let html = `
-        <h2>Tour ${tour}</h2>
-        <div id="chrono-tour" style="font-size:22px;color:#00ffaa;margin-bottom:10px;">
-          ⏱️ Chrono Tour ${tour} : --:--:--
-        </div>
-        <h3 style="color:#00ff99">⏱️ Temps maximum : ${formatTemps(limite * 60000)}</h3>
-        <h3 style="color:yellow">Arrivés : ${arrives} / ${totalParTour[tour] ?? total}</h3>
-      `;
-
-      const nb = liste.length;
-      const cols = getNombreColonnes(nb);
-      html += `<div class="columns cols-${cols}">`;
-
-      const chunk = Math.ceil(nb / cols);
-      let colonnes = [];
-      for (let i = 0; i < cols; i++) {
-        colonnes.push(liste.slice(i * chunk, (i + 1) * chunk));
-      }
-
-      let rank = 1;
-      colonnes.forEach(col => {
-        html += `
-          <table>
-          <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th></tr>
-        `;
-        col.forEach(r => {
-          const c = coureursMap[r.dossard] || {};
-          const tempsTour = calculTempsTour(r.dossard, tour);
-          const classe = (r.type === "DNF" || r.type === "DNS" || r.horsDelai) ? "red fade" : (c.sexe === "F" || c.categorie === "F" ? "femme fade" : "fade");
-
-          // Afficher le temps ou "DNS"/"DNF" en rouge
-          let labelTemps;
-          if (r.type === "DNF") {
-            labelTemps = "DNF";
-          } else if (r.type === "DNS") {
-            labelTemps = "DNS";
-          } else {
-            labelTemps = tempsTour !== null ? formatTemps(tempsTour) : "--:--:--";
-          }
-
-          html += `
-            <tr class="${classe}">
-              <td>${rank++}</td>
-              <td>${r.dossard}</td>
-              <td>${c.nom || ""} ${c.prenom || ""}</td>
-              <td>${labelTemps}</td>
-            </tr>`;
+      if (statutScan) {
+        liste.push({
+          dossard: c.dossard,
+          type: statutScan.type,
+          tour: tour,
+          timestamp: statutScan.timestamp || null
         });
-        html += "</table>";
-      });
+      }
+    }
+  });
 
-      html += "</div>";
-      div.innerHTML = html;
-    };
+  // 🔥 3. Suppression des doublons
+  const uniqueListe = [];
+  const seen = new Set();
+
+  liste.forEach(r => {
+    const key = r.type === "DNF" || r.type === "DNS"
+      ? `${r.dossard}_${r.type}`
+      : `${r.dossard}_${r.tour}`;
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueListe.push(r);
+    }
+  });
+
+  liste = uniqueListe;
+
+  // 🔥 4. Tri (temps puis DNS/DNF en bas)
+  liste.sort((a, b) => {
+    if (a.type === "DNS" || a.type === "DNF") return 1;
+    if (b.type === "DNS" || b.type === "DNF") return -1;
+    return (a.timestamp || 0) - (b.timestamp || 0);
+  });
+
+  // 🔥 5. AFFICHAGE
+  let html = `<h2>Tour ${tour}</h2>`;
+  html += `<div id="chrono-tour"></div>`;
+
+  html += `<table>
+    <tr>
+      <th>#</th>
+      <th>Dossard</th>
+      <th>Nom</th>
+      <th>Temps</th>
+      <th>Statut</th>
+    </tr>`;
+
+  liste.forEach((r, i) => {
+    const c = coureursMap[r.dossard] || {};
+    let temps = calculTempsTour(r.dossard, tour);
+
+    let statut = "";
+    if (r.type === "DNF") statut = "DNF";
+    if (r.type === "DNS") statut = "DNS";
+
+    html += `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${r.dossard}</td>
+        <td>${c.nom || ""}</td>
+        <td>${temps ? formatTemps(temps) : "--:--:--"}</td>
+        <td>${statut}</td>
+      </tr>
+    `;
+  });
+
+  html += "</table>";
+  div.innerHTML = html;
+
+  updateChronos();
+};
 
     window.afficherGeneral = function() {
       ongletActif = "general";
