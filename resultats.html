@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Résultats – APOLLO RUN</title>
   <style>
@@ -256,7 +256,7 @@
               : `${r.dossard}_${r.tour}_${ts}`;
 
             if (r.type === "DNF" || r.type === "DNS") {
-              const tour = calculateCurrentTour(startMs, limites);
+              const tour = r.tour || calculateCurrentTour(startMs, limites);
               if (!tours[tour]) tours[tour] = [];
               const exists = tours[tour].some(item =>
                 (item.type === r.type && item.dossard === r.dossard)
@@ -299,59 +299,6 @@
       }
     };
 
-    async function loadAllTours() {
-      try {
-        Object.entries(globalCache.resultats).forEach(([key, r]) => {
-          const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
-          const uniqueKey = r.type === "DNF" || r.type === "DNS"
-            ? `${r.dossard}_${r.type}`
-            : `${r.dossard}_${r.tour}_${ts}`;
-
-          if (r.type === "DNF" || r.type === "DNS") {
-            const tour = calculateCurrentTour(startMs, limites);
-            if (!tours[tour]) tours[tour] = [];
-            const exists = tours[tour].some(item =>
-              (item.type === r.type && item.dossard === r.dossard)
-            );
-            if (!exists) {
-              tours[tour].push({ ...r, tour, horsDelai: false, timestamp: ts });
-            }
-            if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-            const existsInAll = tousLesResultats[r.dossard].some(item =>
-              (item.type === r.type && item.dossard === r.dossard)
-            );
-            if (!existsInAll) {
-              tousLesResultats[r.dossard].push({ ...r, tour, timestamp: ts });
-            }
-          } else {
-            if (!r.tour || r.tour < 1 || r.tour > 10) return;
-            if (!tours[r.tour]) tours[r.tour] = [];
-            const exists = tours[r.tour].some(item =>
-              `${item.dossard}_${item.tour}_${item.timestamp}` === uniqueKey
-            );
-            if (!exists) {
-              tours[r.tour].push({ ...r, timestamp: ts });
-            }
-            if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
-            const existsInAll = tousLesResultats[r.dossard].some(item =>
-              `${item.dossard}_${item.tour}_${item.timestamp}` === uniqueKey
-            );
-            if (!existsInAll) {
-              tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
-            }
-          }
-        });
-        processResultsData();
-        construireOnglets();
-        afficherGeneral();
-      } catch (error) {
-        console.error("Erreur chargement des tours :", error);
-      }
-    }
-
-    // loadAllTours(); // désactivé pour éviter doublons
-    setInterval(updateGlobalCache, 60000);
-
     let unsubscribeResultats = null;
     unsubscribeResultats = onSnapshot(
       query(collection(db, "resultats"), orderBy("timestamp", "asc")),
@@ -365,7 +312,7 @@
 
           if (change.type === "removed") {
             if (r.type === "DNF" || r.type === "DNS") {
-              const tour = calculateCurrentTour(startMs, limites);
+              const tour = r.tour || calculateCurrentTour(startMs, limites);
               if (tours[tour]) {
                 tours[tour] = tours[tour].filter(item =>
                   !(item.type === r.type && item.dossard === r.dossard)
@@ -391,7 +338,7 @@
             delete globalCache.resultats[uniqueKey];
           } else {
             if (r.type === "DNF" || r.type === "DNS") {
-              const tour = calculateCurrentTour(startMs, limites);
+              const tour = r.tour || calculateCurrentTour(startMs, limites);
               if (!tours[tour]) tours[tour] = [];
               const exists = tours[tour].some(item =>
                 (item.type === r.type && item.dossard === r.dossard)
@@ -409,7 +356,6 @@
             } else {
               if (!r.tour || r.tour < 1 || r.tour > 10) return;
               if (!tours[r.tour]) tours[r.tour] = [];
-              // 🔥 Supprimer les doublons avant d'ajouter
               tours[r.tour] = tours[r.tour].filter(item =>
                 `${item.dossard}_${item.tour}_${item.timestamp}` !== uniqueKey
               );
@@ -520,7 +466,6 @@
       }
     }
 
-    // 🔥 Mettre à jour le chrono toutes les secondes (pas toutes les 10 secondes)
     setInterval(updateChronos, 1000);
 
     function calculTempsTour(dossard, tour) {
@@ -556,28 +501,14 @@
       ongletActif = tour;
       recalculerDepartTours();
 
-      // Filtrer les coureurs éliminés (DNF/DNS/ELIMINE) pour ce tour et les suivants
+      // Récupérer tous les résultats pour ce tour, y compris DNF/DNS/Hors délais
       let liste = (tours[tour] || []).filter(r => {
         const coureur = coureursMap[r.dossard];
         if (!coureur) return false;
-
-        // Exclure les coureurs DNF/DNS/ELIMINE pour les tours suivants
-        if (tour > 1) {
-          const lastScan = tousLesResultats[r.dossard]?.find(s => s.tour === tour - 1);
-          if (lastScan && (lastScan.dnf || lastScan.dns || lastScan.horsDelai)) {
-            return false;
-          }
-        }
-
-        // Exclure les coureurs ELIMINE/DNF/DNS pour le tour actuel
-        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-          return false;
-        }
-
         return true;
       });
 
-      // 🔥 Supprimer les doublons dans la liste
+      // Supprimer les doublons
       const uniqueListe = [];
       const seen = new Set();
       liste.forEach(r => {
@@ -591,12 +522,11 @@
       });
       liste = uniqueListe;
 
-      let total = 0, arrives = 0;
-
+      // Calculer le total de coureurs pour ce tour
+      let total = 0;
       if (tour === 1) {
         total = Object.values(coureursMap)
           .filter(c => c.dossard && Number(c.dossard) > 0)
-          .filter(c => !["DNF", "DNS", "ELIMINE"].includes(c.statut))
           .length;
       } else {
         total = (tours[tour - 1] || [])
@@ -607,7 +537,7 @@
           .filter(r => !r.horsDelai).length;
       }
 
-      arrives = liste.filter(r => !r.horsDelai).length;
+      const arrives = liste.filter(r => !r.horsDelai && !r.type).length;
       const limite = limites["t" + tour] || 0;
 
       let html = `
@@ -633,17 +563,16 @@
       colonnes.forEach(col => {
         html += `
           <table>
-          <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th></tr>
+          <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Temps</th><th>Statut</th></tr>
         `;
         col.forEach(r => {
           const c = coureursMap[r.dossard] || {};
           const tempsTour = calculTempsTour(r.dossard, tour);
           const classe = r.horsDelai ? "red fade" : (c.sexe === "F" ? "femme fade" : "fade");
 
-          // 🔥 Afficher le temps en rouge si hors délai, sinon en normal
-          const labelTemps = r.horsDelai
-            ? `<span style="color:red">${formatTemps(tempsTour)}</span>`
-            : formatTemps(tempsTour);
+          // Afficher le statut (DNF/DNS/Hors délai)
+          const statut = r.type === "DNF" ? "DNF" : r.type === "DNS" ? "DNS" : r.horsDelai ? "Hors délai" : "";
+          const labelTemps = tempsTour !== null ? formatTemps(tempsTour) : "--:--:--";
 
           html += `
             <tr class="${classe}">
@@ -651,6 +580,7 @@
               <td>${r.dossard}</td>
               <td>${c.nom || ""} ${c.prenom || ""}</td>
               <td>${labelTemps}</td>
+              <td>${statut}</td>
             </tr>`;
         });
         html += "</table>";
@@ -712,7 +642,7 @@
         });
       });
 
-      // Filtrer les doublons dans le classement général
+      // Supprimer les doublons dans le classement général
       const uniqueClassement = [];
       const seenClassement = new Set();
       classement.forEach(r => {
@@ -804,7 +734,6 @@
         if (t === 1) {
           total = Object.values(coureursMap)
             .filter(c => c.dossard && Number(c.dossard) > 0)
-            .filter(c => !["DNF", "DNS", "ELIMINE"].includes(c.statut))
             .length;
         } else {
           total = (tours[t - 1] || [])
@@ -823,41 +752,42 @@
       else afficherTour(Number(ongletActif));
     }
 
-    // 🔥 Supprimer le rafraîchissement forcé toutes les 10 secondes (inutile avec les écouteurs)
-    // setInterval(() => {
-    //   if (ongletActif === "general") afficherGeneral();
-    //   else if (ongletActif !== "general") afficherTour(Number(ongletActif));
-    // }, 10000);
-
     window.addEventListener("beforeunload", () => {
       if (unsubscribeResultats) unsubscribeResultats();
       cacheChannel.close();
     });
+
+    // Initialiser l'affichage
+    setTimeout(() => {
+      processResultsData();
+      construireOnglets();
+      afficherGeneral();
+    }, 1000);
   </script>
 
   <!-- Slider partenaires -->
   <div class="partners-slider">
     <div class="partners-track">
-      <img src="Z1.png">
-      <img src="Z2.png">
-      <img src="Z3.png">
-      <img src="Z4.png">
-      <img src="Z5.png">
-      <img src="Z6.png">
-      <img src="Z7.png">
-      <img src="Z8.png">
-      <img src="Z1.png">
-      <img src="Z2.png">
-      <img src="Z3.png">
-      <img src="Z4.png">
-      <img src="Z5.png">
-      <img src="Z6.png">
-      <img src="Z7.png">
-      <img src="Z8.png">
-      <img src="Z1.png">
-      <img src="Z2.png">
-      <img src="Z3.png">
-      <img src="Z4.png">
+      <img src="Z1.png" />
+      <img src="Z2.png" />
+      <img src="Z3.png" />
+      <img src="Z4.png" />
+      <img src="Z5.png" />
+      <img src="Z6.png" />
+      <img src="Z7.png" />
+      <img src="Z8.png" />
+      <img src="Z1.png" />
+      <img src="Z2.png" />
+      <img src="Z3.png" />
+      <img src="Z4.png" />
+      <img src="Z5.png" />
+      <img src="Z6.png" />
+      <img src="Z7.png" />
+      <img src="Z8.png" />
+      <img src="Z1.png" />
+      <img src="Z2.png" />
+      <img src="Z3.png" />
+      <img src="Z4.png" />
     </div>
   </div>
 
