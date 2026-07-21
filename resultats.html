@@ -130,7 +130,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Active la persistance locale
     enableIndexedDbPersistence(db)
       .catch((err) => {
         if (err.code == 'failed-precondition') {
@@ -175,22 +174,19 @@
     // Met à jour le cache global depuis Firebase
     async function updateGlobalCache() {
       const now = Date.now();
-      if (now - globalCache.lastUpdated < 60000) return; // 1 minute
+      if (now - globalCache.lastUpdated < 60000) return;
 
       try {
-        // Charger les limites (1 lecture)
         const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
         if (limitesDoc.exists()) {
           globalCache.limites = limitesDoc.data();
         }
 
-        // Charger le départ (1 lecture)
         const departDoc = await getDoc(doc(db, "course", "depart"));
         if (departDoc.exists()) {
           globalCache.startMs = departDoc.data().startMs;
         }
 
-        // Charger les coureurs (1 lecture)
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         globalCache.coureurs = {};
         coureursSnap.forEach(doc => {
@@ -200,7 +196,6 @@
           }
         });
 
-        // Charger les résultats (1 lecture)
         const resultatsSnap = await getDocs(query(collection(db, "resultats"), orderBy("timestamp", "asc")));
         globalCache.resultats = {};
         resultatsSnap.forEach(doc => {
@@ -258,13 +253,11 @@
         limites = globalCache.limites;
         coureursMap = globalCache.coureurs;
 
-        // Réinitialiser les données locales si la course est réinitialisée
         if (startMs === null) {
           tours = {};
           tousLesResultats = {};
           totalParTour = {};
         } else {
-          // Mettre à jour les données locales depuis le cache (sans doublons)
           Object.entries(globalCache.resultats).forEach(([key, r]) => {
             const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
             const uniqueKey = r.type === "DNF" || r.type === "DNS"
@@ -366,13 +359,10 @@
       }
     }
 
-    // Charge tous les tours au démarrage
     loadAllTours();
-
-    // Met à jour le cache périodiquement
     setInterval(updateGlobalCache, 60000);
 
-    // Écoute des changements en temps réel (TOUS les résultats, y compris DNF/DNS)
+    // Écoute des changements en temps réel
     let unsubscribeResultats = null;
     unsubscribeResultats = onSnapshot(
       query(collection(db, "resultats"), orderBy("timestamp", "asc")),
@@ -384,7 +374,6 @@
             ? `${r.dossard}_${r.type}`
             : `${r.dossard}_${r.tour}_${ts}`;
 
-          // Gérer les suppressions
           if (change.type === "removed") {
             if (r.type === "DNF" || r.type === "DNS") {
               const tour = calculateCurrentTour(startMs, limites);
@@ -411,9 +400,7 @@
               }
             }
             delete globalCache.resultats[uniqueKey];
-          }
-          // Gérer les ajouts/modifications
-          else {
+          } else {
             if (r.type === "DNF" || r.type === "DNS") {
               const tour = calculateCurrentTour(startMs, limites);
               if (!tours[tour]) tours[tour] = [];
@@ -457,7 +444,6 @@
       }
     );
 
-    // Écoute des coureurs
     onSnapshot(collection(db, "coureurs"), snap => {
       snap.docChanges().forEach(change => {
         const data = change.doc.data();
@@ -470,7 +456,6 @@
       rafraichir();
     });
 
-    // Écoute du départ
     onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
         startMs = snap.data().startMs;
@@ -488,7 +473,6 @@
       }
     });
 
-    // Écoute des limites
     onSnapshot(doc(db, "course", "limitesTours"), snap => {
       if (snap.exists()) {
         limites = snap.data();
@@ -500,14 +484,10 @@
       }
     });
 
-    /* -------------------------------------------
-       🔥 Calcul départs théoriques
-    --------------------------------------------*/
     function recalculerDepartTours() {
       if (!startMs || !limites) return;
       departTours = {};
       let cumul = 0;
-
       for (let i = 1; i <= 10; i++) {
         if (!limites["t" + i]) break;
         departTours[i] = startMs + cumul * 60000;
@@ -515,7 +495,6 @@
       }
     }
 
-    /* Format temps */
     function formatTemps(ms) {
       if (!ms || ms < 0) return "--:--:--";
       const s = Math.floor(ms / 1000);
@@ -537,10 +516,8 @@
       return cols;
     }
 
-    /* 🔥 CHRONOS LIVE */
     function updateChronos() {
       if (!startMs) return;
-
       const now = Date.now();
       const globalMs = now - startMs;
       document.getElementById("chrono-global").innerHTML =
@@ -558,9 +535,6 @@
 
     setInterval(updateChronos, 1000);
 
-    /* -------------------------------------------
-       🔥 Calcul temps d’un tour
-    --------------------------------------------*/
     function calculTempsTour(dossard, tour) {
       if (!departTours[tour]) return null;
       const scans = tousLesResultats[dossard] || [];
@@ -569,26 +543,20 @@
       return scanTour.timestamp - departTours[tour];
     }
 
-    /* -------------------------------------------
-       🔥 Onglets dynamiques
-    --------------------------------------------*/
     function construireOnglets() {
       let html = `<button onclick="afficherGeneral()">Général</button>`;
       let tourMax = 1;
 
-      // Détermine le tour maximum en fonction des résultats existants
       Object.keys(tours).forEach(t => {
         const num = Number(t);
         if (num > tourMax && num <= 10) tourMax = num;
       });
 
-      // Si la course est lancée, on affiche tous les tours jusqu'au tour actuel
       if (startMs) {
         currentTour = calculateCurrentTour(startMs, limites);
         tourMax = Math.max(tourMax, currentTour);
       }
 
-      // Affiche les onglets pour les tours 1 à tourMax (max 10)
       for (let t = 1; t <= Math.min(tourMax, 10); t++) {
         html += `<button onclick="afficherTour(${t})">Tour ${t}</button>`;
       }
@@ -596,22 +564,36 @@
       document.getElementById("onglets").innerHTML = html;
     }
 
-    /* -------------------------------------------
-       🔥 AFFICHAGE TOUR
-    --------------------------------------------*/
     window.afficherTour = function(tour) {
       ongletActif = tour;
       recalculerDepartTours();
 
-      let liste = [...(tours[tour] || [])];
+      // Filtrer les coureurs éliminés (DNF/DNS/ELIMINE) pour ce tour et les suivants
+      let liste = (tours[tour] || []).filter(r => {
+        const coureur = coureursMap[r.dossard];
+        if (!coureur) return false;
 
-      // 🔥 Filtrer les doublons dans la liste
+        // Exclure les coureurs DNF/DNS/ELIMINE pour les tours suivants
+        if (tour > 1) {
+          const lastScan = tousLesResultats[r.dossard]?.find(s => s.tour === tour - 1);
+          if (lastScan && (lastScan.dnf || lastScan.dns || lastScan.horsDelai)) {
+            return false;
+          }
+        }
+
+        // Exclure les coureurs ELIMINE/DNF/DNS pour le tour actuel
+        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+          return false;
+        }
+
+        return true;
+      });
+
+      // Supprimer les doublons dans la liste
       const uniqueListe = [];
       const seen = new Set();
       liste.forEach(r => {
-        const key = r.type === "DNF" || r.type === "DNS"
-          ? `${r.dossard}_${r.type}`
-          : `${r.dossard}_${r.tour}_${r.timestamp}`;
+        const key = `${r.dossard}_${r.tour}_${r.timestamp}`;
         if (!seen.has(key)) {
           seen.add(key);
           uniqueListe.push(r);
@@ -628,14 +610,14 @@
           .length;
       } else {
         total = (tours[tour - 1] || [])
-          .filter(r => !r.horsDelai && !r.dnf && !r.dns)
           .filter(r => {
             const c = coureursMap[r.dossard];
             return c && !["DNF", "DNS", "ELIMINE"].includes(c.statut);
-          }).length;
+          })
+          .filter(r => !r.horsDelai && !r.dnf && !r.dns).length;
       }
 
-      arrives = liste.filter(r => !r.horsDelai && !r.dnf && !r.dns).length;
+      arrives = liste.filter(r => !r.horsDelai).length;
       const limite = limites["t" + tour] || 0;
 
       let html = `
@@ -666,12 +648,10 @@
         col.forEach(r => {
           const c = coureursMap[r.dossard] || {};
           const tempsTour = calculTempsTour(r.dossard, tour);
-          const classe = r.dns || r.dnf || r.horsDelai
-            ? "red fade"
-            : (c.sexe === "F" ? "femme fade" : "fade");
+          const classe = r.horsDelai ? "red fade" : (c.sexe === "F" ? "femme fade" : "fade");
 
-          // 🔥 Afficher DNS/DNF/Hors délai au lieu du temps
-          const labelTemps = r.dns ? "DNS" : r.dnf ? "DNF" : r.horsDelai ? "Hors délai" : formatTemps(tempsTour);
+          // Afficher le temps en rouge si hors délai
+          const labelTemps = r.horsDelai ? `<span style="color:red">${formatTemps(tempsTour)}</span>` : formatTemps(tempsTour);
 
           html += `
             <tr class="${classe}">
@@ -688,9 +668,6 @@
       div.innerHTML = html;
     };
 
-    /* -------------------------------------------
-       🔥 CLASSEMENT GÉNÉRAL
-    --------------------------------------------*/
     window.afficherGeneral = function() {
       ongletActif = "general";
 
@@ -706,7 +683,6 @@
           if (idx !== -1) rang = idx + 1;
         }
 
-        // Afficher "En course T1" au lieu de "En course T0" si la course est lancée
         let tourAtteint = lastTour;
         if (startMs && tourAtteint === 0) {
           tourAtteint = 1;
@@ -744,7 +720,7 @@
         });
       });
 
-      // 🔥 Filtrer les doublons dans le classement général
+      // Filtrer les doublons dans le classement général
       const uniqueClassement = [];
       const seenClassement = new Set();
       classement.forEach(r => {
@@ -802,14 +778,9 @@
       div.innerHTML = html;
     };
 
-    /* -------------------------------------------
-       🔥 Traite les données des résultats
-    --------------------------------------------*/
     function processResultsData() {
-      // Réinitialiser les totaux par tour
       totalParTour = {};
 
-      // Hors délais
       Object.keys(tours).forEach(t => {
         const tour = Number(t);
         if (tour < 1 || tour > 10) return;
@@ -824,7 +795,6 @@
         });
       });
 
-      // Marquer ELIMINE
       Object.keys(tours).forEach(t => {
         if (t < 1 || t > 10) return;
         tours[t].forEach(r => {
@@ -835,7 +805,6 @@
         });
       });
 
-      // Totaux par tour
       Object.keys(limites).forEach(key => {
         const t = Number(key.replace("t", ""));
         if (!t || t < 1 || t > 10) return;
@@ -857,21 +826,16 @@
       });
     }
 
-    /* -------------------------------------------
-       🔥 RAFRAICHIR L’AFFICHAGE
-    --------------------------------------------*/
     function rafraichir() {
       if (ongletActif === "general") afficherGeneral();
       else afficherTour(Number(ongletActif));
     }
 
-    // Rafraîchissement forcé toutes les 10 secondes (pour garantir la synchronisation)
     setInterval(() => {
       if (ongletActif === "general") afficherGeneral();
       else if (ongletActif !== "general") afficherTour(Number(ongletActif));
     }, 10000);
 
-    // Désabonnement à la fermeture
     window.addEventListener("beforeunload", () => {
       if (unsubscribeResultats) unsubscribeResultats();
       cacheChannel.close();
@@ -889,7 +853,6 @@
       <img src="Z6.png">
       <img src="Z7.png">
       <img src="Z8.png">
-      <!-- Duplication pour boucle infinie -->
       <img src="Z1.png">
       <img src="Z2.png">
       <img src="Z3.png">
@@ -898,7 +861,6 @@
       <img src="Z6.png">
       <img src="Z7.png">
       <img src="Z8.png">
-      <!-- Duplication pour boucle infinie -->
       <img src="Z1.png">
       <img src="Z2.png">
       <img src="Z3.png">
