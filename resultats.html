@@ -255,6 +255,14 @@
         startMs = globalCache.startMs;
         limites = globalCache.limites;
         coureursMap = globalCache.coureurs;
+
+        // 🔥 Réinitialiser les données locales si la course est réinitialisée
+        if (startMs === null) {
+          tours = {};
+          tousLesResultats = {};
+          totalParTour = {};
+        }
+
         currentTour = calculateCurrentTour(startMs, limites);
         recalculerDepartTours();
         rafraichir();
