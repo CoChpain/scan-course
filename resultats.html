@@ -206,7 +206,7 @@
         resultatsSnap.forEach(doc => {
           const data = doc.data();
           const ts = data.timestamp?.toDate?.()?.getTime?.() || data.timestamp;
-          const key = `${data.dossard}_${data.tour}_${ts}`;
+          const key = `${data.dossard}_${data.tour || 0}_${ts}`;
           globalCache.resultats[key] = data;
         });
 
@@ -261,10 +261,45 @@
           tours = {};
           tousLesResultats = {};
           totalParTour = {};
+        } else {
+          // 🔥 Mettre à jour les données locales depuis le cache
+          Object.entries(globalCache.resultats).forEach(([key, r]) => {
+            if (!r.tour || r.tour < 1 || r.tour > 10) {
+              // Gérer DNF/DNS
+              if (r.type === "DNF" || r.type === "DNS") {
+                const dossard = r.dossard;
+                const tour = calculateCurrentTour(startMs, limites);
+                if (!tours[tour]) tours[tour] = [];
+                const exists = tours[tour].some(item => item.dossard === dossard && item.type === r.type);
+                if (!exists) {
+                  tours[tour].push({ ...r, tour, horsDelai: false, timestamp: r.timestamp?.toDate?.()?.getTime?.() || Date.now() });
+                }
+                if (!tousLesResultats[dossard]) tousLesResultats[dossard] = [];
+                const existsInAll = tousLesResultats[dossard].some(item => item.dossard === dossard && item.type === r.type);
+                if (!existsInAll) {
+                  tousLesResultats[dossard].push({ ...r, tour, timestamp: r.timestamp?.toDate?.()?.getTime?.() || Date.now() });
+                }
+              }
+              return;
+            }
+            const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
+            if (!tours[r.tour]) tours[r.tour] = [];
+            const exists = tours[r.tour].some(item => `${item.dossard}_${item.tour}_${item.timestamp}` === key);
+            if (!exists) {
+              tours[r.tour].push({ ...r, timestamp: ts });
+            }
+            if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
+            const existsInAll = tousLesResultats[r.dossard].some(item => `${item.dossard}_${item.tour}_${item.timestamp}` === key);
+            if (!existsInAll) {
+              tousLesResultats[r.dossard].push({ ...r, timestamp: ts });
+            }
+          });
         }
 
         currentTour = calculateCurrentTour(startMs, limites);
         recalculerDepartTours();
+        processResultsData();
+        construireOnglets();
         rafraichir();
       }
     };
@@ -272,9 +307,25 @@
     // Charge tous les tours existants au démarrage
     async function loadAllTours() {
       try {
-        // Utilise le cache global pour éviter une lecture Firebase
         Object.entries(globalCache.resultats).forEach(([key, r]) => {
-          if (!r.tour || r.tour < 1 || r.tour > 10) return;
+          if (!r.tour || r.tour < 1 || r.tour > 10) {
+            // Gérer DNF/DNS
+            if (r.type === "DNF" || r.type === "DNS") {
+              const dossard = r.dossard;
+              const tour = calculateCurrentTour(startMs, limites);
+              if (!tours[tour]) tours[tour] = [];
+              const exists = tours[tour].some(item => item.dossard === dossard && item.type === r.type);
+              if (!exists) {
+                tours[tour].push({ ...r, tour, horsDelai: false, timestamp: r.timestamp?.toDate?.()?.getTime?.() || Date.now() });
+              }
+              if (!tousLesResultats[dossard]) tousLesResultats[dossard] = [];
+              const existsInAll = tousLesResultats[dossard].some(item => item.dossard === dossard && item.type === r.type);
+              if (!existsInAll) {
+                tousLesResultats[dossard].push({ ...r, tour, timestamp: r.timestamp?.toDate?.()?.getTime?.() || Date.now() });
+              }
+            }
+            return;
+          }
           const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
           if (!tours[r.tour]) tours[r.tour] = [];
           const exists = tours[r.tour].some(item => `${item.dossard}_${item.tour}_${item.timestamp}` === key);
@@ -301,14 +352,31 @@
     // Met à jour le cache périodiquement
     setInterval(updateGlobalCache, 60000);
 
-    // Écoute des changements en temps réel (uniquement pour les nouvelles données)
+    // Écoute des changements en temps réel (TOUS les résultats, y compris DNF/DNS)
     let unsubscribeResultats = null;
     unsubscribeResultats = onSnapshot(
-      query(collection(db, "resultats"), where("tour", ">=", 1), where("tour", "<=", 10), orderBy("timestamp", "asc")),
+      query(collection(db, "resultats"), orderBy("timestamp", "asc")),
       snap => {
         snap.docChanges().forEach(change => {
           const r = change.doc.data();
-          if (!r.tour || r.tour < 1 || r.tour > 10) return;
+          if (!r.tour || r.tour < 1 || r.tour > 10) {
+            // Gérer les DNF/DNS (qui n'ont pas de tour)
+            if (r.type === "DNF" || r.type === "DNS") {
+              const dossard = r.dossard;
+              const tour = calculateCurrentTour(startMs, limites);
+              if (!tours[tour]) tours[tour] = [];
+              const exists = tours[tour].some(item => item.dossard === dossard && item.type === r.type);
+              if (!exists) {
+                tours[tour].push({ ...r, tour, horsDelai: false, timestamp: r.timestamp?.toDate?.()?.getTime?.() || Date.now() });
+              }
+              if (!tousLesResultats[dossard]) tousLesResultats[dossard] = [];
+              const existsInAll = tousLesResultats[dossard].some(item => item.dossard === dossard && item.type === r.type);
+              if (!existsInAll) {
+                tousLesResultats[dossard].push({ ...r, tour, timestamp: r.timestamp?.toDate?.()?.getTime?.() || Date.now() });
+              }
+            }
+            return;
+          }
 
           const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
           const key = `${r.dossard}_${r.tour}_${ts}`;
@@ -669,6 +737,9 @@
        🔥 Traite les données des résultats
     --------------------------------------------*/
     function processResultsData() {
+      // Réinitialiser les totaux par tour
+      totalParTour = {};
+
       // Hors délais
       Object.keys(tours).forEach(t => {
         const tour = Number(t);
@@ -745,6 +816,12 @@
       if (ongletActif === "general") afficherGeneral();
       else afficherTour(Number(ongletActif));
     }
+
+    // Rafraîchissement forcé toutes les 10 secondes (pour garantir la synchronisation)
+    setInterval(() => {
+      if (ongletActif === "general") afficherGeneral();
+      else if (ongletActif !== "general") afficherTour(Number(ongletActif));
+    }, 10000);
 
     // Désabonnement à la fermeture
     window.addEventListener("beforeunload", () => {
