@@ -11,70 +11,57 @@
       font-family: Arial;
       text-align: center;
     }
-
     .columns {
       display: grid;
       gap: 10px;
       width: 98%;
       margin: auto;
     }
-
     .cols-1 { grid-template-columns: repeat(1, 1fr); }
     .cols-2 { grid-template-columns: repeat(2, 1fr); }
     .cols-3 { grid-template-columns: repeat(3, 1fr); }
     .cols-4 { grid-template-columns: repeat(4, 1fr); }
-
     @media (max-width: 768px) {
       .cols-4, .cols-3, .cols-2, .cols-1 {
         grid-template-columns: repeat(1, 1fr);
       }
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
       border: 2px solid #555;
     }
-
     th, td {
       border: 1px solid #333;
       padding: 3px;
     }
-
     th {
       background: #111;
     }
-
     tr:nth-child(even) {
       background: rgba(255, 255, 255, 0.05);
     }
-
     .red {
       color: red;
       font-weight: bold;
     }
-
     .femme {
       color: #ff66cc;
       font-weight: bold;
     }
-
     .fade {
       animation: fade 0.4s;
     }
-
     @keyframes fade {
       from { opacity: 0; }
       to { opacity: 1; }
     }
-
     button {
       margin: 4px;
       padding: 8px 12px;
       font-size: 14px;
     }
-
     .partners-slider {
       position: fixed;
       bottom: 0;
@@ -85,25 +72,21 @@
       border-top: 2px solid #00ffcc;
       z-index: 999;
     }
-
     .partners-track {
       display: flex;
       width: max-content;
       animation: scroll 30s linear infinite;
     }
-
     .partners-track img {
       height: 80px;
       margin: 10px 40px;
       object-fit: contain;
       flex-shrink: 0;
     }
-
     @keyframes scroll {
       from { transform: translateX(0); }
       to { transform: translateX(-50%); }
     }
-
     body {
       padding-bottom: 90px;
     }
@@ -196,7 +179,7 @@
           const data = doc.data();
           const ts = data.timestamp?.toDate?.()?.getTime?.() || data.timestamp;
           const key = data.type === "DNF" || data.type === "DNS"
-            ? `${data.dossard}_${data.type}`
+            ? `${data.dossard}_${data.type}_T${data.tour || 1}`
             : `${data.dossard}_${data.tour}`;
           globalCache.resultats[key] = data;
         });
@@ -237,6 +220,7 @@
     limites = globalCache.limites;
     coureursMap = globalCache.coureurs;
 
+    // 🔥 CORRECTION: Gérer les suppressions de coureurs
     cacheChannel.onmessage = (e) => {
       if (e.data.type === 'cache-updated') {
         globalCache = e.data.data;
@@ -251,31 +235,25 @@
         } else {
           Object.entries(globalCache.resultats).forEach(([key, r]) => {
             const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
-           const uniqueKey = r.type === "DNF" || r.type === "DNS"
-  ? `${r.dossard}_${r.type}_T${r.tour || currentTour}`  // Ex: "123_DNF_T3"
-  : `${r.dossard}_${r.tour}`;
+            const uniqueKey = r.type === "DNF" || r.type === "DNS"
+              ? `${r.dossard}_${r.type}_T${r.tour || currentTour}`
+              : `${r.dossard}_${r.tour}`;
 
             if (r.type === "DNF" || r.type === "DNS") {
-              
-let tour = Number(r.tour);
-
-if (!tour || tour < 1 || tour > 10) {
-  console.warn("DNS/DNF sans tour :", r);
-
-  // DNS/DNF sans tour => tour courant
-  tour = currentTour || 1;
-}
-
+              let tour = Number(r.tour);
+              if (!tour || tour < 1 || tour > 10) {
+                tour = currentTour || 1;
+              }
               if (!tours[tour]) tours[tour] = [];
               const exists = tours[tour].some(item =>
-                (item.type === r.type && item.dossard === r.dossard)
+                (item.type === r.type && item.dossard === r.dossard && item.tour === tour)
               );
               if (!exists) {
                 tours[tour].push({ ...r, tour, horsDelai: false, timestamp: ts });
               }
               if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
               const existsInAll = tousLesResultats[r.dossard].some(item =>
-                (item.type === r.type && item.dossard === r.dossard)
+                (item.type === r.type && item.dossard === r.dossard && item.tour === tour)
               );
               if (!existsInAll) {
                 tousLesResultats[r.dossard].push({ ...r, tour, timestamp: ts });
@@ -317,21 +295,21 @@ if (!tour || tour < 1 || tour > 10) {
             const r = change.doc.data();
             const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
             const uniqueKey = r.type === "DNF" || r.type === "DNS"
-              ? `${r.dossard}_${r.type}`
+              ? `${r.dossard}_${r.type}_T${r.tour || currentTour}`
               : `${r.dossard}_${r.tour}`;
 
             if (change.type === "removed") {
               if (r.type === "DNF" || r.type === "DNS") {
-                const tour = r.tour;
-                if (!tour || tour < 1 || tour > 10) return;
+                const tour = r.tour || currentTour;
+                if (tour < 1 || tour > 10) return;
                 if (tours[tour]) {
                   tours[tour] = tours[tour].filter(item =>
-                    !(item.type === r.type && item.dossard === r.dossard)
+                    !(item.type === r.type && item.dossard === r.dossard && item.tour === tour)
                   );
                 }
                 if (tousLesResultats[r.dossard]) {
                   tousLesResultats[r.dossard] = tousLesResultats[r.dossard].filter(item =>
-                    !(item.type === r.type && item.dossard === r.dossard)
+                    !(item.type === r.type && item.dossard === r.dossard && item.tour === tour)
                   );
                 }
               } else {
@@ -349,17 +327,17 @@ if (!tour || tour < 1 || tour > 10) {
               delete globalCache.resultats[uniqueKey];
             } else {
               if (r.type === "DNF" || r.type === "DNS") {
-                const tour = r.tour;
-                if (!tour || tour < 1 || tour > 10) return;
+                const tour = r.tour || currentTour;
+                if (tour < 1 || tour > 10) return;
                 if (!tours[tour]) tours[tour] = [];
                 tours[tour] = tours[tour].filter(item =>
-                  !(item.type === r.type && item.dossard === r.dossard)
+                  !(item.type === r.type && item.dossard === r.dossard && item.tour === tour)
                 );
                 tours[tour].push({ ...r, tour, horsDelai: false, timestamp: ts });
 
                 if (!tousLesResultats[r.dossard]) tousLesResultats[r.dossard] = [];
                 tousLesResultats[r.dossard] = tousLesResultats[r.dossard].filter(item =>
-                  !(item.type === r.type && item.dossard === r.dossard)
+                  !(item.type === r.type && item.dossard === r.dossard && item.tour === tour)
                 );
                 tousLesResultats[r.dossard].push({ ...r, tour, timestamp: ts });
               } else {
@@ -391,41 +369,47 @@ if (!tour || tour < 1 || tour > 10) {
       }
     );
 
+    // 🔥 CORRECTION: Gérer les suppressions de coureurs
     onSnapshot(collection(db, "coureurs"), snap => {
       snap.docChanges().forEach(change => {
         const data = change.doc.data();
-        if (!data.dossard || Number(data.dossard) <= 0) return;
-        globalCache.coureurs[data.dossard] = data;
-        coureursMap[data.dossard] = data;
+        if (change.type === "removed") {
+          delete globalCache.coureurs[data.dossard];
+          delete coureursMap[data.dossard];
+        } else if (data.dossard && Number(data.dossard) > 0) {
+          globalCache.coureurs[data.dossard] = data;
+          coureursMap[data.dossard] = data;
+        }
       });
       saveGlobalCache();
       construireOnglets();
       rafraichir();
     });
 
- onSnapshot(doc(db, "course", "depart"), snap => {
-  if (snap.exists()) {
-    startMs = snap.data().startMs;
-    globalCache.startMs = startMs;
-    saveGlobalCache();
-    recalculerDepartTours();
-    currentTour = calculateCurrentTour(startMs, limites);
-    rafraichir();
-  } else {
-    // ⚠️ Si le départ est supprimé (réinitialisation), réinitialiser le cache local
-    startMs = null;
-    globalCache.startMs = null;
-    globalCache.resultats = {};  // <-- Réinitialiser les résultats
-    globalCache.coureurs = {};   // <-- Réinitialiser les coureurs
-    saveGlobalCache();
-    tours = {};
-    tousLesResultats = {};
-    totalParTour = {};
-    recalculerDepartTours();
-    currentTour = 1;
-    rafraichir();
-  }
-});
+    // 🔥 CORRECTION: Réinitialiser coureursMap quand startMs = null
+    onSnapshot(doc(db, "course", "depart"), snap => {
+      if (snap.exists()) {
+        startMs = snap.data().startMs;
+        globalCache.startMs = startMs;
+        saveGlobalCache();
+        recalculerDepartTours();
+        currentTour = calculateCurrentTour(startMs, limites);
+        rafraichir();
+      } else {
+        startMs = null;
+        globalCache.startMs = null;
+        globalCache.resultats = {};
+        globalCache.coureurs = {};
+        coureursMap = {};  // 🔥 CORRECTION: Réinitialiser aussi coureursMap
+        saveGlobalCache();
+        tours = {};
+        tousLesResultats = {};
+        totalParTour = {};
+        recalculerDepartTours();
+        currentTour = 1;
+        rafraichir();
+      }
+    });
 
     onSnapshot(doc(db, "course", "limitesTours"), snap => {
       if (snap.exists()) {
@@ -523,18 +507,16 @@ if (!tour || tour < 1 || tour > 10) {
       ongletActif = tour;
       recalculerDepartTours();
 
-      // Récupérer tous les résultats pour ce tour
       let liste = (tours[tour] || []).filter(r => {
         const coureur = coureursMap[r.dossard];
         return coureur !== undefined;
       });
 
-      // Supprimer les doublons
       const uniqueListe = [];
       const seen = new Set();
       liste.forEach(r => {
         const key = r.type === "DNF" || r.type === "DNS"
-          ? `${r.dossard}_${r.type}`
+          ? `${r.dossard}_${r.type}_T${r.tour || 1}`
           : `${r.dossard}_${r.tour}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -543,29 +525,18 @@ if (!tour || tour < 1 || tour > 10) {
       });
       liste = uniqueListe;
 
-      // Trier la liste : arrivés, hors délai, DNF, DNS
       liste.sort((a, b) => {
-        // 1. Arrivés (pas de type, pas horsDelai)
         if (!a.type && !a.horsDelai && (b.type || b.horsDelai)) return -1;
         if (!b.type && !b.horsDelai && (a.type || a.horsDelai)) return 1;
-
-        // 2. Hors délai
         if (a.horsDelai && !b.horsDelai) return 1;
         if (b.horsDelai && !a.horsDelai) return -1;
-
-        // 3. DNF
         if (a.type === "DNF" && b.type !== "DNF") return 1;
         if (b.type === "DNF" && a.type !== "DNF") return -1;
-
-        // 4. DNS
         if (a.type === "DNS" && b.type !== "DNS") return 1;
         if (b.type === "DNS" && a.type !== "DNS") return -1;
-
-        // 5. Tri par dossard si même statut
         return (a.dossard || 0) - (b.dossard || 0);
       });
 
-      // Calculer le total de coureurs pour ce tour
       let total = 0;
       if (tour === 1) {
         total = Object.values(coureursMap)
@@ -615,13 +586,13 @@ if (!tour || tour < 1 || tour > 10) {
             ? "red fade"
             : (c.sexe === "F" || c.categorie === "F" ? "femme fade" : "fade");
 
-          // Afficher le temps ou "DNS"/"DNF" en rouge
+          // 🔥 CORRECTION: Afficher le tour pour DNS/DNF
           let labelTemps;
           if (r.type === "DNF") {
-  labelTemps = `DNF T${r.tour || '?'}`;  // Affiche "DNF T3" par exemple
-} else if (r.type === "DNS") {
-  labelTemps = `DNS T${r.tour || '?'}`;  // Affiche "DNS T1" par exemple
-} else {
+            labelTemps = `DNF T${r.tour || '?'}`;
+          } else if (r.type === "DNS") {
+            labelTemps = `DNS T${r.tour || '?'}`;
+          } else {
             labelTemps = tempsTour !== null ? formatTemps(tempsTour) : "--:--:--";
           }
 
@@ -648,7 +619,6 @@ if (!tour || tour < 1 || tour > 10) {
       Object.values(coureursMap).forEach(c => {
         const scans = tousLesResultats[c.dossard] || [];
 
-        // 🔹 1. Dernier tour VALIDÉ (sans DNS/DNF)
         const toursValides = scans
           .filter(r => !r.type)
           .map(r => r.tour);
@@ -657,25 +627,21 @@ if (!tour || tour < 1 || tour > 10) {
           ? Math.max(...toursValides)
           : 0;
 
-        // 🔹 2. Détection abandon (DNS ou DNF) avec le bon tour
         let abandon = null;
         scans.forEach(r => {
           if (r.type === "DNS" || r.type === "DNF") {
-            // On garde le DNS/DNF avec le tour le plus élevé
             if (!abandon || r.tour > abandon.tour) {
               abandon = r;
             }
           }
         });
 
-        // 🔹 3. Rang basé sur dernier tour validé
         let rang = 9999;
         if (lastValidTour > 0 && tours[lastValidTour]) {
           const idx = tours[lastValidTour].findIndex(r => r.dossard == c.dossard);
           if (idx !== -1) rang = idx + 1;
         }
 
-        // 🔹 4. Hors délai
         let horsDelaiTour = null;
         scans.forEach(scan => {
           if (scan.horsDelai && !horsDelaiTour) {
@@ -686,11 +652,9 @@ if (!tour || tour < 1 || tour > 10) {
         let statutTxt = "", statutOrdre = 0;
         let tourAtteint = lastValidTour;
 
-        // 🔴 CAS PRIORITAIRE : DNS / DNF
         if (abandon) {
           const tourAbandon = abandon.tour;
-          tourAtteint = tourAbandon; // Mise à jour pour afficher le bon tour
-
+          tourAtteint = tourAbandon;
           if (abandon.type === "DNF") {
             statutTxt = `DNF T${tourAbandon}`;
             statutOrdre = 3;
@@ -699,12 +663,10 @@ if (!tour || tour < 1 || tour > 10) {
             statutOrdre = 4;
           }
         }
-        // 🟠 Hors délai
         else if (horsDelaiTour) {
           statutTxt = `Hors délai T${horsDelaiTour}`;
           statutOrdre = 2;
         }
-        // 🟢 En course
         else {
           if (tourAtteint === 0 && startMs) {
             tourAtteint = 1;
@@ -726,7 +688,6 @@ if (!tour || tour < 1 || tour > 10) {
         });
       });
 
-      // 🔹 Suppression doublons
       const uniqueClassement = [];
       const seenClassement = new Set();
       classement.forEach(r => {
@@ -737,7 +698,6 @@ if (!tour || tour < 1 || tour > 10) {
       });
       classement = uniqueClassement;
 
-      // 🔹 Tri
       classement.sort((a, b) => {
         if (b.tourAtteint !== a.tourAtteint)
           return b.tourAtteint - a.tourAtteint;
@@ -746,7 +706,6 @@ if (!tour || tour < 1 || tour > 10) {
         return a.rang - b.rang;
       });
 
-      // 🔹 Affichage
       const nb = classement.length;
       const cols = getNombreColonnes(nb);
       let html = `<h2>Classement général</h2><div class="columns cols-${cols}">`;
@@ -792,7 +751,6 @@ if (!tour || tour < 1 || tour > 10) {
     function processResultsData() {
       totalParTour = {};
 
-      // Marquer les coureurs hors délai
       Object.keys(tours).forEach(t => {
         const tour = Number(t);
         if (tour < 1 || tour > 10) return;
@@ -808,7 +766,6 @@ if (!tour || tour < 1 || tour > 10) {
         });
       });
 
-      // Mettre à jour le statut des coureurs hors délai ou DNF/DNS
       Object.keys(tours).forEach(t => {
         if (t < 1 || t > 10) return;
         tours[t].forEach(r => {
@@ -823,7 +780,6 @@ if (!tour || tour < 1 || tour > 10) {
         });
       });
 
-      // Calculer le total de coureurs par tour
       Object.keys(limites).forEach(key => {
         const t = Number(key.replace("t", ""));
         if (!t || t < 1 || t > 10) return;
@@ -854,7 +810,6 @@ if (!tour || tour < 1 || tour > 10) {
       cacheChannel.close();
     });
 
-    // Initialiser l'affichage
     setTimeout(() => {
       processResultsData();
       construireOnglets();
