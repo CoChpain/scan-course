@@ -644,57 +644,60 @@ async function getDernierTourCommence(dossard) {
       document.getElementById("dossard-dns").value = "";
     };
 
-    // 🔥 CORRECTION: Ajouter tour: currentTour pour DNS/DNF
-    async function changerStatut(dossard, type) {
-      const coureur = globalCache.coureurs[dossard];
-      if (!coureur) {
-        feedback("❌ Dossard inconnu", "red");
-        return;
-      }
+// 🔥 CORRECTION : Utiliser le dernier tour COMMENCÉ pour DNS/DNF
+async function changerStatut(dossard, type) {
+  const coureur = globalCache.coureurs[dossard];
+  if (!coureur) {
+    feedback("❌ Dossard inconnu", "red");
+    return;
+  }
 
-      if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-        feedback(`⛔ Déjà ${coureur.statut}`, "red");
-        return;
-      }
+  if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+    feedback(`⛔ Déjà ${coureur.statut}`, "red");
+    return;
+  }
 
-      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        feedback("❌ Dossard inconnu", "red");
-        return;
-      }
-      const coureurDoc = snap.docs[0];
-      await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: type });
-      globalCache.coureurs[dossard].statut = type;
-      saveGlobalCache();
+  // 🔥 NOUVEAU : Récupérer le dernier tour commencé
+  const dernierTour = await getDernierTourCommence(dossard);
 
-      // 🔥 CORRECTION: Ajouter tour: currentTour
-      const currentTourValue = calculateCurrentTour(startMs, limites);
-      await addDoc(collection(db, "resultats"), {
-        dossard,
-        type,
-        tour: currentTourValue,  // 🔥 AJOUT CORRIGÉ
-        source: "MANUEL",
-        timestamp: serverTimestamp()
-      });
+  const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+  const snap = await getDocs(q);
+  if (snap.empty) {
+    feedback("❌ Dossard inconnu", "red");
+    return;
+  }
+  const coureurDoc = snap.docs[0];
+  await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: type });
+  globalCache.coureurs[dossard].statut = type;
+  saveGlobalCache();
 
-      if (currentTourValue > 0) {
-        const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTourValue}`);
-        await setDoc(lockRef, {
-          dossard: dossard,
-          tour: currentTourValue,
-          createdAt: serverTimestamp()
-        });
-        globalCache.locks[`${dossard}_t${currentTourValue}`] = true;
-        saveGlobalCache();
-      }
+  // 🔥 CORRECTION : Utiliser dernierTour au lieu de currentTour
+  await addDoc(collection(db, "resultats"), {
+    dossard,
+    type,
+    tour: dernierTour,  // 🔥 Utiliser le dernier tour COMMENCÉ
+    source: "MANUEL",
+    timestamp: serverTimestamp()
+  });
 
-      feedback(
-        type === "DNF" ? `🏳️ DNF ${dossard}` : `🚫 DNS ${dossard}`,
-        "orange"
-      );
-      beepError.play();
-    }
+  // Créer un verrou pour le dernier tour
+  if (dernierTour > 0) {
+    const lockRef = doc(db, "scansLocks", `${dossard}_t${dernierTour}`);
+    await setDoc(lockRef, {
+      dossard: dossard,
+      tour: dernierTour,
+      createdAt: serverTimestamp()
+    });
+    globalCache.locks[`${dossard}_t${dernierTour}`] = true;
+    saveGlobalCache();
+  }
+
+  feedback(
+    type === "DNF" ? `🏳️ DNF ${dossard} T${dernierTour}` : `🚫 DNS ${dossard} T${dernierTour}`,
+    "orange"
+  );
+  beepError.play();
+}
 
     window.addEventListener("beforeunload", () => {
       if (scanner) {
