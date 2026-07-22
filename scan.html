@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SCAN COURSE</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -290,7 +290,7 @@
       return (Date.now() - startMs) > cumul * 60000;
     }
 
-    // 🔥 NOUVELLE FONCTION : Récupère le dernier tour COMMENCÉ par un coureur (retourne 1 si aucun historique)
+    // 🔥 CORRECTION: getDernierTourCommence retourne 0 si aucun tour
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
@@ -335,8 +335,7 @@
         }
       }
 
-      // 🔥 CORRECTION : Si AUCUN tour trouvé → T1 (n'a pas commencé la course)
-      return dernierTour > 0 ? dernierTour : 1;
+      return dernierTour; // 🔥 CORRECTION: retourne 0 si aucun tour
     }
 
     async function traiterArrivee(dossard, source) {
@@ -408,16 +407,12 @@
         return;
       }
 
-      // 🔥 CORRECTION : Utiliser une transaction avec vérification double
       try {
         await runTransaction(db, async (transaction) => {
-          // 1. Vérifier le verrou
           const lockDoc = await transaction.get(lockRef);
           if (lockDoc.exists) {
             throw new Error("LOCK_EXISTS");
           }
-
-          // 2. Vérifier qu'il n'y a pas déjà un scan pour ce dossard/tour
           const scanQuery = query(
             collection(db, "resultats"),
             where("dossard", "==", dossard),
@@ -427,8 +422,6 @@
           if (!scanSnap.empty) {
             throw new Error("SCAN_EXISTS");
           }
-
-          // 3. Créer le verrou
           transaction.set(lockRef, {
             dossard, tour: prochainTour, source, createdAt: serverTimestamp()
           });
@@ -630,7 +623,7 @@
       document.getElementById("dossard-dns").value = "";
     };
 
-    // 🔥 FONCTION CORRIGÉE : changerStatut avec vérification DNS/DNF existant et tour correct
+    // 🔥 FONCTION CORRIGÉE : changerStatut avec tour = dernierTour + 1
     async function changerStatut(dossard, type) {
       const coureur = globalCache.coureurs[dossard];
       if (!coureur) {
@@ -667,6 +660,7 @@
 
       // 🔥 UTILISER getDernierTourCommence pour avoir le bon tour
       const dernierTour = await getDernierTourCommence(dossard);
+      const tour = Math.min(10, dernierTour + 1); // 🔥 CORRECTION: tour = dernierTour + 1 (plafonné à 10)
 
       const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
       const snap = await getDocs(q);
@@ -698,27 +692,27 @@
           transaction.set(newDocRef, {
             dossard,
             type,
-            tour: dernierTour,  // 🔥 Utiliser le dernier tour COMMENCÉ
+            tour: tour,  // 🔥 CORRECTION: Utiliser le tour calculé
             source: "MANUEL",
             timestamp: serverTimestamp()
           });
 
-          // Créer le verrou
-          const lockRef = doc(db, "scansLocks", `${dossard}_t${dernierTour}`);
+          // Créer le verrou avec le BON TOUR
+          const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`); // 🔥 CORRECTION: verrou avec le bon tour
           transaction.set(lockRef, {
             dossard: dossard,
-            tour: dernierTour,
+            tour: tour,
             createdAt: serverTimestamp()
           });
         });
 
         // Mettre à jour le cache local
         globalCache.coureurs[dossard].statut = type;
-        globalCache.locks[`${dossard}_t${dernierTour}`] = true;
+        globalCache.locks[`${dossard}_t${tour}`] = true;
         saveGlobalCache();
 
         feedback(
-          type === "DNF" ? `🏳️ DNF ${dossard} T${dernierTour}` : `🚫 DNS ${dossard} T${dernierTour}`,
+          type === "DNF" ? `🏳️ DNF ${dossard} T${tour}` : `🚫 DNS ${dossard} T${tour}`,
           "orange"
         );
         beepError.play();
