@@ -305,6 +305,53 @@
       return (Date.now() - startMs) > cumul * 60000;
     }
 
+    // 🔥 NOUVELLE FONCTION : Récupère le dernier tour COMMENCÉ par un coureur
+async function getDernierTourCommence(dossard) {
+  // 1. Chercher dans le cache global
+  let dernierTour = 0;
+  for (const key in globalCache.scans) {
+    if (key.startsWith(`${dossard}_t`)) {
+      const tour = parseInt(key.split('_t')[1]);
+      // On ignore les DNS/DNF, on veut les tours normaux
+      if (tour > dernierTour && !key.includes("_DNF") && !key.includes("_DNS")) {
+        dernierTour = tour;
+      }
+    }
+  }
+  for (const key in globalCache.locks) {
+    if (key.startsWith(`${dossard}_t`)) {
+      const tour = parseInt(key.split('_t')[1]);
+      if (tour > dernierTour) {
+        dernierTour = tour;
+      }
+    }
+  }
+
+  // 2. Si pas trouvé dans le cache, chercher dans Firestore
+  if (dernierTour === 0) {
+    try {
+      const scans = await getDocs(query(
+        collection(db, "resultats"),
+        where("dossard", "==", dossard)
+      ));
+      scans.forEach(doc => {
+        const data = doc.data();
+        // On ne prend que les scans normaux (pas DNF/DNS)
+        if (data.tour && !data.type) {
+          if (data.tour > dernierTour) {
+            dernierTour = data.tour;
+          }
+        }
+      });
+    } catch (e) {
+      console.error("Erreur getDernierTourCommence:", e);
+    }
+  }
+
+  // 3. Si toujours 0, utiliser currentTour
+  return dernierTour > 0 ? dernierTour : currentTour;
+}
+
     async function traiterArrivee(dossard, source) {
       if (!startMs) {
         feedback("⛔ Course non démarrée", "red");
