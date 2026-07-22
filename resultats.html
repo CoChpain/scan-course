@@ -403,22 +403,29 @@ if (!tour || tour < 1 || tour > 10) {
       rafraichir();
     });
 
-    onSnapshot(doc(db, "course", "depart"), snap => {
-      if (snap.exists()) {
-        startMs = snap.data().startMs;
-        globalCache.startMs = startMs;
-        saveGlobalCache();
-        recalculerDepartTours();
-        currentTour = calculateCurrentTour(startMs, limites);
-        rafraichir();
-      } else {
-        startMs = null;
-        globalCache.startMs = null;
-        saveGlobalCache();
-        recalculerDepartTours();
-        rafraichir();
-      }
-    });
+ onSnapshot(doc(db, "course", "depart"), snap => {
+  if (snap.exists()) {
+    startMs = snap.data().startMs;
+    globalCache.startMs = startMs;
+    saveGlobalCache();
+    recalculerDepartTours();
+    currentTour = calculateCurrentTour(startMs, limites);
+    rafraichir();
+  } else {
+    // ⚠️ Si le départ est supprimé (réinitialisation), réinitialiser le cache local
+    startMs = null;
+    globalCache.startMs = null;
+    globalCache.resultats = {};  // <-- Réinitialiser les résultats
+    globalCache.coureurs = {};   // <-- Réinitialiser les coureurs
+    saveGlobalCache();
+    tours = {};
+    tousLesResultats = {};
+    totalParTour = {};
+    recalculerDepartTours();
+    currentTour = 1;
+    rafraichir();
+  }
+});
 
     onSnapshot(doc(db, "course", "limitesTours"), snap => {
       if (snap.exists()) {
