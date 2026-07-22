@@ -1360,104 +1360,106 @@
     };
 
     window.resetResultats = async function() {
-      if (!confirm("⚠️ Supprimer TOUS les résultats ?")) return;
-      if (!confirm("⚠️ Irréversible.")) return;
-      if (!confirm("⚠️ Dernière confirmation.")) return;
-      try {
-        const batch = writeBatch(db);
+  if (!confirm("⚠️ Supprimer TOUS les résultats ?")) return;
+  if (!confirm("⚠️ Irréversible.")) return;
+  if (!confirm("⚠️ Dernière confirmation.")) return;
+  try {
+    const batch = writeBatch(db);
 
-        const locksSnap = await getDocs(collection(db, "scansLocks"));
-        locksSnap.forEach(docu => batch.delete(docu.ref));
+    const locksSnap = await getDocs(collection(db, "scansLocks"));
+    locksSnap.forEach(docu => batch.delete(docu.ref));
 
-        const resultatsSnap = await getDocs(collection(db, "resultats"));
-        resultatsSnap.forEach(docu => batch.delete(docu.ref));
+    const resultatsSnap = await getDocs(collection(db, "resultats"));
+    resultatsSnap.forEach(docu => batch.delete(docu.ref));
 
-        const coureursSnap = await getDocs(collection(db, "coureurs"));
-        coureursSnap.forEach(docu => batch.update(docu.ref, { statut: "OK" }));
+    // ❌ NE PAS réinitialiser les coureurs ici (ils restent avec leur statut actuel)
+    // coureursSnap.forEach(docu => batch.update(docu.ref, { statut: "OK" }));
 
-        await batch.commit();
+    await batch.commit();
 
-        globalCache.locks = {};
-        globalCache.scans = {};
-        Object.keys(globalCache.coureurs).forEach(dossard => {
-          globalCache.coureurs[dossard].statut = "OK";
-        });
-        saveGlobalCache();
+    globalCache.locks = {};
+    globalCache.scans = {};
+    // ❌ NE PAS réinitialiser globalCache.coureurs
+    saveGlobalCache();
 
-        runnerStatuses = {};
-        for (let i = 1; i <= 160; i++) {
-          const btn = document.getElementById(`dossard-btn-${i}`);
-          if (btn) {
-            btn.classList.remove("scanned", "banned", "valid", "invalid", "waiting");
-            btn.disabled = !startMs;
-          }
-        }
-        document.getElementById("reset-resultats-status").innerHTML = "🗑️ Résultats supprimés.";
-        document.getElementById("reset-resultats-status").className = "message success";
-      } catch (error) {
-        document.getElementById("reset-resultats-status").innerHTML = `❌ Erreur : ${error.message}`;
-        document.getElementById("reset-resultats-status").className = "message error";
+    runnerStatuses = {};
+    for (let i = 1; i <= 160; i++) {
+      const btn = document.getElementById(`dossard-btn-${i}`);
+      if (btn) {
+        btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
+        btn.disabled = !startMs;
       }
-    };
+    }
+    document.getElementById("reset-resultats-status").innerHTML = "🗑️ Résultats supprimés.";
+    document.getElementById("reset-resultats-status").className = "message success";
+  } catch (error) {
+    document.getElementById("reset-resultats-status").innerHTML = `❌ Erreur : ${error.message}`;
+    document.getElementById("reset-resultats-status").className = "message error";
+  }
+};
 
     window.resetCompleteCourse = async function() {
-      if (!confirm("⚠️ Réinitialiser COMPLÈTEMENT la course ? Tous les coureurs, résultats, verrous et le chrono seront réinitialisés.")) return;
-      if (!confirm("⚠️ Cette action est IRRÉVERSIBLE.")) return;
-      if (!confirm("⚠️ Dernière confirmation.")) return;
+  if (!confirm("⚠️ Réinitialiser COMPLÈTEMENT la course ? Tous les coureurs, résultats, verrous et le chrono seront réinitialisés.")) return;
+  if (!confirm("⚠️ Cette action est IRRÉVERSIBLE.")) return;
+  if (!confirm("⚠️ Dernière confirmation.")) return;
 
-      try {
-        const batch = writeBatch(db);
+  try {
+    const batch = writeBatch(db);
 
-        await setDoc(doc(db, "course", "depart"), { startMs: null }, { merge: true });
-        batch.update(doc(db, "course", "depart"), { startMs: null });
+    // 1. Réinitialiser le départ
+    batch.set(doc(db, "course", "depart"), { startMs: null }, { merge: true });
 
-        const locksSnap = await getDocs(collection(db, "scansLocks"));
-        locksSnap.forEach(docu => batch.delete(docu.ref));
+    // 2. Supprimer TOUS les verrous
+    const locksSnap = await getDocs(collection(db, "scansLocks"));
+    locksSnap.forEach(docu => batch.delete(docu.ref));
 
-        const resultatsSnap = await getDocs(collection(db, "resultats"));
-        resultatsSnap.forEach(docu => batch.delete(docu.ref));
+    // 3. Supprimer TOUS les résultats
+    const resultatsSnap = await getDocs(collection(db, "resultats"));
+    resultatsSnap.forEach(docu => batch.delete(docu.ref));
 
-        const coureursSnap = await getDocs(collection(db, "coureurs"));
-        coureursSnap.forEach(docu => batch.update(docu.ref, { statut: "OK" }));
+    // 4. ⚠️ SUPRIMER (pas juste réinitialiser) TOUS les coureurs
+    const coureursSnap = await getDocs(collection(db, "coureurs"));
+    coureursSnap.forEach(docu => batch.delete(docu.ref));
 
-        await batch.commit();
+    await batch.commit();
 
-        startMs = null;
-        currentTour = 0;
-        lastTourStartTime = null;
-        globalCache.locks = {};
-        globalCache.scans = {};
-        globalCache.startMs = null;
-        Object.keys(globalCache.coureurs).forEach(dossard => {
-          globalCache.coureurs[dossard].statut = "OK";
-        });
-        saveGlobalCache();
-        runnerStatuses = {};
-
-        afficherChrono();
-        updateChronoButtonState();
-
-        for (let i = 1; i <= 160; i++) {
-          const btn = document.getElementById(`dossard-btn-${i}`);
-          if (btn) {
-            btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
-            btn.disabled = true;
-            btn.title = "Chrono non lancé";
-          }
-        }
-
-        document.getElementById("reset-course-status").innerHTML = "🔄 Course complètement réinitialisée !";
-        document.getElementById("reset-course-status").className = "message success";
-
-        setTimeout(() => {
-          updateDossardButtonsState();
-        }, 1000);
-
-      } catch (error) {
-        document.getElementById("reset-course-status").innerHTML = `❌ Erreur : ${error.message}`;
-        document.getElementById("reset-course-status").className = "message error";
-      }
+    // 5. Réinitialiser le cache local COMPLÈTEMENT
+    startMs = null;
+    currentTour = 0;
+    lastTourStartTime = null;
+    runnerStatuses = {};
+    globalCache = {
+      locks: {},
+      scans: {},
+      coureurs: {},  // <-- Réinitialiser complètement (pas juste le statut)
+      limites: globalCache.limites || { t1:40, t2:37, t3:34, t4:31, t5:28, t6:25, t7:22, t8:19, t9:16, t10:13 },
+      startMs: null,
+      lastUpdated: 0
     };
+    saveGlobalCache();
+
+    // 6. Mettre à jour l'UI
+    afficherChrono();
+    updateChronoButtonState();
+
+    for (let i = 1; i <= 160; i++) {
+      const btn = document.getElementById(`dossard-btn-${i}`);
+      if (btn) {
+        btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
+        btn.disabled = true;
+        btn.title = "Chrono non lancé";
+      }
+    }
+
+    document.getElementById("reset-course-status").innerHTML = "🔄 Course complètement réinitialisée !";
+    document.getElementById("reset-course-status").className = "message success";
+
+    setTimeout(() => updateDossardButtonsState(), 1000);
+  } catch (error) {
+    document.getElementById("reset-course-status").innerHTML = `❌ Erreur : ${error.message}`;
+    document.getElementById("reset-course-status").className = "message error";
+  }
+};
 
     window.resetLocalCache = function() {
       if (!confirm("⚠️ Réinitialiser le cache local ? Cela peut résoudre des incohérences d'affichage.")) return;
