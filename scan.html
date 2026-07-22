@@ -674,6 +674,7 @@
       await addDoc(collection(db, "resultats"), {
         dossard,
         type,
+        tour: currentTour,  // <-- AJOUTER CECI
         source: "MANUEL",
         timestamp: serverTimestamp()
       });
