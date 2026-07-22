@@ -528,22 +528,26 @@
       });
       liste = uniqueListe;
 
-      // Filtrer les coureurs éliminés dans les tours précédents
-      liste = liste.filter(r => {
-        if (r.type === "DNF" || r.type === "DNS") return true;
-        if (r.horsDelai) return true;
-        return true;
-      });
-
       // Trier la liste : arrivés, hors délai, DNF, DNS
       liste.sort((a, b) => {
-        if (a.type === "DNS" && b.type !== "DNS") return 1;
-        if (b.type === "DNS" && a.type !== "DNS") return -1;
-        if (a.type === "DNF" && b.type !== "DNF") return 1;
-        if (b.type === "DNF" && a.type !== "DNF") return -1;
+        // 1. Arrivés (pas de type, pas horsDelai)
+        if (!a.type && !a.horsDelai && (b.type || b.horsDelai)) return -1;
+        if (!b.type && !b.horsDelai && (a.type || a.horsDelai)) return 1;
+
+        // 2. Hors délai
         if (a.horsDelai && !b.horsDelai) return 1;
         if (b.horsDelai && !a.horsDelai) return -1;
-        return 0;
+
+        // 3. DNF
+        if (a.type === "DNF" && b.type !== "DNF") return 1;
+        if (b.type === "DNF" && a.type !== "DNF") return -1;
+
+        // 4. DNS
+        if (a.type === "DNS" && b.type !== "DNS") return 1;
+        if (b.type === "DNS" && a.type !== "DNS") return -1;
+
+        // 5. Tri par dossard si même statut
+        return (a.dossard || 0) - (b.dossard || 0);
       });
 
       // Calculer le total de coureurs pour ce tour
@@ -670,6 +674,7 @@
         // 🔴 CAS PRIORITAIRE : DNS / DNF
         if (abandon) {
           const tourAbandon = abandon.tour;
+          tourAtteint = tourAbandon; // Mise à jour pour afficher le bon tour
 
           if (abandon.type === "DNF") {
             statutTxt = `DNF T${tourAbandon}`;
