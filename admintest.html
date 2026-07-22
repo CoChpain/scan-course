@@ -944,6 +944,28 @@
         }
         return false;
       }
+
+      // ===== AJOUT : Vérification du délai depuis le dernier scan =====
+const lastScanQuery = query(
+  collection(db, "resultats"),
+  where("dossard", "==", dossard),
+  orderBy("timestamp", "desc"),
+  limit(1)
+);
+const lastScanSnap = await getDocs(lastScanQuery);
+if (!lastScanSnap.empty) {
+  const lastScanTime = lastScanSnap.docs[0].data().timestamp.toDate().getTime();
+  const timeSinceLastScan = Date.now() - lastScanTime;
+  if (timeSinceLastScan < 180000) { // 3 minutes
+    const remainingSeconds = Math.ceil((180000 - timeSinceLastScan) / 1000);
+    if (statusDiv) {
+      statusDiv.innerHTML = `⏳ Attendez ${remainingSeconds}s avant de scanner à nouveau.`;
+      statusDiv.className = "message warning";
+    }
+    return false;
+  }
+}
+// ===== FIN DE L'AJOUT =====
       const horsDelai = await isHorsDelai(dossard, nextTour);
       if (horsDelai) {
         await addDoc(collection(db, "resultats"), {
