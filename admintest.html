@@ -20,7 +20,6 @@
       --btn-bg-dark-red: #8B0000;
     }
 
-    
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg-primary);
@@ -349,7 +348,7 @@
     import {
       getFirestore, collection, query, where, getDocs,
       doc, updateDoc, deleteDoc, addDoc, onSnapshot, setDoc, serverTimestamp, getDoc,
-      orderBy, writeBatch, enableIndexedDbPersistence
+      orderBy, writeBatch, enableIndexedDbPersistence, runTransaction
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -502,7 +501,7 @@
       div.style.display = div.style.display === "none" ? "block" : "none";
     };
 
-    // 🔥 NOUVELLE FONCTION : Récupère le dernier tour COMMENCÉ par un coureur (retourne 1 si aucun historique)
+    // 🔥 CORRECTION: getDernierTourCommence retourne 0 si aucun tour
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
@@ -547,8 +546,7 @@
         }
       }
 
-      // 🔥 CORRECTION : Si AUCUN tour trouvé → T1 (n'a pas commencé la course)
-      return dernierTour > 0 ? dernierTour : 1;
+      return dernierTour; // 🔥 CORRECTION: retourne 0 si aucun tour
     }
 
     window.checkPwd = async function() {
@@ -687,10 +685,10 @@
       currentRunnerDossard = dossard;
       document.getElementById("runner-info").innerHTML = `
         <div class="message success">
-          <h3>${coureur.nom} ${coureur.prenom}</h3>
-          <p>Dossard : ${coureur.dossard}</p>
-          <p>Catégorie : ${coureur.categorie === "H" ? "Homme" : "Femme"}</p>
-          <p>Statut : ${coureur.statut}</p>
+          <h3>\${coureur.nom} \${coureur.prenom}</h3>
+          <p>Dossard : \${coureur.dossard}</p>
+          <p>Catégorie : \${coureur.categorie === "H" ? "Homme" : "Femme"}</p>
+          <p>Statut : \${coureur.statut}</p>
         </div>
       `;
     };
@@ -799,47 +797,47 @@
       const coureur = globalCache.coureurs[dossard];
       if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
         btn.disabled = true;
-        btn.classList.add("invalid");
-        btn.title = coureur.statut;
-        return;
-      }
-      if (!startMs) {
-        btn.disabled = true;
-        btn.title = "Chrono non lancé";
-        return;
-      }
-      currentTour = calculateCurrentTour(startMs, limites);
-      const scanKey = `${dossard}_t${currentTour}`;
-      if (globalCache.scans[scanKey] || globalCache.locks[scanKey]) {
-        btn.disabled = true;
-        btn.classList.add("valid");
-        btn.title = `Tour ${currentTour} validé`;
-        return;
-      }
-      let dernierTour = 0;
-      for (const key in globalCache.scans) {
-        if (key.startsWith(`${dossard}_t`)) {
-          const tour = parseInt(key.split('_t')[1]);
-          if (tour > dernierTour) dernierTour = tour;
-        }
-      }
-      for (const key in globalCache.locks) {
-        if (key.startsWith(`${dossard}_t`)) {
-          const tour = parseInt(key.split('_t')[1]);
-          if (tour > dernierTour) dernierTour = tour;
-        }
-      }
-      if (dernierTour === currentTour - 1 && lastTourStartTime) {
-        const attente = Date.now() - lastTourStartTime;
-        if (attente < 180000) {
-          btn.disabled = true;
-          btn.classList.add("waiting");
-          btn.title = `Disponible dans ${Math.ceil((180000 - attente) / 1000)}s`;
-          return;
-        }
-      }
-      btn.title = `Prêt tour ${currentTour}`;
+             btn.classList.add("invalid");
+      btn.title = coureur.statut;
+      return;
     }
+    if (!startMs) {
+      btn.disabled = true;
+      btn.title = "Chrono non lancé";
+      return;
+    }
+    currentTour = calculateCurrentTour(startMs, limites);
+    const scanKey = `${dossard}_t${currentTour}`;
+    if (globalCache.scans[scanKey] || globalCache.locks[scanKey]) {
+      btn.disabled = true;
+      btn.classList.add("valid");
+      btn.title = `Tour ${currentTour} validé`;
+      return;
+    }
+    let dernierTour = 0;
+    for (const key in globalCache.scans) {
+      if (key.startsWith(`${dossard}_t`)) {
+        const tour = parseInt(key.split('_t')[1]);
+        if (tour > dernierTour) dernierTour = tour;
+      }
+    }
+    for (const key in globalCache.locks) {
+      if (key.startsWith(`${dossard}_t`)) {
+        const tour = parseInt(key.split('_t')[1]);
+        if (tour > dernierTour) dernierTour = tour;
+      }
+    }
+    if (dernierTour === currentTour - 1 && lastTourStartTime) {
+      const attente = Date.now() - lastTourStartTime;
+      if (attente < 180000) {
+        btn.disabled = true;
+        btn.classList.add("waiting");
+        btn.title = `Disponible dans ${Math.ceil((180000 - attente) / 1000)}s`;
+        return;
+      }
+    }
+    btn.title = `Prêt tour ${currentTour}`;
+  }
 
     async function updateDossardButtonsState() {
       if (isUpdatingButtons) return;
@@ -1013,7 +1011,7 @@
       await performScan(dossard, statusDiv);
     };
 
-    // 🔥 FONCTION CORRIGÉE : quickDnfScan avec vérification DNS/DNF existant et tour correct
+    // 🔥 FONCTION CORRIGÉE : quickDnfScan avec tour = dernierTour + 1
     window.quickDnfScan = async function() {
       const dossard = document.getElementById("quick-dnf-dossard").value.trim();
       const statusDiv = document.getElementById("quick-scan-status");
@@ -1040,7 +1038,7 @@
           return;
         }
 
-        // 🔥 VÉRIFIER SI UN DNS/DNF EXISTE DÉJÀ (quel que soit le tour)
+        // 🔥 VÉRIFIER SI UN DNS/DNF EXISTE DÉJÀ
         const existingDnsDnf = await getDocs(query(
           collection(db, "resultats"),
           where("dossard", "==", dossard),
@@ -1058,6 +1056,7 @@
 
         // 🔥 UTILISER getDernierTourCommence pour avoir le bon tour
         const dernierTour = await getDernierTourCommence(dossard);
+        const tour = Math.min(10, dernierTour + 1); // 🔥 CORRECTION: tour = dernierTour + 1
 
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
@@ -1091,27 +1090,27 @@
               dossard,
               timestamp: new Date(),
               type: "DNF",
-              tour: dernierTour,  // 🔥 Utiliser le dernier tour COMMENCÉ
+              tour: tour,  // 🔥 CORRECTION: Utiliser le tour calculé
               source: "admin"
             });
 
-            // Créer le verrou
-            const lockRef = doc(db, "scansLocks", `${dossard}_t${dernierTour}`);
+            // Créer le verrou avec le BON TOUR
+            const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`); // 🔥 CORRECTION
             transaction.set(lockRef, {
               dossard: dossard,
-              tour: dernierTour,
+              tour: tour,
               createdAt: serverTimestamp()
             });
           });
 
           // Mettre à jour le cache local
           globalCache.coureurs[dossard].statut = "DNF";
-          globalCache.locks[`${dossard}_t${dernierTour}`] = true;
+          globalCache.locks[`${dossard}_t${tour}`] = true;
           saveGlobalCache();
           runnerStatuses[dossard] = "DNF";
 
           updateDossardButton(dossard);
-          statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF T${dernierTour} !`;
+          statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF T${tour} !`;
           statusDiv.className = "message success";
           document.getElementById("quick-dnf-dossard").value = "";
         } catch (e) {
@@ -1124,7 +1123,7 @@
       }
     };
 
-    // 🔥 FONCTION CORRIGÉE : quickDnsScan avec vérification DNS/DNF existant et tour correct
+    // 🔥 FONCTION CORRIGÉE : quickDnsScan avec tour = dernierTour + 1
     window.quickDnsScan = async function() {
       const dossard = document.getElementById("quick-dns-dossard").value.trim();
       const statusDiv = document.getElementById("quick-scan-status");
@@ -1151,7 +1150,7 @@
           return;
         }
 
-        // 🔥 VÉRIFIER SI UN DNS/DNF EXISTE DÉJÀ (quel que soit le tour)
+        // 🔥 VÉRIFIER SI UN DNS/DNF EXISTE DÉJÀ
         const existingDnsDnf = await getDocs(query(
           collection(db, "resultats"),
           where("dossard", "==", dossard),
@@ -1169,6 +1168,7 @@
 
         // 🔥 UTILISER getDernierTourCommence pour avoir le bon tour
         const dernierTour = await getDernierTourCommence(dossard);
+        const tour = Math.min(10, dernierTour + 1); // 🔥 CORRECTION: tour = dernierTour + 1
 
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
@@ -1202,27 +1202,27 @@
               dossard,
               timestamp: new Date(),
               type: "DNS",
-              tour: dernierTour,  // 🔥 Utiliser le dernier tour COMMENCÉ
+              tour: tour,  // 🔥 CORRECTION: Utiliser le tour calculé
               source: "admin"
             });
 
-            // Créer le verrou
-            const lockRef = doc(db, "scansLocks", `${dossard}_t${dernierTour}`);
+            // Créer le verrou avec le BON TOUR
+            const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`); // 🔥 CORRECTION
             transaction.set(lockRef, {
               dossard: dossard,
-              tour: dernierTour,
+              tour: tour,
               createdAt: serverTimestamp()
             });
           });
 
           // Mettre à jour le cache local
           globalCache.coureurs[dossard].statut = "DNS";
-          globalCache.locks[`${dossard}_t${dernierTour}`] = true;
+          globalCache.locks[`${dossard}_t${tour}`] = true;
           saveGlobalCache();
           runnerStatuses[dossard] = "DNS";
 
           updateDossardButton(dossard);
-          statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS T${dernierTour} !`;
+          statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS T${tour} !`;
           statusDiv.className = "message success";
           document.getElementById("quick-dns-dossard").value = "";
         } catch (e) {
@@ -1245,7 +1245,7 @@
         statusDiv.className = "message error";
         return;
       }
-      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})\$/;
       if (!timeRegex.test(time)) {
         statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
         statusDiv.className = "message error";
@@ -1315,7 +1315,7 @@
         statusDiv.className = "message error";
         return;
       }
-      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})\$/;
       if (!timeRegex.test(time)) {
         statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
         statusDiv.className = "message error";
@@ -1411,7 +1411,6 @@
       }
     };
 
-    // 🔥 CORRECTION: resetCompleteCourse supprime TOUS les coureurs
     window.resetCompleteCourse = async function() {
       if (!confirm("⚠️ Réinitialiser COMPLÈTEMENT la course ? Tous les coureurs, résultats, verrous et le chrono seront réinitialisés.")) return;
       if (!confirm("⚠️ Cette action est IRRÉVERSIBLE.")) return;
@@ -1424,7 +1423,7 @@
         const resultatsSnap = await getDocs(collection(db, "resultats"));
         resultatsSnap.forEach(docu => batch.delete(docu.ref));
         const coureursSnap = await getDocs(collection(db, "coureurs"));
-        coureursSnap.forEach(docu => batch.delete(docu.ref));
+                coureursSnap.forEach(docu => batch.delete(docu.ref));
         await batch.commit();
         startMs = null;
         currentTour = 0;
