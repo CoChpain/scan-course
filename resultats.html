@@ -256,7 +256,7 @@
               : `${r.dossard}_${r.tour}`;
 
             if (r.type === "DNF" || r.type === "DNS") {
-              const tour = r.tour; // DNS/DNF ont toujours un tour
+              const tour = r.tour;
               if (!tour || tour < 1 || tour > 10) return;
               if (!tours[tour]) tours[tour] = [];
               const exists = tours[tour].some(item =>
@@ -341,7 +341,7 @@
               delete globalCache.resultats[uniqueKey];
             } else {
               if (r.type === "DNF" || r.type === "DNS") {
-                const tour = r.tour; // DNS/DNF ont toujours un tour
+                const tour = r.tour;
                 if (!tour || tour < 1 || tour > 10) return;
                 if (!tours[tour]) tours[tour] = [];
                 tours[tour] = tours[tour].filter(item =>
@@ -530,14 +530,10 @@
 
       // Filtrer les coureurs éliminés dans les tours précédents
       liste = liste.filter(r => {
-  // Toujours afficher DNS/DNF dans leur tour
-  if (r.type === "DNF" || r.type === "DNS") return true;
-
-  // Pour les autres, garder logique normale
-  if (r.horsDelai) return true;
-
-  return true;
-});
+        if (r.type === "DNF" || r.type === "DNS") return true;
+        if (r.horsDelai) return true;
+        return true;
+      });
 
       // Trier la liste : arrivés, hors délai, DNF, DNS
       liste.sort((a, b) => {
@@ -596,7 +592,9 @@
         col.forEach(r => {
           const c = coureursMap[r.dossard] || {};
           const tempsTour = calculTempsTour(r.dossard, tour);
-          const classe = (r.type === "DNF" || r.type === "DNS" || r.horsDelai) ? "red fade" : (c.sexe === "F" || c.categorie === "F" ? "femme fade" : "fade");
+          const classe = (r.type === "DNF" || r.type === "DNS" || r.horsDelai)
+            ? "red fade"
+            : (c.sexe === "F" || c.categorie === "F" ? "femme fade" : "fade");
 
           // Afficher le temps ou "DNS"/"DNF" en rouge
           let labelTemps;
@@ -623,147 +621,153 @@
       div.innerHTML = html;
     };
 
-   window.afficherGeneral = function() {
-  ongletActif = "general";
+    window.afficherGeneral = function() {
+      ongletActif = "general";
 
-  let classement = [];
+      let classement = [];
 
-  Object.values(coureursMap).forEach(c => {
+      Object.values(coureursMap).forEach(c => {
+        const scans = tousLesResultats[c.dossard] || [];
 
-    const scans = tousLesResultats[c.dossard] || [];
+        // 🔹 1. Dernier tour VALIDÉ (sans DNS/DNF)
+        const toursValides = scans
+          .filter(r => !r.type)
+          .map(r => r.tour);
 
-    // 🔹 1. Dernier tour VALIDÉ (sans DNS/DNF)
-    const toursValides = scans
-      .filter(r => !r.type)
-      .map(r => r.tour);
+        const lastValidTour = toursValides.length > 0
+          ? Math.max(...toursValides)
+          : 0;
 
-    const lastValidTour = toursValides.length > 0
-      ? Math.max(...toursValides)
-      : 0;
+        // 🔹 2. Détection abandon (DNS ou DNF) avec le bon tour
+        let abandon = null;
+        scans.forEach(r => {
+          if (r.type === "DNS" || r.type === "DNF") {
+            // On garde le DNS/DNF avec le tour le plus élevé
+            if (!abandon || r.tour > abandon.tour) {
+              abandon = r;
+            }
+          }
+        });
 
-    // 🔹 2. Détection abandon (DNS ou DNF)
-    const abandon = scans.find(r => r.type === "DNS" || r.type === "DNF");
+        // 🔹 3. Rang basé sur dernier tour validé
+        let rang = 9999;
+        if (lastValidTour > 0 && tours[lastValidTour]) {
+          const idx = tours[lastValidTour].findIndex(r => r.dossard == c.dossard);
+          if (idx !== -1) rang = idx + 1;
+        }
 
-    // 🔹 3. Rang basé sur dernier tour validé
-    let rang = 9999;
-    if (lastValidTour > 0 && tours[lastValidTour]) {
-      const idx = tours[lastValidTour].findIndex(r => r.dossard == c.dossard);
-      if (idx !== -1) rang = idx + 1;
-    }
+        // 🔹 4. Hors délai
+        let horsDelaiTour = null;
+        scans.forEach(scan => {
+          if (scan.horsDelai && !horsDelaiTour) {
+            horsDelaiTour = scan.tour;
+          }
+        });
 
-    // 🔹 4. Hors délai
-    let horsDelaiTour = null;
-    scans.forEach(scan => {
-      if (scan.horsDelai && !horsDelaiTour) {
-        horsDelaiTour = scan.tour;
+        let statutTxt = "", statutOrdre = 0;
+        let tourAtteint = lastValidTour;
+
+        // 🔴 CAS PRIORITAIRE : DNS / DNF
+        if (abandon) {
+          const tourAbandon = abandon.tour;
+
+          if (abandon.type === "DNF") {
+            statutTxt = `DNF T${tourAbandon}`;
+            statutOrdre = 3;
+          } else {
+            statutTxt = `DNS T${tourAbandon}`;
+            statutOrdre = 4;
+          }
+        }
+        // 🟠 Hors délai
+        else if (horsDelaiTour) {
+          statutTxt = `Hors délai T${horsDelaiTour}`;
+          statutOrdre = 2;
+        }
+        // 🟢 En course
+        else {
+          if (tourAtteint === 0 && startMs) {
+            tourAtteint = 1;
+          }
+          statutTxt = `En course T${tourAtteint}`;
+          statutOrdre = 1;
+        }
+
+        classement.push({
+          dossard: c.dossard,
+          nom: c.nom || "",
+          prenom: c.prenom || "",
+          tours: lastValidTour,
+          tourAtteint: tourAtteint,
+          rang: rang,
+          statut: c.statut,
+          statutTxt: statutTxt,
+          statutOrdre: statutOrdre
+        });
+      });
+
+      // 🔹 Suppression doublons
+      const uniqueClassement = [];
+      const seenClassement = new Set();
+      classement.forEach(r => {
+        if (!seenClassement.has(r.dossard)) {
+          seenClassement.add(r.dossard);
+          uniqueClassement.push(r);
+        }
+      });
+      classement = uniqueClassement;
+
+      // 🔹 Tri
+      classement.sort((a, b) => {
+        if (b.tourAtteint !== a.tourAtteint)
+          return b.tourAtteint - a.tourAtteint;
+        if (a.statutOrdre !== b.statutOrdre)
+          return a.statutOrdre - b.statutOrdre;
+        return a.rang - b.rang;
+      });
+
+      // 🔹 Affichage
+      const nb = classement.length;
+      const cols = getNombreColonnes(nb);
+      let html = `<h2>Classement général</h2><div class="columns cols-${cols}">`;
+
+      const chunk = Math.ceil(nb / cols);
+      let colonnes = [];
+      for (let i = 0; i < cols; i++) {
+        colonnes.push(classement.slice(i * chunk, (i + 1) * chunk));
       }
-    });
 
-    let statutTxt = "", statutOrdre = 0;
-    let tourAtteint = lastValidTour;
+      let rank = 1;
+      colonnes.forEach(col => {
+        html += `
+          <table>
+          <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Tours</th><th>Statut</th></tr>
+        `;
+        col.forEach(r => {
+          const c = coureursMap[r.dossard] || {};
 
-    // 🔴 CAS PRIORITAIRE : DNS / DNF
-    if (abandon) {
-      const tourAbandon = abandon.tour;
+          const classe =
+            r.statutTxt.includes("DNF") ||
+            r.statutTxt.includes("DNS") ||
+            r.statutTxt.includes("Hors délai")
+              ? "red fade"
+              : (c.sexe === "F" || c.categorie === "F" ? "femme fade" : "fade");
 
-      if (abandon.type === "DNF") {
-        statutTxt = `DNF T${tourAbandon}`;
-        statutOrdre = 3;
-      } else {
-        statutTxt = `DNS T${tourAbandon}`;
-        statutOrdre = 4;
-      }
+          html += `
+            <tr class="${classe}">
+              <td>${rank++}</td>
+              <td>${r.dossard}</td>
+              <td>${r.nom} ${r.prenom}</td>
+              <td>${r.tours}</td>
+              <td>${r.statutTxt}</td>
+            </tr>`;
+        });
+        html += "</table>";
+      });
 
-    }
-    // 🟠 Hors délai
-    else if (horsDelaiTour) {
-      statutTxt = `Hors délai T${horsDelaiTour}`;
-      statutOrdre = 2;
-    }
-    // 🟢 En course
-    else {
-      if (tourAtteint === 0 && startMs) {
-        tourAtteint = 1;
-      }
-      statutTxt = `En course T${tourAtteint}`;
-      statutOrdre = 1;
-    }
-
-    classement.push({
-      dossard: c.dossard,
-      nom: c.nom || "",
-      prenom: c.prenom || "",
-      tours: lastValidTour, // 🔥 important : tours validés uniquement
-      tourAtteint: tourAtteint,
-      rang: rang,
-      statut: c.statut,
-      statutTxt: statutTxt,
-      statutOrdre: statutOrdre
-    });
-  });
-
-  // 🔹 Suppression doublons
-  const uniqueClassement = [];
-  const seenClassement = new Set();
-  classement.forEach(r => {
-    if (!seenClassement.has(r.dossard)) {
-      seenClassement.add(r.dossard);
-      uniqueClassement.push(r);
-    }
-  });
-  classement = uniqueClassement;
-
-  // 🔹 Tri
-  classement.sort((a, b) => {
-    if (b.tourAtteint !== a.tourAtteint)
-      return b.tourAtteint - a.tourAtteint;
-    if (a.statutOrdre !== b.statutOrdre)
-      return a.statutOrdre - b.statutOrdre;
-    return a.rang - b.rang;
-  });
-
-  // 🔹 Affichage
-  const nb = classement.length;
-  const cols = getNombreColonnes(nb);
-  let html = `<h2>Classement général</h2><div class="columns cols-${cols}">`;
-
-  const chunk = Math.ceil(nb / cols);
-  let colonnes = [];
-  for (let i = 0; i < cols; i++) {
-    colonnes.push(classement.slice(i * chunk, (i + 1) * chunk));
-  }
-
-  let rank = 1;
-  colonnes.forEach(col => {
-    html += `
-      <table>
-      <tr><th>#</th><th>Dossard</th><th>Nom</th><th>Tours</th><th>Statut</th></tr>
-    `;
-    col.forEach(r => {
-      const c = coureursMap[r.dossard] || {};
-
-      const classe =
-        r.statutTxt.includes("DNF") ||
-        r.statutTxt.includes("DNS") ||
-        r.statutTxt.includes("Hors délai")
-          ? "red fade"
-          : (c.sexe === "F" || c.categorie === "F" ? "femme fade" : "fade");
-
-      html += `
-        <tr class="${classe}">
-          <td>${rank++}</td>
-          <td>${r.dossard}</td>
-          <td>${r.nom} ${r.prenom}</td>
-          <td>${r.tours}</td>
-          <td>${r.statutTxt}</td>
-        </tr>`;
-    });
-    html += "</table>";
-  });
-
-  html += "</div>";
-  div.innerHTML = html;
-};
+      html += "</div>";
+      div.innerHTML = html;
+    };
 
     function processResultsData() {
       totalParTour = {};
