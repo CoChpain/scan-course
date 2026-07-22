@@ -256,8 +256,16 @@
               : `${r.dossard}_${r.tour}`;
 
             if (r.type === "DNF" || r.type === "DNS") {
-              const tour = r.tour;
-              if (!tour || tour < 1 || tour > 10) return;
+              
+let tour = Number(r.tour);
+
+if (!tour || tour < 1 || tour > 10) {
+  console.warn("DNS/DNF sans tour :", r);
+
+  // DNS/DNF sans tour => tour courant
+  tour = currentTour || 1;
+}
+
               if (!tours[tour]) tours[tour] = [];
               const exists = tours[tour].some(item =>
                 (item.type === r.type && item.dossard === r.dossard)
