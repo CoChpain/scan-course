@@ -251,9 +251,9 @@
         } else {
           Object.entries(globalCache.resultats).forEach(([key, r]) => {
             const ts = r.timestamp?.toDate?.()?.getTime?.() || r.timestamp;
-            const uniqueKey = r.type === "DNF" || r.type === "DNS"
-              ? `${r.dossard}_${r.type}`
-              : `${r.dossard}_${r.tour}`;
+           const uniqueKey = r.type === "DNF" || r.type === "DNS"
+  ? `${r.dossard}_${r.type}_T${r.tour || currentTour}`  // Ex: "123_DNF_T3"
+  : `${r.dossard}_${r.tour}`;
 
             if (r.type === "DNF" || r.type === "DNS") {
               
@@ -611,10 +611,10 @@ if (!tour || tour < 1 || tour > 10) {
           // Afficher le temps ou "DNS"/"DNF" en rouge
           let labelTemps;
           if (r.type === "DNF") {
-            labelTemps = "DNF";
-          } else if (r.type === "DNS") {
-            labelTemps = "DNS";
-          } else {
+  labelTemps = `DNF T${r.tour || '?'}`;  // Affiche "DNF T3" par exemple
+} else if (r.type === "DNS") {
+  labelTemps = `DNS T${r.tour || '?'}`;  // Affiche "DNS T1" par exemple
+} else {
             labelTemps = tempsTour !== null ? formatTemps(tempsTour) : "--:--:--";
           }
 
