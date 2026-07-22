@@ -390,51 +390,59 @@
         }
       }
 
-      const lockKey = `${dossard}_t${prochainTour}`;
-      if (globalCache.locks[lockKey]) {
-        feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
-        beepError.play();
-        return;
-      }
+// ===== NOUVELLE VÉRIFICATION COMPLÈTE =====
+const lockKey = `${dossard}_t${prochainTour}`;
 
-      const lockRef = doc(db, "scansLocks", lockKey);
-      const lockSnap = await getDoc(lockRef);
-      if (lockSnap.exists()) {
-        globalCache.locks[lockKey] = true;
-        saveGlobalCache();
-        feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
-        beepError.play();
-        return;
-      }
+// 1. Vérifier dans le cache local
+if (globalCache.locks[lockKey]) {
+  feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
+  beepError.play();
+  return;
+}
 
-      try {
-        await runTransaction(db, async (transaction) => {
-          const lockDoc = await transaction.get(lockRef);
-          if (lockDoc.exists) {
-            throw new Error("LOCK_EXISTS");
-          }
-          const scanQuery = query(
-            collection(db, "resultats"),
-            where("dossard", "==", dossard),
-            where("tour", "==", prochainTour)
-          );
-          const scanSnap = await getDocs(scanQuery);
-          if (!scanSnap.empty) {
-            throw new Error("SCAN_EXISTS");
-          }
-          transaction.set(lockRef, {
-            dossard, tour: prochainTour, source, createdAt: serverTimestamp()
-          });
-        });
-      } catch (e) {
-        globalCache.locks[lockKey] = true;
-        saveGlobalCache();
-        feedback("⛔ Déjà enregistré pour ce tour", "orange");
-        return;
-      }
+// 2. Vérifier dans Firestore (verrou)
+const lockRef = doc(db, "scansLocks", lockKey);
+const lockSnap = await getDoc(lockRef);
+if (lockSnap.exists()) {
+  globalCache.locks[lockKey] = true;
+  saveGlobalCache();
+  feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
+  beepError.play();
+  return;
+}
 
-      globalCache.locks[lockKey] = true;
-      saveGlobalCache();
+// 3. Vérifier si un SCAN EXISTE déjà pour ce tour (au cas où le verrou aurait été supprimé)
+const scanQuery = query(
+  collection(db, "resultats"),
+  where("dossard", "==", dossard),
+  where("tour", "==", prochainTour)
+);
+const scanSnap = await getDocs(scanQuery);
+if (!scanSnap.empty) {
+  feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
+  beepError.play();
+  return;
+}
+
+// 4. VÉRIFIER LE DÉLAI DE 3 MIN DEPUIS LE DERNIER SCAN (pas seulement depuis le début du tour)
+const lastScanQuery = query(
+  collection(db, "resultats"),
+  where("dossard", "==", dossard),
+  orderBy("timestamp", "desc"),
+  limit(1)
+);
+const lastScanSnap = await getDocs(lastScanQuery);
+if (!lastScanSnap.empty) {
+  const lastScanTime = lastScanSnap.docs[0].data().timestamp.toDate().getTime();
+  const timeSinceLastScan = Date.now() - lastScanTime;
+  if (timeSinceLastScan < 180000) { // 3 minutes = 180000 ms
+    const remainingSeconds = Math.ceil((180000 - timeSinceLastScan) / 1000);
+    feedback(`⏳ Attendez ${remainingSeconds}s avant de scanner à nouveau`, "orange");
+    beepError.play();
+    return;
+  }
+}
+// ===== FIN DE LA NOUVELLE VÉRIFICATION =====
 
       const horsDelai = await isHorsDelai(prochainTour);
       if (horsDelai) {
