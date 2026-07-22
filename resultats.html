@@ -525,17 +525,57 @@
       });
       liste = uniqueListe;
 
-      liste.sort((a, b) => {
-        if (!a.type && !a.horsDelai && (b.type || b.horsDelai)) return -1;
-        if (!b.type && !b.horsDelai && (a.type || a.horsDelai)) return 1;
-        if (a.horsDelai && !b.horsDelai) return 1;
-        if (b.horsDelai && !a.horsDelai) return -1;
-        if (a.type === "DNF" && b.type !== "DNF") return 1;
-        if (b.type === "DNF" && a.type !== "DNF") return -1;
-        if (a.type === "DNS" && b.type !== "DNS") return 1;
-        if (b.type === "DNS" && a.type !== "DNS") return -1;
-        return (a.dossard || 0) - (b.dossard || 0);
-      });
+// 🔥 NOUVEAU CLASSMENT : 1) Arrivés (par temps), 2) Hors délai (par temps), 3) DNF, 4) DNS
+liste.sort((a, b) => {
+  // 1. Les deux sont arrivés → tri par temps croissant
+  if (!a.type && !a.horsDelai && !b.type && !b.horsDelai) {
+    const tempsA = calculTempsTour(a.dossard, tour);
+    const tempsB = calculTempsTour(b.dossard, tour);
+    if (tempsA !== null && tempsB !== null) return tempsA - tempsB;
+    if (tempsA !== null) return -1;
+    if (tempsB !== null) return 1;
+    return (a.dossard || 0) - (b.dossard || 0);
+  }
+  // a est arrivé, b ne l'est pas → a devant
+  if (!a.type && !a.horsDelai) return -1;
+  // b est arrivé, a ne l'est pas → b devant
+  if (!b.type && !b.horsDelai) return 1;
+
+  // 2. Les deux sont hors délai → tri par temps croissant
+  if (a.horsDelai && b.horsDelai) {
+    const tempsA = calculTempsTour(a.dossard, tour);
+    const tempsB = calculTempsTour(b.dossard, tour);
+    if (tempsA !== null && tempsB !== null) return tempsA - tempsB;
+    if (tempsA !== null) return -1;
+    if (tempsB !== null) return 1;
+    return (a.dossard || 0) - (b.dossard || 0);
+  }
+  // a est hors délai, b ne l'est pas → b devant
+  if (a.horsDelai) return 1;
+  // b est hors délai, a ne l'est pas → a devant
+  if (b.horsDelai) return -1;
+
+  // 3. Les deux sont DNF → tri par dossard
+  if (a.type === "DNF" && b.type === "DNF") {
+    return (a.dossard || 0) - (b.dossard || 0);
+  }
+  // a est DNF, b ne l'est pas → b devant
+  if (a.type === "DNF") return 1;
+  // b est DNF, a ne l'est pas → a devant
+  if (b.type === "DNF") return -1;
+
+  // 4. Les deux sont DNS → tri par dossard
+  if (a.type === "DNS" && b.type === "DNS") {
+    return (a.dossard || 0) - (b.dossard || 0);
+  }
+  // a est DNS, b ne l'est pas → b devant
+  if (a.type === "DNS") return 1;
+  // b est DNS, a ne l'est pas → a devant
+  if (b.type === "DNS") return -1;
+
+  // 5. Par défaut (ne devrait pas arriver)
+  return (a.dossard || 0) - (b.dossard || 0);
+});
 
       let total = 0;
       if (tour === 1) {
