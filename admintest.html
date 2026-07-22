@@ -1046,141 +1046,147 @@ async function getDernierTourCommence(dossard) {
       await performScan(dossard, statusDiv);
     };
 
-    // 🔥 CORRECTION: Ajouter tour: currentTour pour DNF
-    window.quickDnfScan = async function() {
-      const dossard = document.getElementById("quick-dnf-dossard").value.trim();
-      const statusDiv = document.getElementById("quick-scan-status");
-      if (!dossard) {
-        statusDiv.innerHTML = "⚠️ Veuillez entrer un numéro de dossard.";
-        statusDiv.className = "message error";
-        return;
-      }
-      if (!startMs) {
-        statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de marquer un DNF.";
-        statusDiv.className = "message error";
-        return;
-      }
-      try {
-        const coureur = globalCache.coureurs[dossard];
-        if (!coureur) {
-          statusDiv.innerHTML = "❌ Coureur introuvable";
-          statusDiv.className = "message error";
-          return;
-        }
-        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
-          statusDiv.className = "message error";
-          return;
-        }
+// 🔥 CORRECTION : Utiliser le dernier tour COMMENCÉ pour DNF
+window.quickDnfScan = async function() {
+  const dossard = document.getElementById("quick-dnf-dossard").value.trim();
+  const statusDiv = document.getElementById("quick-scan-status");
+  if (!dossard) {
+    statusDiv.innerHTML = "⚠️ Veuillez entrer un numéro de dossard.";
+    statusDiv.className = "message error";
+    return;
+  }
+  if (!startMs) {
+    statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de marquer un DNF.";
+    statusDiv.className = "message error";
+    return;
+  }
+  try {
+    const coureur = globalCache.coureurs[dossard];
+    if (!coureur) {
+      statusDiv.innerHTML = "❌ Coureur introuvable";
+      statusDiv.className = "message error";
+      return;
+    }
+    if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+      statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+      statusDiv.className = "message error";
+      return;
+    }
 
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          statusDiv.innerHTML = "❌ Coureur introuvable";
-          statusDiv.className = "message error";
-          return;
-        }
-        const docRef = snap.docs[0];
-        await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
-        globalCache.coureurs[dossard].statut = "DNF";
-        saveGlobalCache();
-        runnerStatuses[dossard] = "DNF";
+    // 🔥 NOUVEAU : Récupérer le dernier tour commencé
+    const dernierTour = await getDernierTourCommence(dossard);
 
-        // 🔥 CORRECTION: Ajouter tour: currentTour
-        await addDoc(collection(db, "resultats"), {
-          dossard,
-          timestamp: new Date(),
-          type: "DNF",
-          tour: currentTour,  // 🔥 AJOUT CORRIGÉ
-          source: "admin"
-        });
+    const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      statusDiv.innerHTML = "❌ Coureur introuvable";
+      statusDiv.className = "message error";
+      return;
+    }
+    const docRef = snap.docs[0];
+    await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNF" });
+    globalCache.coureurs[dossard].statut = "DNF";
+    saveGlobalCache();
+    runnerStatuses[dossard] = "DNF";
 
-        const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
-        await setDoc(lockRef, {
-          dossard: dossard,
-          tour: currentTour,
-          createdAt: serverTimestamp()
-        });
-        globalCache.locks[`${dossard}_t${currentTour}`] = true;
-        saveGlobalCache();
+    // 🔥 CORRECTION : Utiliser dernierTour
+    await addDoc(collection(db, "resultats"), {
+      dossard,
+      timestamp: new Date(),
+      type: "DNF",
+      tour: dernierTour,  // 🔥 Utiliser le dernier tour COMMENCÉ
+      source: "admin"
+    });
 
-        updateDossardButton(dossard);
-        statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF !`;
-        statusDiv.className = "message success";
-        document.getElementById("quick-dnf-dossard").value = "";
-      } catch (error) {
-        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
-        statusDiv.className = "message error";
-      }
-    };
+    const lockRef = doc(db, "scansLocks", `${dossard}_t${dernierTour}`);
+    await setDoc(lockRef, {
+      dossard: dossard,
+      tour: dernierTour,
+      createdAt: serverTimestamp()
+    });
+    globalCache.locks[`${dossard}_t${dernierTour}`] = true;
+    saveGlobalCache();
 
-    // 🔥 CORRECTION: Ajouter tour: currentTour pour DNS
-    window.quickDnsScan = async function() {
-      const dossard = document.getElementById("quick-dns-dossard").value.trim();
-      const statusDiv = document.getElementById("quick-scan-status");
-      if (!dossard) {
-        statusDiv.innerHTML = "⚠️ Veuillez entrer un numéro de dossard.";
-        statusDiv.className = "message error";
-        return;
-      }
-      if (!startMs) {
-        statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de marquer un DNS.";
-        statusDiv.className = "message error";
-        return;
-      }
-      try {
-        const coureur = globalCache.coureurs[dossard];
-        if (!coureur) {
-          statusDiv.innerHTML = "❌ Coureur introuvable";
-          statusDiv.className = "message error";
-          return;
-        }
-        if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-          statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
-          statusDiv.className = "message error";
-          return;
-        }
+    updateDossardButton(dossard);
+    statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNF T${dernierTour} !`;
+    statusDiv.className = "message success";
+    document.getElementById("quick-dnf-dossard").value = "";
+  } catch (error) {
+    statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+    statusDiv.className = "message error";
+  }
+};
 
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          statusDiv.innerHTML = "❌ Coureur introuvable";
-          statusDiv.className = "message error";
-          return;
-        }
-        const docRef = snap.docs[0];
-        await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
-        globalCache.coureurs[dossard].statut = "DNS";
-        saveGlobalCache();
-        runnerStatuses[dossard] = "DNS";
+   // 🔥 CORRECTION : Utiliser le dernier tour COMMENCÉ pour DNS
+window.quickDnsScan = async function() {
+  const dossard = document.getElementById("quick-dns-dossard").value.trim();
+  const statusDiv = document.getElementById("quick-scan-status");
+  if (!dossard) {
+    statusDiv.innerHTML = "⚠️ Veuillez entrer un numéro de dossard.";
+    statusDiv.className = "message error";
+    return;
+  }
+  if (!startMs) {
+    statusDiv.innerHTML = "❌ Chrono non lancé. Impossible de marquer un DNS.";
+    statusDiv.className = "message error";
+    return;
+  }
+  try {
+    const coureur = globalCache.coureurs[dossard];
+    if (!coureur) {
+      statusDiv.innerHTML = "❌ Coureur introuvable";
+      statusDiv.className = "message error";
+      return;
+    }
+    if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+      statusDiv.innerHTML = `❌ Coureur déjà ${coureur.statut}`;
+      statusDiv.className = "message error";
+      return;
+    }
 
-        // 🔥 CORRECTION: Ajouter tour: currentTour
-        await addDoc(collection(db, "resultats"), {
-          dossard,
-          timestamp: new Date(),
-          type: "DNS",
-          tour: currentTour,  // 🔥 AJOUT CORRIGÉ
-          source: "admin"
-        });
+    // 🔥 NOUVEAU : Récupérer le dernier tour commencé
+    const dernierTour = await getDernierTourCommence(dossard);
 
-        const lockRef = doc(db, "scansLocks", `${dossard}_t${currentTour}`);
-        await setDoc(lockRef, {
-          dossard: dossard,
-          tour: currentTour,
-          createdAt: serverTimestamp()
-        });
-        globalCache.locks[`${dossard}_t${currentTour}`] = true;
-        saveGlobalCache();
+    const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      statusDiv.innerHTML = "❌ Coureur introuvable";
+      statusDiv.className = "message error";
+      return;
+    }
+    const docRef = snap.docs[0];
+    await updateDoc(doc(db, "coureurs", docRef.id), { statut: "DNS" });
+    globalCache.coureurs[dossard].statut = "DNS";
+    saveGlobalCache();
+    runnerStatuses[dossard] = "DNS";
 
-        updateDossardButton(dossard);
-        statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS !`;
-        statusDiv.className = "message success";
-        document.getElementById("quick-dns-dossard").value = "";
-      } catch (error) {
-        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
-        statusDiv.className = "message error";
-      }
-    };
+    // 🔥 CORRECTION : Utiliser dernierTour
+    await addDoc(collection(db, "resultats"), {
+      dossard,
+      timestamp: new Date(),
+      type: "DNS",
+      tour: dernierTour,  // 🔥 Utiliser le dernier tour COMMENCÉ
+      source: "admin"
+    });
+
+    const lockRef = doc(db, "scansLocks", `${dossard}_t${dernierTour}`);
+    await setDoc(lockRef, {
+      dossard: dossard,
+      tour: dernierTour,
+      createdAt: serverTimestamp()
+    });
+    globalCache.locks[`${dossard}_t${dernierTour}`] = true;
+    saveGlobalCache();
+
+    updateDossardButton(dossard);
+    statusDiv.innerHTML = `✅ Dossard ${dossard} marqué comme DNS T${dernierTour} !`;
+    statusDiv.className = "message success";
+    document.getElementById("quick-dns-dossard").value = "";
+  } catch (error) {
+    statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+    statusDiv.className = "message error";
+  }
+};
 
     window.addScan = async function() {
       const dossard = document.getElementById("add-dossard").value.trim();
