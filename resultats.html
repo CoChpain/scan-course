@@ -149,9 +149,10 @@
       cacheChannel.postMessage({ type: 'cache-updated', data: globalCache });
     }
 
+    // CORRECTION: Intervalle réduit à 15 secondes
     async function updateGlobalCache() {
       const now = Date.now();
-      if (now - globalCache.lastUpdated < 60000) return;
+      if (now - globalCache.lastUpdated < 15000) return; // 15 secondes au lieu de 60
 
       try {
         const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
@@ -359,6 +360,8 @@
           processResultsData();
           construireOnglets();
           rafraichir();
+          // CORRECTION: Forcer le rafraîchissement immédiat
+          setTimeout(() => rafraichir(), 100);
         } catch (error) {
           console.error("Erreur dans onSnapshot (resultats) :", error);
         }
@@ -368,7 +371,7 @@
       }
     );
 
-    // 🔥 CORRECTION: Gérer les suppressions de coureurs
+    // CORRECTION: Gérer les suppressions de coureurs
     onSnapshot(collection(db, "coureurs"), snap => {
       snap.docChanges().forEach(change => {
         const data = change.doc.data();
@@ -385,7 +388,7 @@
       rafraichir();
     });
 
-    // 🔥 CORRECTION: Réinitialiser coureursMap quand startMs = null
+    // CORRECTION: Réinitialiser coureursMap quand startMs = null
     onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
         startMs = snap.data().startMs;
@@ -399,7 +402,7 @@
         globalCache.startMs = null;
         globalCache.resultats = {};
         globalCache.coureurs = {};
-        coureursMap = {};  // 🔥 Réinitialiser aussi coureursMap
+        coureursMap = {};  // CORRECTION: Réinitialiser aussi coureursMap
         saveGlobalCache();
         tours = {};
         tousLesResultats = {};
@@ -511,6 +514,7 @@
         return coureur !== undefined;
       });
 
+      // CORRECTION: Éviter les doublons
       const uniqueListe = [];
       const seen = new Set();
       liste.forEach(r => {
@@ -524,7 +528,7 @@
       });
       liste = uniqueListe;
 
-      // 🔥 NOUVEAU CLASSMENT : 1) Arrivés (par temps), 2) Hors délai (par temps), 3) DNF, 4) DNS
+      // NOUVEAU CLASSMENT : 1) Arrivés (par temps), 2) Hors délai (par temps), 3) DNF, 4) DNS
       liste.sort((a, b) => {
         // 1. Les deux sont arrivés → tri par temps croissant
         if (!a.type && !a.horsDelai && !b.type && !b.horsDelai) {
@@ -787,12 +791,15 @@
       div.innerHTML = html;
     };
 
+    // CORRECTION: Optimisation de processResultsData
     function processResultsData() {
       totalParTour = {};
 
+      // 1. Calculer les temps par tour et marquer les hors délai
       Object.keys(tours).forEach(t => {
         const tour = Number(t);
         if (tour < 1 || tour > 10) return;
+
         const limite = limites[`t${tour}`] || 0;
         const departTheorique = departTours[tour];
         if (!departTheorique) return;
@@ -802,9 +809,17 @@
           const diffMin = (r.timestamp - departTheorique) / 60000;
           const horsDelai = diffMin > limite;
           return { ...r, horsDelai };
-        });
+        }).filter(r => {
+          // Filtrer les doublons
+          const key = r.type === "DNF" || r.type === "DNS"
+            ? `${r.dossard}_${r.type}_T${r.tour || 1}`
+            : `${r.dossard}_${r.tour}`;
+          return !this.seenKeys || !this.seenKeys.has(key) ||
+            (this.seenKeys.add(key), true);
+        }, { seenKeys: new Set() });
       });
 
+      // 2. Mettre à jour le statut des coureurs
       Object.keys(tours).forEach(t => {
         if (t < 1 || t > 10) return;
         tours[t].forEach(r => {
@@ -819,6 +834,7 @@
         });
       });
 
+      // 3. Calculer le total par tour
       Object.keys(limites).forEach(key => {
         const t = Number(key.replace("t", ""));
         if (!t || t < 1 || t > 10) return;
