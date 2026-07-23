@@ -290,7 +290,6 @@
       return (Date.now() - startMs) > cumul * 60000;
     }
 
-    // CORRECTION: getDernierTourCommence inclut TOUS les types de scans (y compris DNF/DNS)
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
@@ -337,7 +336,6 @@
       return dernierTour;
     }
 
-    // CORRECTION: Fonction principale pour traiter les arrivées
     async function traiterArrivee(dossard, source) {
       if (!startMs) {
         feedback("⛔ Course non démarrée", "red");
@@ -376,7 +374,7 @@
       let dernierTour = await getDernierTourCommence(dossard);
       const prochainTour = dernierTour + 1;
 
-      // CORRECTION: Vérifier que le coureur n'a pas sauté de tour
+      // Vérifier que le coureur n'a pas sauté de tour
       if (dernierTour < currentTour - 1) {
         feedback(`⛔ Impossible : dernier tour validé = ${dernierTour} (tour actuel: ${currentTour})`, "red");
         beepError.play();
@@ -430,27 +428,8 @@
         return;
       }
 
-      // Vérification du délai de 3 min depuis le dernier scan
-      const lastScanQuery = query(
-        collection(db, "resultats"),
-        where("dossard", "==", dossard),
-        orderBy("timestamp", "desc"),
-        limit(1)
-      );
-      const lastScanSnap = await getDocs(lastScanQuery);
-      if (!lastScanSnap.empty) {
-        const lastScanTime = lastScanSnap.docs[0].data().timestamp.toDate().getTime();
-        const timeSinceLastScan = Date.now() - lastScanTime;
-        if (timeSinceLastScan < 180000) {
-          const remainingSeconds = Math.ceil((180000 - timeSinceLastScan) / 1000);
-          feedback(`⏳ Attendez ${remainingSeconds}s avant de scanner à nouveau`, "orange");
-          beepError.play();
-          return;
-        }
-      }
-
       const horsDelai = await isHorsDelai(prochainTour);
-      
+
       // TOUJOURS CRÉER LE VERROU AVANT D'AJOUTER LE RÉSULTAT
       await setDoc(lockRef, {
         dossard: dossard,
@@ -461,7 +440,6 @@
       saveGlobalCache();
 
       if (horsDelai) {
-        // Ne PAS marquer comme ELIMINE, juste enregistrer horsDelai: true
         await addDoc(collection(db, "resultats"), {
           dossard, tour: prochainTour, horsDelai: true, source, timestamp: serverTimestamp()
         });
