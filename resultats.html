@@ -17,7 +17,6 @@
       width: 98%;
       margin: auto;
     }
-    
     .cols-1 { grid-template-columns: repeat(1, 1fr); }
     .cols-2 { grid-template-columns: repeat(2, 1fr); }
     .cols-3 { grid-template-columns: repeat(3, 1fr); }
@@ -119,7 +118,7 @@
         }
       });
 
-    // ======================--
+    // ======================
     // 💾 Cache global partagé
     // ======================
     const GLOBAL_CACHE_KEY = "apolloRunGlobalCache";
@@ -153,7 +152,7 @@
     // CORRECTION: Intervalle réduit à 15 secondes
     async function updateGlobalCache() {
       const now = Date.now();
-      if (now - globalCache.lastUpdated < 15000) return; // 15 secondes au lieu de 60
+      if (now - globalCache.lastUpdated < 15000) return;
 
       try {
         const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
@@ -372,7 +371,6 @@
       }
     );
 
-    // CORRECTION: Gérer les suppressions de coureurs
     onSnapshot(collection(db, "coureurs"), snap => {
       snap.docChanges().forEach(change => {
         const data = change.doc.data();
@@ -389,7 +387,6 @@
       rafraichir();
     });
 
-    // CORRECTION: Réinitialiser coureursMap quand startMs = null
     onSnapshot(doc(db, "course", "depart"), snap => {
       if (snap.exists()) {
         startMs = snap.data().startMs;
@@ -403,7 +400,7 @@
         globalCache.startMs = null;
         globalCache.resultats = {};
         globalCache.coureurs = {};
-        coureursMap = {};  // CORRECTION: Réinitialiser aussi coureursMap
+        coureursMap = {};
         saveGlobalCache();
         tours = {};
         tousLesResultats = {};
@@ -515,7 +512,7 @@
         return coureur !== undefined;
       });
 
-      // CORRECTION: Éviter les doublons
+      // Éviter les doublons
       const uniqueListe = [];
       const seen = new Set();
       liste.forEach(r => {
@@ -529,55 +526,27 @@
       });
       liste = uniqueListe;
 
-      // NOUVEAU CLASSMENT : 1) Arrivés (par temps), 2) Hors délai (par temps), 3) DNF, 4) DNS
+      // CORRECTION: NOUVEAU CLASSMENT POUR LES ONGLETS TOUR
+      // 1) Arrivés dans les délais (meilleur chrono en premier)
+      // 2) Hors délai (dans l'ordre des chronos)
+      // 3) DNF (partis mais pas terminés)
+      // 4) DNS (pas partis)
       liste.sort((a, b) => {
-        // 1. Les deux sont arrivés → tri par temps croissant
-        if (!a.type && !a.horsDelai && !b.type && !b.horsDelai) {
-          const tempsA = calculTempsTour(a.dossard, tour);
-          const tempsB = calculTempsTour(b.dossard, tour);
-          if (tempsA !== null && tempsB !== null) return tempsA - tempsB;
-          if (tempsA !== null) return -1;
-          if (tempsB !== null) return 1;
-          return (a.dossard || 0) - (b.dossard || 0);
-        }
-        // a est arrivé, b ne l'est pas → a devant
-        if (!a.type && !a.horsDelai) return -1;
-        // b est arrivé, a ne l'est pas → b devant
-        if (!b.type && !b.horsDelai) return 1;
+        // 🔹 1. Comparer le statut global (arrivé > hors délai > DNF > DNS)
+        const statutA = a.type === "DNS" ? 4 : a.type === "DNF" ? 3 : a.horsDelai ? 2 : 1;
+        const statutB = b.type === "DNS" ? 4 : b.type === "DNF" ? 3 : b.horsDelai ? 2 : 1;
 
-        // 2. Les deux sont hors délai → tri par temps croissant
-        if (a.horsDelai && b.horsDelai) {
-          const tempsA = calculTempsTour(a.dossard, tour);
-          const tempsB = calculTempsTour(b.dossard, tour);
-          if (tempsA !== null && tempsB !== null) return tempsA - tempsB;
-          if (tempsA !== null) return -1;
-          if (tempsB !== null) return 1;
-          return (a.dossard || 0) - (b.dossard || 0);
-        }
-        // a est hors délai, b ne l'est pas → b devant
-        if (a.horsDelai) return 1;
-        // b est hors délai, a ne l'est pas → a devant
-        if (b.horsDelai) return -1;
+        if (statutA !== statutB) return statutA - statutB;
 
-        // 3. Les deux sont DNF → tri par dossard
-        if (a.type === "DNF" && b.type === "DNF") {
-          return (a.dossard || 0) - (b.dossard || 0);
-        }
-        // a est DNF, b ne l'est pas → b devant
-        if (a.type === "DNF") return 1;
-        // b est DNF, a ne l'est pas → a devant
-        if (b.type === "DNF") return -1;
+        // 🔹 2. Même statut → tri par temps croissant
+        const tempsA = calculTempsTour(a.dossard, tour);
+        const tempsB = calculTempsTour(b.dossard, tour);
 
-        // 4. Les deux sont DNS → tri par dossard
-        if (a.type === "DNS" && b.type === "DNS") {
-          return (a.dossard || 0) - (b.dossard || 0);
-        }
-        // a est DNS, b ne l'est pas → b devant
-        if (a.type === "DNS") return 1;
-        // b est DNS, a ne l'est pas → a devant
-        if (b.type === "DNS") return -1;
+        if (tempsA !== null && tempsB !== null) return tempsA - tempsB;
+        if (tempsA !== null) return -1;
+        if (tempsB !== null) return 1;
 
-        // 5. Par défaut
+        // 🔹 3. Même temps → tri par dossard
         return (a.dossard || 0) - (b.dossard || 0);
       });
 
@@ -630,12 +599,13 @@
             ? "red fade"
             : (c.sexe === "F" || c.categorie === "F" ? "femme fade" : "fade");
 
-          // Afficher le temps ou "DNS"/"DNF" avec le tour
           let labelTemps;
           if (r.type === "DNF") {
             labelTemps = `DNF T${r.tour || '?'}`;
           } else if (r.type === "DNS") {
             labelTemps = `DNS T${r.tour || '?'}`;
+          } else if (r.horsDelai) {
+            labelTemps = tempsTour !== null ? formatTemps(tempsTour) + " (HD)" : "--:--:-- (HD)";
           } else {
             labelTemps = tempsTour !== null ? formatTemps(tempsTour) : "--:--:--";
           }
@@ -792,11 +762,9 @@
       div.innerHTML = html;
     };
 
-    // CORRECTION: Optimisation de processResultsData
     function processResultsData() {
       totalParTour = {};
 
-      // 1. Calculer les temps par tour et marquer les hors délai
       Object.keys(tours).forEach(t => {
         const tour = Number(t);
         if (tour < 1 || tour > 10) return;
@@ -811,7 +779,6 @@
           const horsDelai = diffMin > limite;
           return { ...r, horsDelai };
         }).filter(r => {
-          // Filtrer les doublons
           const key = r.type === "DNF" || r.type === "DNS"
             ? `${r.dossard}_${r.type}_T${r.tour || 1}`
             : `${r.dossard}_${r.tour}`;
@@ -820,7 +787,6 @@
         }, { seenKeys: new Set() });
       });
 
-      // 2. Mettre à jour le statut des coureurs
       Object.keys(tours).forEach(t => {
         if (t < 1 || t > 10) return;
         tours[t].forEach(r => {
@@ -835,7 +801,6 @@
         });
       });
 
-      // 3. Calculer le total par tour
       Object.keys(limites).forEach(key => {
         const t = Number(key.replace("t", ""));
         if (!t || t < 1 || t > 10) return;
