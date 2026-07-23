@@ -152,7 +152,7 @@
       });
 
     // ======================
-    // 💾 Cache global partagé---
+    // 💾 Cache global partagé
     // ======================
     const GLOBAL_CACHE_KEY = "apolloRunGlobalCache";
     let globalCache = {
@@ -376,6 +376,13 @@
       let dernierTour = await getDernierTourCommence(dossard);
       const prochainTour = dernierTour + 1;
 
+      // CORRECTION: Vérifier que le coureur n'a pas sauté de tour
+      if (dernierTour < currentTour - 1) {
+        feedback(`⛔ Impossible : dernier tour validé = ${dernierTour} (tour actuel: ${currentTour})`, "red");
+        beepError.play();
+        return;
+      }
+
       if (prochainTour > currentTour) {
         feedback(`⛔ Tour ${prochainTour} non encore ouvert (tour actuel: ${currentTour})`, "orange");
         beepError.play();
@@ -454,14 +461,13 @@
       saveGlobalCache();
 
       if (horsDelai) {
-        // CORRECTION: Ne PAS marquer comme ELIMINE, juste enregistrer horsDelai: true
+        // Ne PAS marquer comme ELIMINE, juste enregistrer horsDelai: true
         await addDoc(collection(db, "resultats"), {
           dossard, tour: prochainTour, horsDelai: true, source, timestamp: serverTimestamp()
         });
         globalCache.scans[lockKey] = { dossard, tour: prochainTour, horsDelai: true, timestamp: Date.now() };
         saveGlobalCache();
 
-        // Le bouton sera désactivé via la détection de horsDelai dans l'admin
         feedback(`🚨 ${dossard} HORS DELAI T${prochainTour} (temps enregistré)`, "orange");
         beepError.play();
         return;
@@ -633,7 +639,6 @@
       document.getElementById("dossard-dns").value = "";
     };
 
-    // CORRECTION: changerStatut avec gestion des tours
     async function changerStatut(dossard, type) {
       await updateGlobalCache();
 
