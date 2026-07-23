@@ -851,18 +851,7 @@
         return;
       }
 
-      // 7. Attente de 3 minutes après le début du tour
-      if (dernierTour === currentTour - 1 && lastTourStartTime) {
-        const attente = Date.now() - lastTourStartTime;
-        if (attente < 180000) {
-          btn.disabled = true;
-          btn.classList.add("waiting");
-          btn.title = `Disponible dans ${Math.ceil((180000 - attente) / 1000)}s`;
-          return;
-        }
-      }
-
-      // 8. État par défaut
+      // 7. État par défaut
       btn.title = `Prêt tour ${currentTour}`;
     }
 
@@ -935,18 +924,6 @@
           statusDiv.className = "message error";
         }
         return false;
-      }
-
-      if (lastScannedTour === currentTour - 1 && lastTourStartTime) {
-        const timeSinceStart = Date.now() - lastTourStartTime;
-        if (timeSinceStart < 180000) {
-          const remainingSeconds = Math.ceil((180000 - timeSinceStart) / 1000);
-          if (statusDiv) {
-            statusDiv.innerHTML = `❌ Attendez ${remainingSeconds}s.`;
-            statusDiv.className = "message error";
-          }
-          return false;
-        }
       }
 
       const lockKey = `${dossard}_t${nextTour}`;
