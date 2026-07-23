@@ -101,7 +101,7 @@
       gap: 10px;
       margin: 20px 0;
     }
-    
+
     .tab-btn {
       padding: 12px 20px;
       background: var(--bg-secondary);
@@ -500,7 +500,6 @@
       div.style.display = div.style.display === "none" ? "block" : "none";
     };
 
-    // CORRECTION: getDernierTourCommence inclut TOUS les types de scans (y compris DNF/DNS)
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
@@ -787,7 +786,6 @@
       setTimeout(() => updateDossardButtonsState(), 200);
     }
 
-    // CORRECTION: updateDossardButton gère les horsDelai comme des éliminés
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
@@ -819,32 +817,22 @@
       // 4. Vérifier si déjà scanné pour ce tour
       if (globalCache.scans[scanKey] || globalCache.locks[scanKey]) {
         btn.disabled = true;
-
         const scanData = globalCache.scans[scanKey];
+
         if (scanData) {
-          // CORRECTION: Si hors délai OU statut éliminé → bouton invalid (rouge foncé + barré)
-          if (scanData.horsDelai || (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut))) {
-            btn.classList.add("invalid");
-            btn.title = scanData.horsDelai ? "Hors délai (verrouillé)" : coureur.statut;
-            return;
-          }
-          // Sinon, bouton valid (rouge clair)
           btn.classList.add("valid");
-          // Vérifier si 3 minutes se sont écoulées
-          if (scanData.timestamp) {
-            const scanTime = new Date(scanData.timestamp).getTime();
-            const timeSinceScan = Date.now() - scanTime;
-            if (timeSinceScan > 180000) { // 3 minutes
-              btn.classList.remove("valid");
-              btn.disabled = false;
-            }
+          btn.title = scanData.horsDelai ? `Hors délai T${currentTour} (verrouillé)` : `Tour ${currentTour} validé`;
+
+          // Si le coureur est DNS/DNF/ELIMINE, on applique le style invalid
+          if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+            btn.classList.remove("valid");
+            btn.classList.add("invalid");
+            btn.title = coureur.statut;
           }
+        } else {
+          btn.classList.add("valid");
           btn.title = `Tour ${currentTour} validé`;
-          return;
         }
-        // Si seulement verrouillé mais pas de scan data
-        btn.classList.add("valid");
-        btn.title = `Tour ${currentTour} validé`;
         return;
       }
 
@@ -1011,7 +999,6 @@
 
       const horsDelai = await isHorsDelai(dossard, nextTour);
       if (horsDelai) {
-        // CORRECTION: Ne PAS marquer comme ELIMINE, juste enregistrer horsDelai: true
         const now = Date.now();
         const elapsedTime = now - startMs;
         const formattedTime = formatTime(elapsedTime);
@@ -1020,8 +1007,15 @@
         });
         globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: true, timestamp: now };
         saveGlobalCache();
-        
-        // Le bouton sera désactivé via updateDossardButton() grâce à horsDelai: true
+
+        // Marquer le bouton comme invalid (rouge foncé + barré) uniquement après le clic
+        const btn = document.getElementById(`dossard-btn-${dossard}`);
+        if (btn) {
+          btn.classList.remove("valid");
+          btn.classList.add("invalid");
+          btn.title = `Hors délai T${nextTour} (verrouillé)`;
+        }
+
         updateDossardButton(dossard);
         if (statusDiv) {
           statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai T${nextTour} à ${formattedTime} (verrouillé)`;
