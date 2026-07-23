@@ -446,11 +446,24 @@
       globalCache.scans[lockKey] = { dossard, tour: prochainTour, horsDelai: horsDelai, timestamp: Date.now() };
       saveGlobalCache();
 
+      // Si hors délai, marquer comme ELIMINE
+      if (horsDelai) {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const coureurDoc = snap.docs[0];
+          await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "ELIMINE" });
+          globalCache.coureurs[dossard].statut = "ELIMINE";
+          saveGlobalCache();
+          runnerStatuses[dossard] = "ELIMINE";
+        }
+      }
+
       let couleur = horsDelai ? "orange" : "lime";
       if (coureur && coureur.sexe === "F") couleur = "violet";
       if (coureur && coureur.sexe === "H" && !horsDelai) couleur = "cyan";
 
-      feedback(horsDelai ? `🚨 ${dossard} HORS DELAI T${prochainTour} (temps enregistré)` : `✅ ${dossard} - TOUR ${prochainTour}`, couleur);
+      feedback(horsDelai ? `🚨 ${dossard} HORS DELAI T${prochainTour} (ELIMINÉ)` : `✅ ${dossard} - TOUR ${prochainTour}`, couleur);
       horsDelai ? beepError.play() : beepOk.play();
     }
 
