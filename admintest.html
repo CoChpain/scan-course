@@ -822,13 +822,6 @@
         if (scanData) {
           btn.classList.add("valid");
           btn.title = scanData.horsDelai ? `Hors délai T${currentTour} (verrouillé)` : `Tour ${currentTour} validé`;
-
-          // Si le coureur est DNS/DNF/ELIMINE, on applique le style invalid
-          if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-            btn.classList.remove("valid");
-            btn.classList.add("invalid");
-            btn.title = coureur.statut;
-          }
         } else {
           btn.classList.add("valid");
           btn.title = `Tour ${currentTour} validé`;
@@ -1008,17 +1001,9 @@
         globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: true, timestamp: now };
         saveGlobalCache();
 
-        // Marquer le bouton comme invalid (rouge foncé + barré) uniquement après le clic
-        const btn = document.getElementById(`dossard-btn-${dossard}`);
-        if (btn) {
-          btn.classList.remove("valid");
-          btn.classList.add("invalid");
-          btn.title = `Hors délai T${nextTour} (verrouillé)`;
-        }
-
         updateDossardButton(dossard);
         if (statusDiv) {
-          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai T${nextTour} à ${formattedTime} (verrouillé)`;
+          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai T${nextTour} à ${formattedTime} (enregistré)`;
           statusDiv.className = "message warning";
         }
         return true;
