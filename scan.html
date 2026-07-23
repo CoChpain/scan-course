@@ -362,7 +362,6 @@
         }
       }
 
-      // Bloquer si DNS, DNF ou ELIMINE
       if (coureur && ["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
         feedback(`⛔ ${coureur.statut}`, "red");
         beepError.play();
@@ -464,7 +463,7 @@
       if (coureur && coureur.sexe === "F") couleur = "violet";
       if (coureur && coureur.sexe === "H" && !horsDelai) couleur = "cyan";
 
-      feedback(horsDelai ? `🚨 ${dossard} HORS DÉLAI T${prochainTour} (ELIMINÉ)` : `✅ ${dossard} - TOUR ${prochainTour}`, couleur);
+      feedback(horsDelai ? `🚨 ${dossard} HORS DELAI T${prochainTour} (ELIMINÉ)` : `✅ ${dossard} - TOUR ${prochainTour}`, couleur);
       horsDelai ? beepError.play() : beepOk.play();
     }
 
@@ -708,7 +707,6 @@
         globalCache.locks[`${dossard}_t${tour}`] = true;
         saveGlobalCache();
 
-        
         feedback(
           type === "DNF" ? `🏳️ DNF ${dossard} T${tour}` : `🚫 DNS ${dossard} T${tour}`,
           "orange"
