@@ -818,10 +818,9 @@
       if (globalCache.scans[scanKey] || globalCache.locks[scanKey]) {
         btn.disabled = true;
         const scanData = globalCache.scans[scanKey];
-
         if (scanData) {
-          btn.classList.add("valid");
-          btn.title = scanData.horsDelai ? `Hors délai T${currentTour} (verrouillé)` : `Tour ${currentTour} validé`;
+          btn.classList.add(scanData.horsDelai ? "invalid" : "valid");
+          btn.title = scanData.horsDelai ? `Hors délai T${currentTour} (ELIMINÉ)` : `Tour ${currentTour} validé`;
         } else {
           btn.classList.add("valid");
           btn.title = `Tour ${currentTour} validé`;
@@ -991,37 +990,36 @@
       }
 
       const horsDelai = await isHorsDelai(dossard, nextTour);
-      if (horsDelai) {
-        const now = Date.now();
-        const elapsedTime = now - startMs;
-        const formattedTime = formatTime(elapsedTime);
-        await addDoc(collection(db, "resultats"), {
-          dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admin"
-        });
-        globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: true, timestamp: now };
-        saveGlobalCache();
-
-        updateDossardButton(dossard);
-        if (statusDiv) {
-          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai T${nextTour} à ${formattedTime} (enregistré)`;
-          statusDiv.className = "message warning";
-        }
-        return true;
-      }
-
-      // Arrivée normale - Toujours créer le verrou
       const now = Date.now();
       const elapsedTime = now - startMs;
       const formattedTime = formatTime(elapsedTime);
+
+      // Toujours enregistrer le scan
       await addDoc(collection(db, "resultats"), {
-        dossard, tour: nextTour, timestamp: new Date(), horsDelai: false, source: "admin"
+        dossard, tour: nextTour, timestamp: new Date(), horsDelai: horsDelai, source: "admin"
       });
-      globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: false, timestamp: now };
+      globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: horsDelai, timestamp: now };
       saveGlobalCache();
+
+      // Si hors délai, marquer comme ELIMINE
+      if (horsDelai) {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const coureurDoc = snap.docs[0];
+          await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "ELIMINE" });
+          globalCache.coureurs[dossard].statut = "ELIMINE";
+          saveGlobalCache();
+          runnerStatuses[dossard] = "ELIMINE";
+        }
+      }
+
       updateDossardButton(dossard);
       if (statusDiv) {
-        statusDiv.innerHTML = `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
-        statusDiv.className = "message success";
+        statusDiv.innerHTML = horsDelai
+          ? `⚠️ Dossard ${dossard} hors délai T${nextTour} à ${formattedTime} (ELIMINÉ)`
+          : `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
+        statusDiv.className = horsDelai ? "message warning" : "message success";
       }
       return true;
     }
