@@ -83,7 +83,6 @@
   </style>
 </head>
 
-  
 <body>
   <div id="lock">
     <h2>🔒 Accès protégé</h2>
@@ -186,7 +185,7 @@
 
     async function updateGlobalCache() {
       const now = Date.now();
-      if (now - globalCache.lastUpdated < 15000) return; // 15 secondes
+      if (now - globalCache.lastUpdated < 15000) return;
 
       try {
         const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
@@ -291,16 +290,15 @@
       return (Date.now() - startMs) > cumul * 60000;
     }
 
-    // CORRECTION: getDernierTourCommence retourne 0 si aucun tour
+    // CORRECTION: getDernierTourCommence inclut TOUS les types de scans (y compris DNF/DNS)
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
-      // 1. Chercher dans le cache global (UNIQUEMENT les scans normaux, pas DNF/DNS)
+      // 1. Chercher dans le cache global (TOUS les types de scans)
       for (const key in globalCache.scans) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
-          const data = globalCache.scans[key];
-          if (data && !data.type && tour > dernierTour) {
+          if (tour > dernierTour) {
             dernierTour = tour;
           }
         }
@@ -316,7 +314,7 @@
         }
       }
 
-      // 3. Si pas trouvé dans le cache, chercher dans Firestore
+      // 3. Si pas trouvé dans le cache, chercher dans Firestore (TOUS les types)
       if (dernierTour === 0) {
         try {
           const scans = await getDocs(query(
@@ -325,7 +323,7 @@
           ));
           scans.forEach(doc => {
             const data = doc.data();
-            if (data.tour && !data.type) { // Seuls les scans normaux (pas DNF/DNS)
+            if (data.tour) {
               if (data.tour > dernierTour) {
                 dernierTour = data.tour;
               }
@@ -339,7 +337,7 @@
       return dernierTour;
     }
 
-    // ===== FONCTION PRINCIPALE CORRIGÉE =====
+    // CORRECTION: Fonction principale pour traiter les arrivées
     async function traiterArrivee(dossard, source) {
       if (!startMs) {
         feedback("⛔ Course non démarrée", "red");
@@ -378,13 +376,6 @@
       let dernierTour = await getDernierTourCommence(dossard);
       const prochainTour = dernierTour + 1;
 
-      // Vérifier si le coureur peut scanner le tour actuel
-      if (dernierTour < currentTour - 1) {
-        feedback(`⛔ Impossible : dernier tour validé = ${dernierTour} (tour actuel: ${currentTour})`, "red");
-        beepError.play();
-        return;
-      }
-
       if (prochainTour > currentTour) {
         feedback(`⛔ Tour ${prochainTour} non encore ouvert (tour actuel: ${currentTour})`, "orange");
         beepError.play();
@@ -401,17 +392,15 @@
         }
       }
 
-      // ===== NOUVELLE VÉRIFICATION COMPLÈTE =====
+      // Vérification complète des doublons
       const lockKey = `${dossard}_t${prochainTour}`;
 
-      // 1. Vérifier dans le cache local
       if (globalCache.locks[lockKey]) {
         feedback(`⛔ Déjà scanné pour le tour ${prochainTour}`, "orange");
         beepError.play();
         return;
       }
 
-      // 2. Vérifier dans Firestore (verrou)
       const lockRef = doc(db, "scansLocks", lockKey);
       const lockSnap = await getDoc(lockRef);
       if (lockSnap.exists()) {
@@ -422,7 +411,6 @@
         return;
       }
 
-      // 3. Vérifier si un SCAN EXISTE déjà pour ce tour (au cas où le verrou aurait été supprimé)
       const scanQuery = query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -435,7 +423,7 @@
         return;
       }
 
-      // 4. VÉRIFIER LE DÉLAI DE 3 MIN DEPUIS LE DERNIER SCAN
+      // Vérification du délai de 3 min depuis le dernier scan
       const lastScanQuery = query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
@@ -446,14 +434,13 @@
       if (!lastScanSnap.empty) {
         const lastScanTime = lastScanSnap.docs[0].data().timestamp.toDate().getTime();
         const timeSinceLastScan = Date.now() - lastScanTime;
-        if (timeSinceLastScan < 180000) { // 3 minutes = 180000 ms
+        if (timeSinceLastScan < 180000) {
           const remainingSeconds = Math.ceil((180000 - timeSinceLastScan) / 1000);
           feedback(`⏳ Attendez ${remainingSeconds}s avant de scanner à nouveau`, "orange");
           beepError.play();
           return;
         }
       }
-      // ===== FIN DE LA NOUVELLE VÉRIFICATION =====
 
       const horsDelai = await isHorsDelai(prochainTour);
       
@@ -467,27 +454,20 @@
       saveGlobalCache();
 
       if (horsDelai) {
+        // CORRECTION: Ne PAS marquer comme ELIMINE, juste enregistrer horsDelai: true
         await addDoc(collection(db, "resultats"), {
           dossard, tour: prochainTour, horsDelai: true, source, timestamp: serverTimestamp()
         });
         globalCache.scans[lockKey] = { dossard, tour: prochainTour, horsDelai: true, timestamp: Date.now() };
         saveGlobalCache();
 
-        if (coureur && !["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-          const coureurRef = doc(db, "coureurs", Object.keys(globalCache.coureurs).find(id => globalCache.coureurs[id].dossard == dossard));
-          if (coureurRef) {
-            await updateDoc(coureurRef, { statut: "ELIMINE" });
-            globalCache.coureurs[dossard].statut = "ELIMINE";
-            saveGlobalCache();
-          }
-        }
-
-        feedback(`🚨 ${dossard} HORS DELAI T${prochainTour}`, "red");
+        // Le bouton sera désactivé via la détection de horsDelai dans l'admin
+        feedback(`🚨 ${dossard} HORS DELAI T${prochainTour} (temps enregistré)`, "orange");
         beepError.play();
         return;
       }
 
-      // ARRIVÉE NORMALE - Le verrou est déjà créé
+      // Arrivée normale
       await addDoc(collection(db, "resultats"), {
         dossard, tour: prochainTour, horsDelai: false, source, timestamp: serverTimestamp()
       });
@@ -653,9 +633,8 @@
       document.getElementById("dossard-dns").value = "";
     };
 
-    // FONCTION CORRIGÉE: changerStatut avec tour = dernierTour + 1
+    // CORRECTION: changerStatut avec gestion des tours
     async function changerStatut(dossard, type) {
-      // Forcer la mise à jour du cache
       await updateGlobalCache();
 
       let coureur = globalCache.coureurs[dossard];
@@ -673,7 +652,6 @@
         return;
       }
 
-      // VÉRIFIER SI UN DNS/DNF EXISTE DÉJÀ (quel que soit le tour)
       try {
         const existingDnsDnf = await getDocs(query(
           collection(db, "resultats"),
@@ -699,7 +677,6 @@
         return;
       }
 
-      // UTILISER getDernierTourCommence pour avoir le bon tour
       const dernierTour = await getDernierTourCommence(dossard);
       const tour = Math.min(10, dernierTour + 1);
 
@@ -712,10 +689,8 @@
       }
       const coureurDoc = snap.docs[0];
 
-      // UTILISER UNE TRANSACTION POUR ÉVITER LES CONFLITS
       try {
         await runTransaction(db, async (transaction) => {
-          // Vérifier à nouveau dans la transaction
           const existingRef = query(
             collection(db, "resultats"),
             where("dossard", "==", dossard),
@@ -726,10 +701,7 @@
             throw new Error("DNS/DNF déjà existant");
           }
 
-          // Mettre à jour le coureur
           transaction.update(doc(db, "coureurs", coureurDoc.id), { statut: type });
-
-          // Ajouter le résultat avec le BON TOUR
           const newDocRef = doc(collection(db, "resultats"));
           transaction.set(newDocRef, {
             dossard,
@@ -738,8 +710,6 @@
             source: "MANUEL",
             timestamp: serverTimestamp()
           });
-
-          // Créer le verrou avec le BON TOUR
           const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
           transaction.set(lockRef, {
             dossard: dossard,
@@ -748,7 +718,6 @@
           });
         });
 
-        // Mettre à jour le cache local
         globalCache.coureurs[dossard].statut = type;
         globalCache.locks[`${dossard}_t${tour}`] = true;
         saveGlobalCache();
