@@ -708,6 +708,7 @@
         globalCache.locks[`${dossard}_t${tour}`] = true;
         saveGlobalCache();
 
+        
         feedback(
           type === "DNF" ? `🏳️ DNF ${dossard} T${tour}` : `🚫 DNS ${dossard} T${tour}`,
           "orange"
