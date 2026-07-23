@@ -439,30 +439,19 @@
       globalCache.locks[lockKey] = true;
       saveGlobalCache();
 
-      if (horsDelai) {
-        await addDoc(collection(db, "resultats"), {
-          dossard, tour: prochainTour, horsDelai: true, source, timestamp: serverTimestamp()
-        });
-        globalCache.scans[lockKey] = { dossard, tour: prochainTour, horsDelai: true, timestamp: Date.now() };
-        saveGlobalCache();
-
-        feedback(`🚨 ${dossard} HORS DELAI T${prochainTour} (temps enregistré)`, "orange");
-        beepError.play();
-        return;
-      }
-
-      // Arrivée normale
+      // Enregistrer le scan, même si hors délai
       await addDoc(collection(db, "resultats"), {
-        dossard, tour: prochainTour, horsDelai: false, source, timestamp: serverTimestamp()
+        dossard, tour: prochainTour, horsDelai: horsDelai, source, timestamp: serverTimestamp()
       });
-      globalCache.scans[lockKey] = { dossard, tour: prochainTour, horsDelai: false, timestamp: Date.now() };
+      globalCache.scans[lockKey] = { dossard, tour: prochainTour, horsDelai: horsDelai, timestamp: Date.now() };
       saveGlobalCache();
 
-      let couleur = "lime";
+      let couleur = horsDelai ? "orange" : "lime";
       if (coureur && coureur.sexe === "F") couleur = "violet";
-      if (coureur && coureur.sexe === "H") couleur = "cyan";
-      feedback(`✅ ${dossard} - TOUR ${prochainTour}`, couleur);
-      beepOk.play();
+      if (coureur && coureur.sexe === "H" && !horsDelai) couleur = "cyan";
+
+      feedback(horsDelai ? `🚨 ${dossard} HORS DELAI T${prochainTour} (temps enregistré)` : `✅ ${dossard} - TOUR ${prochainTour}`, couleur);
+      horsDelai ? beepError.play() : beepOk.play();
     }
 
     function initScanner() {
