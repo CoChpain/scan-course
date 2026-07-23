@@ -20,7 +20,6 @@
       --btn-bg-dark-red: #8B0000;
     }
 
-    
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg-primary);
@@ -199,7 +198,7 @@
   </div>
 
   <a href="index.html">⬅ Retour</a>
-  <h1>🛠️ ADMIN – Gestion de la course:</h1>
+  <h1>🛠️ ADMIN – Gestion de la course-</h1>
 
   <div class="tabs">
     <button class="tab-btn active" onclick="openTab('chrono-tab', this)">⏱️ Chrono</button>
@@ -386,7 +385,6 @@
         try {
           const parsed = JSON.parse(saved);
           globalCache = { ...globalCache, ...parsed };
-          console.log("Cache global chargé depuis localStorage.");
         } catch (e) {
           console.error("Erreur chargement cache global :", e);
         }
@@ -400,7 +398,7 @@
 
     async function updateGlobalCache() {
       const now = Date.now();
-      if (now - globalCache.lastUpdated < 15000) return; // 15 secondes
+      if (now - globalCache.lastUpdated < 15000) return;
 
       try {
         const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
@@ -436,7 +434,6 @@
 
         globalCache.lastUpdated = now;
         saveGlobalCache();
-        console.log("Cache global mis à jour depuis Firebase.");
       } catch (error) {
         console.error("Erreur mise à jour cache global :", error);
       }
@@ -502,19 +499,21 @@
       div.style.display = div.style.display === "none" ? "block" : "none";
     };
 
+    // CORRECTION: getDernierTourCommence inclut TOUS les types de scans (y compris DNF/DNS)
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
+      // 1. Chercher dans le cache global (TOUS les types de scans)
       for (const key in globalCache.scans) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
-          const data = globalCache.scans[key];
-          if (data && !data.type && tour > dernierTour) {
+          if (tour > dernierTour) {
             dernierTour = tour;
           }
         }
       }
 
+      // 2. Chercher dans les verrous
       for (const key in globalCache.locks) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
@@ -524,6 +523,7 @@
         }
       }
 
+      // 3. Si pas trouvé dans le cache, chercher dans Firestore (TOUS les types)
       if (dernierTour === 0) {
         try {
           const scans = await getDocs(query(
@@ -532,7 +532,7 @@
           ));
           scans.forEach(doc => {
             const data = doc.data();
-            if (data.tour && !data.type) {
+            if (data.tour) {
               if (data.tour > dernierTour) {
                 dernierTour = data.tour;
               }
@@ -786,7 +786,7 @@
       setTimeout(() => updateDossardButtonsState(), 200);
     }
 
-    // ===== FONCTION CORRIGÉE: updateDossardButton =====
+    // CORRECTION: updateDossardButton gère les horsDelai comme des éliminés
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
@@ -818,19 +818,31 @@
       // 4. Vérifier si déjà scanné pour ce tour
       if (globalCache.scans[scanKey] || globalCache.locks[scanKey]) {
         btn.disabled = true;
-        btn.classList.add("valid");
 
-        // Vérifier si 3 minutes se sont écoulées depuis le scan
         const scanData = globalCache.scans[scanKey];
-        if (scanData && scanData.timestamp) {
-          const scanTime = new Date(scanData.timestamp).getTime();
-          const timeSinceScan = Date.now() - scanTime;
-          if (timeSinceScan > 180000) { // 3 minutes = 180000 ms
-            btn.classList.remove("valid");
-            btn.disabled = false;
+        if (scanData) {
+          // CORRECTION: Si hors délai OU statut éliminé → bouton invalid (rouge foncé + barré)
+          if (scanData.horsDelai || (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut))) {
+            btn.classList.add("invalid");
+            btn.title = scanData.horsDelai ? "Hors délai (verrouillé)" : coureur.statut;
+            return;
           }
+          // Sinon, bouton valid (rouge clair)
+          btn.classList.add("valid");
+          // Vérifier si 3 minutes se sont écoulées
+          if (scanData.timestamp) {
+            const scanTime = new Date(scanData.timestamp).getTime();
+            const timeSinceScan = Date.now() - scanTime;
+            if (timeSinceScan > 180000) { // 3 minutes
+              btn.classList.remove("valid");
+              btn.disabled = false;
+            }
+          }
+          btn.title = `Tour ${currentTour} validé`;
+          return;
         }
-
+        // Si seulement verrouillé mais pas de scan data
+        btn.classList.add("valid");
         btn.title = `Tour ${currentTour} validé`;
         return;
       }
@@ -851,7 +863,6 @@
       }
 
       // 6. Vérifier si le coureur peut scanner le tour actuel
-      // Un coureur ne peut scanner que le tour N+1 s'il a validé le tour N
       if (dernierTour < currentTour - 1) {
         btn.disabled = true;
         btn.classList.add("invalid");
@@ -925,19 +936,8 @@
       currentTour = calculateCurrentTour(startMs, limites);
 
       // Vérifier le dernier tour scanné
-      let lastScannedTour = 0;
-      for (const key in globalCache.scans) {
-        if (key.startsWith(`${dossard}_t`)) {
-          const tour = parseInt(key.split('_t')[1]);
-          if (tour > lastScannedTour) lastScannedTour = tour;
-        }
-      }
-      for (const key in globalCache.locks) {
-        if (key.startsWith(`${dossard}_t`)) {
-          const tour = parseInt(key.split('_t')[1]);
-          if (tour > lastScannedTour) lastScannedTour = tour;
-        }
-      }
+      let lastScannedTour = await getDernierTourCommence(dossard);
+      const nextTour = lastScannedTour + 1;
 
       // Vérifier si le coureur peut scanner le tour actuel
       if (lastScannedTour < currentTour - 1) {
@@ -948,7 +948,6 @@
         return false;
       }
 
-      const nextTour = lastScannedTour + 1;
       if (nextTour > currentTour) {
         if (statusDiv) {
           statusDiv.innerHTML = `❌ Tour ${nextTour} non encore ouvert.`;
@@ -1011,22 +1010,20 @@
 
       const horsDelai = await isHorsDelai(dossard, nextTour);
       if (horsDelai) {
+        // CORRECTION: Ne PAS marquer comme ELIMINE, juste enregistrer horsDelai: true
+        const now = Date.now();
+        const elapsedTime = now - startMs;
+        const formattedTime = formatTime(elapsedTime);
         await addDoc(collection(db, "resultats"), {
           dossard, tour: nextTour, timestamp: new Date(), horsDelai: true, source: "admin"
         });
-        globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: true };
+        globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: true, timestamp: now };
         saveGlobalCache();
-        if (coureur && !["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-          const coureurRef = doc(db, "coureurs", Object.keys(globalCache.coureurs).find(id => globalCache.coureurs[id].dossard == dossard));
-          if (coureurRef) {
-            await updateDoc(coureurRef, { statut: "ELIMINE" });
-            globalCache.coureurs[dossard].statut = "ELIMINE";
-            saveGlobalCache();
-          }
-        }
+        
+        // Le bouton sera désactivé via updateDossardButton() grâce à horsDelai: true
         updateDossardButton(dossard);
         if (statusDiv) {
-          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai (ELIMINÉ) T${nextTour}.`;
+          statusDiv.innerHTML = `⚠️ Dossard ${dossard} hors délai T${nextTour} à ${formattedTime} (verrouillé)`;
           statusDiv.className = "message warning";
         }
         return true;
