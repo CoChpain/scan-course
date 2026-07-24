@@ -77,12 +77,34 @@
   justify-content: center;
   align-items: center;
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  position: relative; /* Assure que la caméra remplit bien l'espace */
 }
 
+/* Force la vidéo de la caméra à prendre toute la place */
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
 /* Masque les boutons par défaut du scanner (on les recrée manuellement) */
 .html5qrcode-scanner-tool-container {
   display: none !important;
 }
+
+   /* Masque TOUS les éléments natifs du scanner */
+.html5qrcode-scanner-tool-container,
+.html5qrcode-scanner-tool,
+.html5qrcode-scanner-tool-button,
+.html5qrcode-scanner-tool-select {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  position: absolute !important;
+  clip: rect(0 0 0 0) !important;
+} 
 
 /* Style pour les boutons personnalisés (optionnel) */
 .scanner-button {
@@ -586,39 +608,55 @@ function initScanner() {
     scanner = new Html5QrcodeScanner("reader", {
       fps: 10,
       qrbox: {
-        width: 280,  // Prend presque toute la largeur de #reader (300px - bordures)
+        width: 280,  // Prend presque toute la largeur de #reader
         height: 280,
       },
       aspectRatio: 1,
       rememberLastUsedCamera: true,
-      showTorchButtonIfSupported: false, // Désactive les boutons par défaut
+      showTorchButtonIfSupported: false, // Désactive le bouton de torche natif
+      disableFlip: true, // Désactive le bouton de retour caméra natif
       cameraFacing: "environment", // Force la caméra arrière
+      // Désactive tous les contrôles natifs
+      qrCodeSuccessCallback: onScan,
+      qrCodeErrorCallback: (error) => {
+        console.error("Erreur de scan :", error);
+      },
     });
 
     // Ajoute nos propres boutons dans #scanner-controls
     const startButton = document.createElement("button");
-    startButton.textContent = "Start Scanning";
+    startButton.textContent = "📷 Démarrer le scan";
     startButton.className = "scanner-button";
-    startButton.onclick = () => scanner.render(onScan);
+    startButton.onclick = () => {
+      scanner.render(onScan);
+    };
     controlsContainer.appendChild(startButton);
 
     const stopButton = document.createElement("button");
-    stopButton.textContent = "Stop Scanning";
+    stopButton.textContent = "⏹️ Arrêter le scan";
     stopButton.className = "scanner-button";
-    stopButton.onclick = () => scanner.clear();
+    stopButton.onclick = () => {
+      scanner.clear();
+    };
     controlsContainer.appendChild(stopButton);
 
     const cameraButton = document.createElement("button");
-    cameraButton.textContent = "Select Camera";
+    cameraButton.textContent = "📹 Changer de caméra";
     cameraButton.className = "scanner-button";
     cameraButton.onclick = async () => {
       const cameras = await Html5Qrcode.getCameras();
-      // Logique pour changer de caméra (optionnel)
-      console.log("Cameras disponibles:", cameras);
+      if (cameras.length > 1) {
+        const currentCamera = scanner.getState().currentCameraId;
+        const otherCamera = cameras.find(cam => cam.id !== currentCamera);
+        if (otherCamera) {
+          scanner.clear();
+          scanner.render(onScan, null, otherCamera.id);
+        }
+      }
     };
     controlsContainer.appendChild(cameraButton);
 
-    // Démarre le scanner par défaut
+    // Démarre le scanner par défaut avec la caméra arrière
     Html5Qrcode.getCameras()
       .then(devices => {
         if (devices && devices.length) {
