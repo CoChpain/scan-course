@@ -600,12 +600,32 @@
 
 function initScanner() {
   if (scanner) {
-    scanner.clear();
+    scanner.stop().catch(() => {});
   }
 
+  scanner = new Html5Qrcode("reader");
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    feedback("❌ Caméra non supportée", "red");
+    return;
+  }
+
+  scanner.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: { width: 280, height: 280 }
+    },
+    onScan,
+    () => {}
+  ).catch(err => {
+    console.error("Erreur caméra :", err);
+    feedback("⚠️ Impossible d'accéder à la caméra", "orange");
+  });
+}
+
   const readerElement = document.getElementById("reader");
-  const controlsContainer = document.getElementById("scanner-controls");
-  controlsContainer.innerHTML = "";
+  
 
   try {
     // Configuration ultra-minimale pour éviter les contrôles natifs
