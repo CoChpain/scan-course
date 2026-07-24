@@ -396,7 +396,7 @@ async function traiterArrivee(dossard, source) {
   // ======================
   // 🔄 Calcul tour actuel
   // ======================
-   = calculate(startMs, limites);
+   currentTour = calculateCurrentTour(startMs, limites);
 
   const dernierTour = await getDernierTourCommence(dossard);
   const prochainTour = dernierTour + 1;
@@ -572,11 +572,9 @@ async function traiterArrivee(dossard, source) {
         beepError.play();
         return;
       }
-      const now = Date.now();
-      if (dossard === lastScan && now - lastScanTime < 3000) return;
+      
       if (processing) return;
-      lastScan = dossard;
-      lastScanTime = now;
+     
       processing = true;
       try {
         await traiterArrivee(dossard, "SCAN");
@@ -590,7 +588,7 @@ async function traiterArrivee(dossard, source) {
       updateGlobalCache().then(() => {
         startMs = globalCache.startMs;
         limites = globalCache.limites;
-         = calculate(startMs, limites);
+        currentTour = calculateCurrentTour(startMs, limites);
         runnerStatuses = {};
         Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
           runnerStatuses[dossard] = data.statut;
@@ -607,14 +605,15 @@ async function traiterArrivee(dossard, source) {
           if (snap.exists()) {
             startMs = snap.data().startMs;
             globalCache.startMs = startMs;
-             = calculate(startMs, limites);
-            if ( > 0) {
-              let cumulMs = 0;
-              for (let i = 1; i < ; i++) {
-                cumulMs += (limites[`t${i}`] || 0) * 60000;
-              }
-              lastTourStartTime = startMs + cumulMs;
-            }
+         currentTour = calculateCurrentTour(startMs, limites);
+
+if (startMs && currentTour > 0) {
+  let cumulMs = 0;
+  for (let i = 1; i < currentTour; i++) {
+    cumulMs += (limites[`t${i}`] || 0) * 60000;
+  }
+  lastTourStartTime = startMs + cumulMs;
+}
             globalCache.startMs = startMs;
             saveGlobalCache();
             feedback("✅ Nouvelle course démarrée", "lime");
@@ -633,7 +632,7 @@ async function traiterArrivee(dossard, source) {
             limites = snap.data();
             globalCache.limites = limites;
             saveGlobalCache();
-             = calculate(startMs, limites);
+             currentTour = calculateCurrentTour(startMs, limites);
           }
         });
 
@@ -651,7 +650,7 @@ async function traiterArrivee(dossard, source) {
 
         setInterval(updateGlobalCache, 15000);
         setInterval(() => {
-          if (startMs)  = calculate(startMs, limites);
+          if (startMs)  currentTour = calculateCurrentTour(startMs, limites);
         }, 5000);
       });
 
