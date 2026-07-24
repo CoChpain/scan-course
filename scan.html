@@ -42,85 +42,72 @@
       font-weight: bold;
       min-height: 30px;
     }
-/* Style pour le conteneur du scanner */
-#scanner-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  max-width: 100%;
-  margin: 0 auto;
-}
-
-/* Conteneur pour les boutons du scanner */
-#scanner-controls {
-  width: 100%;
-  max-width: 300px;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-/* Style pour la zone de la caméra */
-#reader {
-  width: 100%;
-  max-width: 300px;
-  height: 300px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 4px solid white; /* Cadre blanc */
-  background: black;
-  margin: 0 auto;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-  position: relative; /* Assure que la caméra remplit bien l'espace */
-}
-
-/* Force la vidéo à prendre toute la place */
-#reader video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  display: block !important;
-  border-radius: 8px !important; /* Pour respecter le border-radius de #reader */
-}
-    
-/* Masque les boutons par défaut du scanner (on les recrée manuellement) */
-.html5qrcode-scanner-tool-container {
-  display: none !important;
-}
-
-/* Masque ABSOLUMENT TOUS les éléments natifs du scanner */
-#reader .html5qrcode-scanner-tool-container,
-#reader .html5qrcode-scanner-tool,
-#reader .html5qrcode-scanner-tool-button,
-#reader .html5qrcode-scanner-tool-select,
-#reader .html5qrcode-scanner-tool-button-container {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  height: 0 !important;
-  width: 0 !important;
-  position: absolute !important;
-  clip: rect(0 0 0 0) !important;
-  z-index: -1 !important; /* Place derrière tout */
-  pointer-events: none !important; /* Désactive les clics */
-}
-
-/* Style pour les boutons personnalisés (optionnel) */
-.scanner-button {
-  font-size: 12px;
-  padding: 6px 10px;
-  background: #333;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
+    #scanner-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+    }
+    #scanner-controls {
+      width: 100%;
+      max-width: 300px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    #reader {
+      width: 100%;
+      max-width: 300px;
+      height: 300px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 4px solid white;
+      background: black;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+      position: relative;
+    }
+    #reader video {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      display: block !important;
+      border-radius: 8px !important;
+    }
+    .html5qrcode-scanner-tool-container {
+      display: none !important;
+    }
+    #reader .html5qrcode-scanner-tool-container,
+    #reader .html5qrcode-scanner-tool,
+    #reader .html5qrcode-scanner-tool-button,
+    #reader .html5qrcode-scanner-tool-select,
+    #reader .html5qrcode-scanner-tool-button-container {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      height: 0 !important;
+      width: 0 !important;
+      position: absolute !important;
+      clip: rect(0 0 0 0) !important;
+      z-index: -1 !important;
+      pointer-events: none !important;
+    }
+    .scanner-button {
+      font-size: 12px;
+      padding: 6px 10px;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
     #input-zone {
       width: 100%;
       max-width: 320px;
@@ -156,13 +143,11 @@
   </div>
 
   <div id="scanner-container">
-  <h1>🏁 ARRIVÉES COURSE</h1>
-  <!-- Conteneur pour les boutons du scanner -->
-  <div id="scanner-controls"></div>
-  <!-- Zone de scan -->
-  <div id="reader"></div>
-  <div id="feedback"></div>
-</div>
+    <h1>🏁 ARRIVÉES COURSE</h1>
+    <div id="scanner-controls"></div>
+    <div id="reader"></div>
+    <div id="feedback"></div>
+  </div>
   <div id="input-zone">
     <div class="zone">
       <input id="arrivee-manuel" placeholder="Dossard arrivée">
@@ -314,7 +299,7 @@
       return 10;
     }
 
-    let scanner;
+    let scanner = null;
     let startMs = null;
     let limites = {};
     let currentTour = 0;
@@ -363,7 +348,7 @@
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
-      // 1. Chercher dans le cache global (TOUS les types de scans)
+      // 1. Chercher dans le cache global
       for (const key in globalCache.scans) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
@@ -383,7 +368,7 @@
         }
       }
 
-      // 3. Si pas trouvé dans le cache, chercher dans Firestore (TOUS les types)
+      // 3. Chercher dans Firestore
       if (dernierTour === 0) {
         try {
           const scans = await getDocs(query(
@@ -406,10 +391,100 @@
       return dernierTour;
     }
 
+    // ✅ NOUVELLE FONCTION INITSCANNER (corrigée)
+    function initScanner() {
+      if (scanner) {
+        scanner.stop().catch(() => {});
+      }
+
+      const readerElement = document.getElementById("reader");
+      const controlsContainer = document.getElementById("scanner-controls");
+      controlsContainer.innerHTML = "";
+
+      try {
+        // Crée un nouveau scanner
+        scanner = new Html5Qrcode("reader");
+
+        // Ajoute les boutons personnalisés
+        const startButton = document.createElement("button");
+        startButton.textContent = "📷 Démarrer";
+        startButton.className = "scanner-button";
+        startButton.onclick = startScanning;
+        controlsContainer.appendChild(startButton);
+
+        const stopButton = document.createElement("button");
+        stopButton.textContent = "⏹️ Arrêter";
+        stopButton.className = "scanner-button";
+        stopButton.onclick = stopScanning;
+        controlsContainer.appendChild(stopButton);
+
+        // Démarre automatiquement le scan
+        startScanning();
+      } catch (err) {
+        console.error("Erreur initScanner :", err);
+        feedback("⚠️ Erreur initialisation scanner", "orange");
+      }
+    }
+
+    // ✅ Démarre le scan avec la caméra arrière
+    async function startScanning() {
+      if (!scanner) return;
+
+      try {
+        // Récupère les caméras disponibles
+        const cameras = await Html5Qrcode.getCameras();
+        if (cameras.length === 0) {
+          feedback("⚠️ Aucune caméra détectée", "orange");
+          return;
+        }
+
+        // Trouve la caméra arrière (environment)
+        const backCam = cameras.find(cam =>
+          cam.label.toLowerCase().includes("back") ||
+          cam.label.toLowerCase().includes("environment")
+        );
+
+        // Utilise la caméra arrière ou la première disponible
+        const cameraId = backCam ? backCam.id : cameras[0].id;
+
+        // Démarre le scan
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            rememberLastUsedCamera: true,
+            showTorchButtonIfSupported: false,
+            disableFlip: true,
+          },
+          onScan,
+          (error) => {
+            console.error("Erreur de scan :", error);
+            feedback("⚠️ Erreur de scan : " + error, "orange");
+          }
+        );
+
+        feedback("📷 Scanner démarré", "lime");
+      } catch (err) {
+        console.error("Erreur startScanning :", err);
+        feedback("⚠️ Impossible d'accéder à la caméra. Vérifiez les permissions.", "red");
+
+        // Affiche un message pour guider l'utilisateur
+        setTimeout(() => {
+          feedback("💡 Astuce : Autorisez l'accès à la caméra dans les paramètres du navigateur.", "orange");
+        }, 3000);
+      }
+    }
+
+    // ✅ Arrête le scan
+    function stopScanning() {
+      if (scanner) {
+        scanner.stop().catch(() => {});
+        feedback("⏹️ Scanner arrêté", "orange");
+      }
+    }
+
     async function traiterArrivee(dossard, source) {
-      // ======================
-      // 🔒 Sécurité anti double scan (QR spam)
-      // ======================
       const now = Date.now();
 
       if (!window._lastScan) {
@@ -423,9 +498,6 @@
 
       window._lastScan = { dossard, time: now };
 
-      // ======================
-      // ⛔ Vérifications de base
-      // ======================
       if (!startMs) {
         feedback("⛔ Course non démarrée", "red");
         beepError.play();
@@ -456,43 +528,27 @@
         return;
       }
 
-      // ======================
-      // 🔄 Calcul tour actuel
-      // ======================
       currentTour = calculateCurrentTour(startMs, limites);
 
       const dernierTour = await getDernierTourCommence(dossard);
       const prochainTour = dernierTour + 1;
 
-      // ======================
-      // ⚠️ Coureur en retard → autorisé
-      // ======================
       if (dernierTour < currentTour - 1) {
         console.warn(`⚠️ En retard : ${dossard}`);
-        // ON LAISSE PASSER
       }
 
-      // ======================
-      // ⛔ Empêche double validation du même tour
-      // ======================
       if (dernierTour === prochainTour) {
         feedback(`⛔ ${dossard} a déjà validé le tour ${prochainTour}`, "orange");
         beepError.play();
         return;
       }
 
-      // ======================
-      // ⛔ Tour pas encore ouvert
-      // ======================
       if (prochainTour > currentTour) {
         feedback(`⛔ Tour ${prochainTour} non encore ouvert`, "orange");
         beepError.play();
         return;
       }
 
-      // ======================
-      // ⛔ Règle des 3 minutes
-      // ======================
       if (dernierTour === currentTour - 1 && lastTourStartTime) {
         const timeSinceStart = Date.now() - lastTourStartTime;
 
@@ -504,9 +560,6 @@
         }
       }
 
-      // ======================
-      // ⛔ Anti doublon base (locks + DB)
-      // ======================
       const lockKey = `${dossard}_t${prochainTour}`;
 
       if (globalCache.locks[lockKey]) {
@@ -526,14 +579,8 @@
         return;
       }
 
-      // ======================
-      // ⏱️ Vérif hors délai
-      // ======================
       const horsDelai = await isHorsDelai(prochainTour);
 
-      // ======================
-      // 🔐 Création lock
-      // ======================
       await setDoc(lockRef, {
         dossard,
         tour: prochainTour,
@@ -543,9 +590,6 @@
       globalCache.locks[lockKey] = true;
       saveGlobalCache();
 
-      // ======================
-      // 💾 Enregistrement du scan
-      // ======================
       await addDoc(collection(db, "resultats"), {
         dossard,
         tour: prochainTour,
@@ -563,9 +607,6 @@
 
       saveGlobalCache();
 
-      // ======================
-      // 🚨 Élimination si hors délai
-      // ======================
       if (horsDelai) {
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
@@ -580,9 +621,6 @@
         }
       }
 
-      // ======================
-      // 🎨 Feedback utilisateur
-      // ======================
       let couleur = horsDelai ? "orange" : "lime";
 
       if (coureur?.sexe === "F") couleur = "violet";
@@ -597,77 +635,6 @@
 
       horsDelai ? beepError.play() : beepOk.play();
     }
-
-function initScanner() {
-  if (scanner) {
-    scanner.clear();
-  }
-
-  const readerElement = document.getElementById("reader");
-  const controlsContainer = document.getElementById("scanner-controls");
-  controlsContainer.innerHTML = "";
-
-  try {
-    // Configuration ultra-minimale pour éviter les contrôles natifs
-    scanner = new Html5Qrcode("reader", {
-      fps: 10,
-      qrbox: { width: 280, height: 280 },
-      aspectRatio: 1,
-      cameraFacing: "environment",
-      rememberLastUsedCamera: true,
-      showTorchButtonIfSupported: false,
-      disableFlip: true,
-      // Désactive TOUS les contrôles natifs
-      qrCodeSuccessCallback: onScan,
-      qrCodeErrorCallback: (error) => {
-        console.error("Erreur de scan :", error);
-      },
-      // Option critique : désactive l'interface native
-      supportedFileExtensions: [], // Désactive le scan de fichiers
-      verbose: false, // Désactive les logs
-    });
-
-    // Ajoute tes boutons personnalisés
-    const startButton = document.createElement("button");
-    startButton.textContent = "📷 Démarrer";
-    startButton.className = "scanner-button";
-    startButton.onclick = () => scanner.render(onScan);
-    controlsContainer.appendChild(startButton);
-
-    const stopButton = document.createElement("button");
-    stopButton.textContent = "⏹️ Arrêter";
-    stopButton.className = "scanner-button";
-    stopButton.onclick = () => scanner.clear();
-    controlsContainer.appendChild(stopButton);
-
-    // Démarre automatiquement avec la caméra arrière
-    Html5Qrcode.getCameras().then(devices => {
-      const backCam = devices.find(d =>
-        d.label.toLowerCase().includes("back") ||
-        d.label.toLowerCase().includes("environment")
-      );
-      scanner.render(onScan, null, backCam ? backCam.id : devices[0]?.id);
-    }).catch(err => {
-      console.error("Erreur caméra :", err);
-      feedback("⚠️ Impossible d'accéder à la caméra", "orange");
-    });
-
-  } catch (err) {
-    console.error("Erreur initScanner :", err);
-    feedback("⚠️ Erreur initialisation scanner", "orange");
-  }
-}
-    // Masque les éléments natifs après un court délai (au cas où)
-setTimeout(() => {
-  const nativeTools = document.querySelectorAll('#reader .html5qrcode-scanner-tool-container, #reader .html5qrcode-scanner-tool');
-  nativeTools.forEach(el => {
-    el.style.display = 'none';
-    el.style.visibility = 'hidden';
-    el.style.opacity = '0';
-    el.style.position = 'absolute';
-    el.style.zIndex = '-1';
-  });
-}, 100);
 
     async function onScan(text) {
       const dossard = Number(text.replace(/\D/g, ""));
@@ -691,16 +658,15 @@ setTimeout(() => {
 
     window.addEventListener("DOMContentLoaded", async () => {
       loadGlobalCache();
-const lock = document.getElementById("lock");
-  if (lock.style.display === "none") {
-    initScanner();
-  }
-      // ⚠️ Vérifie si une nouvelle course a démarré depuis la dernière sauvegarde
+      const lock = document.getElementById("lock");
+      if (lock.style.display === "none") {
+        initScanner();
+      }
+
       const departDoc = await getDoc(doc(db, "course", "depart"));
       if (departDoc.exists()) {
         const newStartMs = departDoc.data().startMs;
         if (newStartMs && newStartMs !== globalCache.startMs) {
-          // Réinitialise le cache si une nouvelle course a démarré
           globalCache.locks = {};
           globalCache.scans = {};
           globalCache.startMs = newStartMs;
@@ -739,10 +705,9 @@ const lock = document.getElementById("lock");
             lastTourStartTime = startMs + cumulMs;
           }
 
-          // ⚠️ Réinitialise les locks et scans du cache global
           globalCache.locks = {};
           globalCache.scans = {};
-          globalCache.lastUpdated = 0; // Force une mise à jour complète
+          globalCache.lastUpdated = 0;
           saveGlobalCache();
           feedback("✅ Nouvelle course démarrée", "lime");
         } else {
@@ -845,7 +810,6 @@ const lock = document.getElementById("lock");
       }
     };
 
-    // Bouton de réinitialisation manuelle du cache
     document.getElementById("btn-reset-cache").onclick = () => {
       globalCache = {
         locks: {},
@@ -959,7 +923,9 @@ const lock = document.getElementById("lock");
     }
 
     window.addEventListener("beforeunload", () => {
-      if (scanner) scanner.clear();
+      if (scanner) {
+        scanner.stop().catch(() => {});
+      }
       cacheChannel.close();
     });
   </script>
