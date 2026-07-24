@@ -1,121 +1,967 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SCAN COURSE</title>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-
-<style>
-body {
-  background: #000;
-  color: white;
-  font-family: Arial;
-  text-align: center;
-}
-
-#reader {
-  width: 300px;
-  height: 300px;
-  margin: auto;
-  border: 4px solid white;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-#reader video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-#feedback {
-  font-size: 20px;
-  font-weight: bold;
-  margin-top: 10px;
-}
-
-#lock {
-  position: fixed;
-  inset: 0;
-  background: black;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCAN COURSE</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      background: #000;
+      color: white;
+      font-family: Arial, Helvetica, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 10px;
+      min-height: 100vh;
+    }
+    h1 {
+      margin: 10px 0;
+      font-size: 20px;
+    }
+    button, input {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px;
+      border-radius: 8px;
+      border: none;
+    }
+    button {
+      background: #333;
+      color: white;
+    }
+    input {
+      width: 100%;
+      max-width: 300px;
+      text-align: center;
+      background: #222;
+      color: white;
+    }
+    #feedback {
+      font-size: 22px;
+      font-weight: bold;
+      min-height: 30px;
+    }
+/* Style pour le conteneur du scanner */
+#scanner-container {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Conteneur pour les boutons du scanner */
+#scanner-controls {
+  width: 100%;
+  max-width: 300px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+/* Style pour la zone de la caméra */
+#reader {
+  width: 100%;
+  max-width: 300px;
+  height: 300px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 4px solid white; /* Cadre blanc */
+  background: black;
+  margin: 0 auto;
+  display: flex;
   justify-content: center;
   align-items: center;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  position: relative; /* Assure que la caméra remplit bien l'espace */
 }
-</style>
+
+/* Force la vidéo à prendre toute la place */
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 8px !important; /* Pour respecter le border-radius de #reader */
+}
+    
+/* Masque les boutons par défaut du scanner (on les recrée manuellement) */
+.html5qrcode-scanner-tool-container {
+  display: none !important;
+}
+
+/* Masque ABSOLUMENT TOUS les éléments natifs du scanner */
+#reader .html5qrcode-scanner-tool-container,
+#reader .html5qrcode-scanner-tool,
+#reader .html5qrcode-scanner-tool-button,
+#reader .html5qrcode-scanner-tool-select,
+#reader .html5qrcode-scanner-tool-button-container {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  position: absolute !important;
+  clip: rect(0 0 0 0) !important;
+  z-index: -1 !important; /* Place derrière tout */
+  pointer-events: none !important; /* Désactive les clics */
+}
+
+/* Style pour les boutons personnalisés (optionnel) */
+.scanner-button {
+  font-size: 12px;
+  padding: 6px 10px;
+  background: #333;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+    #input-zone {
+      width: 100%;
+      max-width: 320px;
+      margin: 10px auto;
+      padding: 10px;
+      border-radius: 10px;
+      background: #111;
+    }
+    #lock {
+      position: fixed;
+      inset: 0;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    @media (max-width: 600px) {
+      #reader {
+        max-width: 260px;
+      }
+    }
+  </style>
 </head>
 
 <body>
+  <div id="lock">
+    <h2>🔒 Accès protégé</h2>
+    <input id="pwd" type="password" placeholder="Mot de passe">
+    <button onclick="checkPwd()">Entrer</button>
+    <div id="err"></div>
+  </div>
 
-<div id="lock">
-  <h2>🔒 Accès protégé</h2>
-  <input id="pwd" type="password" placeholder="Mot de passe">
-  <button onclick="checkPwd()">Entrer</button>
-  <div id="err"></div>
+  <div id="scanner-container">
+  <h1>🏁 ARRIVÉES COURSE</h1>
+  <!-- Conteneur pour les boutons du scanner -->
+  <div id="scanner-controls"></div>
+  <!-- Zone de scan -->
+  <div id="reader"></div>
+  <div id="feedback"></div>
 </div>
+  <div id="input-zone">
+    <div class="zone">
+      <input id="arrivee-manuel" placeholder="Dossard arrivée">
+      <button id="btn-arrivee">✅ ARRIVÉE</button>
+    </div>
+    <div class="zone">
+      <input id="dossard-dnf" placeholder="Dossard DNF">
+      <button id="btn-dnf">🏳️ DNF</button>
+    </div>
+    <div class="zone">
+      <input id="dossard-dns" placeholder="Dossard DNS">
+      <button id="btn-dns">🚫 DNS</button>
+    </div>
+    <div class="zone">
+      <button id="btn-reset-cache" style="background: red;">🔄 Réinitialiser le cache</button>
+    </div>
+  </div>
 
-<h1>🏁 ARRIVÉES COURSE</h1>
-<div id="reader"></div>
-<div id="feedback"></div>
+  <script>
+    const SESSION_DURATION = 30 * 60 * 1000;
+    window.checkPwd = function() {
+      const password = document.getElementById("pwd").value;
+      if(password === "3sRunTravel2026") {
+        localStorage.setItem("scanAuthTime", Date.now());
+        unlock();
+      } else {
+        document.getElementById("err").innerHTML = "❌ Mot de passe incorrect";
+      }
+    };
 
-<script>
-let scanner = null;
+    function unlock() {
+      document.getElementById("lock").style.display = "none";
+      initScanner();
+    }
 
-function feedback(msg, color) {
-  const el = document.getElementById("feedback");
-  el.innerHTML = msg;
-  el.style.color = color;
-}
+    function checkSession() {
+      const saved = localStorage.getItem("scanAuthTime");
+      if(saved && (Date.now() - saved) < SESSION_DURATION) unlock();
+    }
+    checkSession();
+  </script>
 
-// ✅ SCANNER CORRIGÉ
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import {
+      getFirestore, collection, query, where, getDocs, addDoc, updateDoc,
+      doc, serverTimestamp, onSnapshot, getDoc, setDoc, runTransaction, enableIndexedDbPersistence
+    } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+    import { firebaseConfig } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    enableIndexedDbPersistence(db)
+      .catch((err) => {
+        if (err.code == 'failed-precondition') {
+          console.log("Persistance désactivée : plusieurs onglets ouverts.");
+        }
+      });
+
+    // ======================
+    // 💾 Cache global partagé
+    // ======================
+    const GLOBAL_CACHE_KEY = "apolloRunGlobalCache";
+    let globalCache = {
+      locks: {},
+      scans: {},
+      coureurs: {},
+      limites: { t1:40, t2:37, t3:34, t4:31, t5:28, t6:25, t7:22, t8:19, t9:16, t10:13 },
+      startMs: null,
+      lastUpdated: 0
+    };
+
+    const cacheChannel = new BroadcastChannel('apollo-run-cache');
+
+    function loadGlobalCache() {
+      const saved = localStorage.getItem(GLOBAL_CACHE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          globalCache = { ...globalCache, ...parsed };
+        } catch (e) {
+          console.error("Erreur chargement cache global :", e);
+        }
+      }
+    }
+
+    function saveGlobalCache() {
+      localStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(globalCache));
+      cacheChannel.postMessage({ type: 'cache-updated', data: globalCache });
+    }
+
+    async function updateGlobalCache() {
+      const now = Date.now();
+      if (now - globalCache.lastUpdated < 15000) return;
+
+      try {
+        const limitesDoc = await getDoc(doc(db, "course", "limitesTours"));
+        if (limitesDoc.exists()) {
+          globalCache.limites = limitesDoc.data();
+        }
+
+        const departDoc = await getDoc(doc(db, "course", "depart"));
+        if (departDoc.exists()) {
+          globalCache.startMs = departDoc.data().startMs;
+        }
+
+        const coureursSnap = await getDocs(collection(db, "coureurs"));
+        globalCache.coureurs = {};
+        coureursSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.dossard) {
+            globalCache.coureurs[data.dossard] = data;
+          }
+        });
+
+        const currentTour = calculateCurrentTour(globalCache.startMs, globalCache.limites);
+        if (currentTour > 0) {
+          const locksSnap = await getDocs(query(collection(db, "scansLocks"), where("tour", "==", currentTour)));
+          locksSnap.forEach(doc => {
+            const data = doc.data();
+            globalCache.locks[`${data.dossard}_t${data.tour}`] = true;
+          });
+
+          const scansSnap = await getDocs(query(collection(db, "resultats"), where("tour", "==", currentTour)));
+          scansSnap.forEach(doc => {
+            const data = doc.data();
+            globalCache.scans[`${data.dossard}_t${data.tour}`] = data;
+          });
+        }
+
+        globalCache.lastUpdated = now;
+        saveGlobalCache();
+      } catch (error) {
+        console.error("Erreur mise à jour cache global :", error);
+      }
+    }
+
+    function calculateCurrentTour(startMs, limites) {
+      if (!startMs || !limites) return 0;
+      const elapsedMin = (Date.now() - startMs) / 60000;
+      let cumul = 0;
+      for (let i = 1; i <= 10; i++) {
+        const limite = limites[`t${i}`];
+        if (limite === undefined) break;
+        cumul += limite;
+        if (elapsedMin <= cumul) return i;
+      }
+      return 10;
+    }
+
+    let scanner;
+    let startMs = null;
+    let limites = {};
+    let currentTour = 0;
+    let lastTourStartTime = null;
+    let runnerStatuses = {};
+    let processing = false;
+
+    cacheChannel.onmessage = (e) => {
+      if (e.data.type === 'cache-updated') {
+        globalCache = e.data.data;
+        startMs = globalCache.startMs;
+        limites = globalCache.limites;
+        currentTour = calculateCurrentTour(startMs, limites);
+        runnerStatuses = {};
+        Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
+          runnerStatuses[dossard] = data.statut;
+        });
+        if (startMs && currentTour > 0) {
+          let cumulMs = 0;
+          for (let i = 1; i < currentTour; i++) {
+            cumulMs += (limites[`t${i}`] || 0) * 60000;
+          }
+          lastTourStartTime = startMs + cumulMs;
+        }
+      }
+    };
+
+    const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+    const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+
+    window.feedback = function(message, couleur) {
+      const zone = document.getElementById("feedback");
+      zone.innerHTML = message;
+      zone.style.color = couleur;
+    };
+
+    async function isHorsDelai(tour) {
+      if (!startMs) return false;
+      let cumul = 0;
+      for (let i = 1; i <= tour; i++) {
+        cumul += globalCache.limites[`t${i}`] || 0;
+      }
+      return (Date.now() - startMs) > cumul * 60000;
+    }
+
+    async function getDernierTourCommence(dossard) {
+      let dernierTour = 0;
+
+      // 1. Chercher dans le cache global (TOUS les types de scans)
+      for (const key in globalCache.scans) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          if (tour > dernierTour) {
+            dernierTour = tour;
+          }
+        }
+      }
+
+      // 2. Chercher dans les verrous
+      for (const key in globalCache.locks) {
+        if (key.startsWith(`${dossard}_t`)) {
+          const tour = parseInt(key.split('_t')[1]);
+          if (tour > dernierTour) {
+            dernierTour = tour;
+          }
+        }
+      }
+
+      // 3. Si pas trouvé dans le cache, chercher dans Firestore (TOUS les types)
+      if (dernierTour === 0) {
+        try {
+          const scans = await getDocs(query(
+            collection(db, "resultats"),
+            where("dossard", "==", dossard)
+          ));
+          scans.forEach(doc => {
+            const data = doc.data();
+            if (data.tour) {
+              if (data.tour > dernierTour) {
+                dernierTour = data.tour;
+              }
+            }
+          });
+        } catch (e) {
+          console.error("Erreur getDernierTourCommence:", e);
+        }
+      }
+
+      return dernierTour;
+    }
+
+    async function traiterArrivee(dossard, source) {
+      // ======================
+      // 🔒 Sécurité anti double scan (QR spam)
+      // ======================
+      const now = Date.now();
+
+      if (!window._lastScan) {
+        window._lastScan = { dossard: null, time: 0 };
+      }
+
+      if (window._lastScan.dossard === dossard && (now - window._lastScan.time) < 3000) {
+        console.warn("⛔ Double scan ignoré");
+        return;
+      }
+
+      window._lastScan = { dossard, time: now };
+
+      // ======================
+      // ⛔ Vérifications de base
+      // ======================
+      if (!startMs) {
+        feedback("⛔ Course non démarrée", "red");
+        beepError.play();
+        return;
+      }
+
+      if (!dossard) {
+        feedback("❌ Dossard invalide", "red");
+        return;
+      }
+
+      await updateGlobalCache();
+
+      let coureur = globalCache.coureurs[dossard];
+
+      if (!coureur) {
+        const snap = await getDoc(doc(db, "coureurs", dossard));
+        if (snap.exists()) {
+          coureur = snap.data();
+          globalCache.coureurs[dossard] = coureur;
+          saveGlobalCache();
+        }
+      }
+
+      if (coureur && ["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
+        feedback(`⛔ ${coureur.statut}`, "red");
+        beepError.play();
+        return;
+      }
+
+      // ======================
+      // 🔄 Calcul tour actuel
+      // ======================
+      currentTour = calculateCurrentTour(startMs, limites);
+
+      const dernierTour = await getDernierTourCommence(dossard);
+      const prochainTour = dernierTour + 1;
+
+      // ======================
+      // ⚠️ Coureur en retard → autorisé
+      // ======================
+      if (dernierTour < currentTour - 1) {
+        console.warn(`⚠️ En retard : ${dossard}`);
+        // ON LAISSE PASSER
+      }
+
+      // ======================
+      // ⛔ Empêche double validation du même tour
+      // ======================
+      if (dernierTour === prochainTour) {
+        feedback(`⛔ ${dossard} a déjà validé le tour ${prochainTour}`, "orange");
+        beepError.play();
+        return;
+      }
+
+      // ======================
+      // ⛔ Tour pas encore ouvert
+      // ======================
+      if (prochainTour > currentTour) {
+        feedback(`⛔ Tour ${prochainTour} non encore ouvert`, "orange");
+        beepError.play();
+        return;
+      }
+
+      // ======================
+      // ⛔ Règle des 3 minutes
+      // ======================
+      if (dernierTour === currentTour - 1 && lastTourStartTime) {
+        const timeSinceStart = Date.now() - lastTourStartTime;
+
+        if (timeSinceStart < 180000) {
+          const sec = Math.ceil((180000 - timeSinceStart) / 1000);
+          feedback(`⏳ Attendre ${sec}s pour le tour ${prochainTour}`, "orange");
+          beepError.play();
+          return;
+        }
+      }
+
+      // ======================
+      // ⛔ Anti doublon base (locks + DB)
+      // ======================
+      const lockKey = `${dossard}_t${prochainTour}`;
+
+      if (globalCache.locks[lockKey]) {
+        feedback(`⛔ Déjà scanné T${prochainTour}`, "orange");
+        beepError.play();
+        return;
+      }
+
+      const lockRef = doc(db, "scansLocks", lockKey);
+      const lockSnap = await getDoc(lockRef);
+
+      if (lockSnap.exists()) {
+        globalCache.locks[lockKey] = true;
+        saveGlobalCache();
+        feedback(`⛔ Déjà scanné T${prochainTour}`, "orange");
+        beepError.play();
+        return;
+      }
+
+      // ======================
+      // ⏱️ Vérif hors délai
+      // ======================
+      const horsDelai = await isHorsDelai(prochainTour);
+
+      // ======================
+      // 🔐 Création lock
+      // ======================
+      await setDoc(lockRef, {
+        dossard,
+        tour: prochainTour,
+        createdAt: serverTimestamp()
+      });
+
+      globalCache.locks[lockKey] = true;
+      saveGlobalCache();
+
+      // ======================
+      // 💾 Enregistrement du scan
+      // ======================
+      await addDoc(collection(db, "resultats"), {
+        dossard,
+        tour: prochainTour,
+        horsDelai,
+        source,
+        timestamp: serverTimestamp()
+      });
+
+      globalCache.scans[lockKey] = {
+        dossard,
+        tour: prochainTour,
+        horsDelai,
+        timestamp: Date.now()
+      };
+
+      saveGlobalCache();
+
+      // ======================
+      // 🚨 Élimination si hors délai
+      // ======================
+      if (horsDelai) {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snap = await getDocs(q);
+
+        if (!snap.empty) {
+          const docRef = snap.docs[0];
+          await updateDoc(doc(db, "coureurs", docRef.id), { statut: "ELIMINE" });
+
+          globalCache.coureurs[dossard].statut = "ELIMINE";
+          saveGlobalCache();
+          runnerStatuses[dossard] = "ELIMINE";
+        }
+      }
+
+      // ======================
+      // 🎨 Feedback utilisateur
+      // ======================
+      let couleur = horsDelai ? "orange" : "lime";
+
+      if (coureur?.sexe === "F") couleur = "violet";
+      if (coureur?.sexe === "H" && !horsDelai) couleur = "cyan";
+
+      feedback(
+        horsDelai
+          ? `🚨 ${dossard} SCANNÉ EN RETARD (T${prochainTour}) → ÉLIMINÉ`
+          : `✅ ${dossard} - TOUR ${prochainTour}`,
+        couleur
+      );
+
+      horsDelai ? beepError.play() : beepOk.play();
+    }
+
 function initScanner() {
   if (scanner) {
-    scanner.stop().catch(() => {});
+    scanner.clear();
   }
 
-  scanner = new Html5Qrcode("reader");
+  const readerElement = document.getElementById("reader");
+  const controlsContainer = document.getElementById("scanner-controls");
+  controlsContainer.innerHTML = "";
 
-  scanner.start(
-    { facingMode: "environment" },
-    {
+  try {
+    // Configuration ultra-minimale pour éviter les contrôles natifs
+    scanner = new Html5Qrcode("reader", {
       fps: 10,
-      qrbox: { width: 250, height: 250 }
-    },
-    onScan,
-    () => {}
-  ).catch(err => {
-    console.error(err);
-    feedback("⚠️ Impossible d'accéder à la caméra", "orange");
+      qrbox: { width: 280, height: 280 },
+      aspectRatio: 1,
+      cameraFacing: "environment",
+      rememberLastUsedCamera: true,
+      showTorchButtonIfSupported: false,
+      disableFlip: true,
+      // Désactive TOUS les contrôles natifs
+      qrCodeSuccessCallback: onScan,
+      qrCodeErrorCallback: (error) => {
+        console.error("Erreur de scan :", error);
+      },
+      // Option critique : désactive l'interface native
+      supportedFileExtensions: [], // Désactive le scan de fichiers
+      verbose: false, // Désactive les logs
+    });
+
+    // Ajoute tes boutons personnalisés
+    const startButton = document.createElement("button");
+    startButton.textContent = "📷 Démarrer";
+    startButton.className = "scanner-button";
+    startButton.onclick = () => scanner.render(onScan);
+    controlsContainer.appendChild(startButton);
+
+    const stopButton = document.createElement("button");
+    stopButton.textContent = "⏹️ Arrêter";
+    stopButton.className = "scanner-button";
+    stopButton.onclick = () => scanner.clear();
+    controlsContainer.appendChild(stopButton);
+
+    // Démarre automatiquement avec la caméra arrière
+    Html5Qrcode.getCameras().then(devices => {
+      const backCam = devices.find(d =>
+        d.label.toLowerCase().includes("back") ||
+        d.label.toLowerCase().includes("environment")
+      );
+      scanner.render(onScan, null, backCam ? backCam.id : devices[0]?.id);
+    }).catch(err => {
+      console.error("Erreur caméra :", err);
+      feedback("⚠️ Impossible d'accéder à la caméra", "orange");
+    });
+
+  } catch (err) {
+    console.error("Erreur initScanner :", err);
+    feedback("⚠️ Erreur initialisation scanner", "orange");
+  }
+}
+    // Masque les éléments natifs après un court délai (au cas où)
+setTimeout(() => {
+  const nativeTools = document.querySelectorAll('#reader .html5qrcode-scanner-tool-container, #reader .html5qrcode-scanner-tool');
+  nativeTools.forEach(el => {
+    el.style.display = 'none';
+    el.style.visibility = 'hidden';
+    el.style.opacity = '0';
+    el.style.position = 'absolute';
+    el.style.zIndex = '-1';
   });
-}
+}, 100);
 
-// ✅ SCAN
-function onScan(text) {
-  const dossard = text.replace(/\D/g, "");
+    async function onScan(text) {
+      const dossard = Number(text.replace(/\D/g, ""));
+      if (!dossard) {
+        feedback("❌ QR invalide", "red");
+        beepError.play();
+        return;
+      }
 
-  if (!dossard) {
-    feedback("❌ QR invalide", "red");
-    return;
-  }
+      if (processing) return;
 
-  feedback("✅ Dossard : " + dossard, "lime");
-}
+      processing = true;
+      try {
+        await traiterArrivee(dossard, "SCAN");
+      } catch (e) {
+        console.error("Erreur dans onScan:", e);
+      } finally {
+        processing = false;
+      }
+    }
 
-// 🔐 LOGIN
-function checkPwd() {
-  const pwd = document.getElementById("pwd").value;
-
-  if (pwd === "3sRunTravel2026") {
-    document.getElementById("lock").style.display = "none";
+    window.addEventListener("DOMContentLoaded", async () => {
+      loadGlobalCache();
+const lock = document.getElementById("lock");
+  if (lock.style.display === "none") {
     initScanner();
-  } else {
-    document.getElementById("err").innerHTML = "❌ Mauvais mot de passe";
   }
-}
-</script>
+      // ⚠️ Vérifie si une nouvelle course a démarré depuis la dernière sauvegarde
+      const departDoc = await getDoc(doc(db, "course", "depart"));
+      if (departDoc.exists()) {
+        const newStartMs = departDoc.data().startMs;
+        if (newStartMs && newStartMs !== globalCache.startMs) {
+          // Réinitialise le cache si une nouvelle course a démarré
+          globalCache.locks = {};
+          globalCache.scans = {};
+          globalCache.startMs = newStartMs;
+          saveGlobalCache();
+        }
+      }
 
+      await updateGlobalCache();
+      startMs = globalCache.startMs;
+      limites = globalCache.limites;
+      currentTour = calculateCurrentTour(startMs, limites);
+      runnerStatuses = {};
+      Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
+        runnerStatuses[dossard] = data.statut;
+      });
+
+      if (startMs && currentTour > 0) {
+        let cumulMs = 0;
+        for (let i = 1; i < currentTour; i++) {
+          cumulMs += (limites[`t${i}`] || 0) * 60000;
+        }
+        lastTourStartTime = startMs + cumulMs;
+      }
+
+      onSnapshot(doc(db, "course", "depart"), async (snap) => {
+        if (snap.exists()) {
+          startMs = snap.data().startMs;
+          globalCache.startMs = startMs;
+          currentTour = calculateCurrentTour(startMs, limites);
+
+          if (startMs && currentTour > 0) {
+            let cumulMs = 0;
+            for (let i = 1; i < currentTour; i++) {
+              cumulMs += (limites[`t${i}`] || 0) * 60000;
+            }
+            lastTourStartTime = startMs + cumulMs;
+          }
+
+          // ⚠️ Réinitialise les locks et scans du cache global
+          globalCache.locks = {};
+          globalCache.scans = {};
+          globalCache.lastUpdated = 0; // Force une mise à jour complète
+          saveGlobalCache();
+          feedback("✅ Nouvelle course démarrée", "lime");
+        } else {
+          startMs = null;
+          currentTour = 0;
+          lastTourStartTime = null;
+          globalCache.startMs = null;
+          globalCache.locks = {};
+          globalCache.scans = {};
+          saveGlobalCache();
+          feedback("⚠️ Course terminée ou non démarrée", "orange");
+        }
+      });
+
+      onSnapshot(doc(db, "course", "limitesTours"), snap => {
+        if (snap.exists()) {
+          limites = snap.data();
+          globalCache.limites = limites;
+          saveGlobalCache();
+          currentTour = calculateCurrentTour(startMs, limites);
+        }
+      });
+
+      onSnapshot(collection(db, "coureurs"), snap => {
+        runnerStatuses = {};
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.dossard) {
+            runnerStatuses[data.dossard] = data.statut;
+            globalCache.coureurs[data.dossard] = data;
+          }
+        });
+        saveGlobalCache();
+      });
+
+      setInterval(updateGlobalCache, 15000);
+      setInterval(() => {
+        if (startMs) currentTour = calculateCurrentTour(startMs, limites);
+      }, 5000);
+
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.attributeName === "style") {
+            const lock = document.getElementById("lock");
+            if (lock.style.display === "none") {
+              // Supprimé pour éviter le doublon avec unlock()
+            }
+          }
+        });
+      });
+      observer.observe(document.getElementById("lock"), { attributes: true });
+    });
+
+    document.getElementById("btn-arrivee").onclick = async () => {
+      if (processing) return;
+      processing = true;
+      try {
+        const dossard = Number(document.getElementById("arrivee-manuel").value.replace(/\D/g, ""));
+        if (!dossard) {
+          feedback("❌ Dossard invalide", "red");
+          beepError.play();
+          return;
+        }
+        await traiterArrivee(dossard, "MANUEL");
+        document.getElementById("arrivee-manuel").value = "";
+      } finally {
+        processing = false;
+      }
+    };
+
+    document.getElementById("btn-dnf").onclick = async () => {
+      if (processing) return;
+      processing = true;
+      try {
+        const dossard = document.getElementById("dossard-dnf").value.replace(/\D/g, "");
+        if(!dossard) {
+          feedback("❌ Dossard invalide", "red");
+          return;
+        }
+        await changerStatut(dossard, "DNF");
+        document.getElementById("dossard-dnf").value = "";
+      } finally {
+        processing = false;
+      }
+    };
+
+    document.getElementById("btn-dns").onclick = async () => {
+      if (processing) return;
+      processing = true;
+      try {
+        const dossard = document.getElementById("dossard-dns").value.replace(/\D/g, "");
+        if(!dossard) {
+          feedback("❌ Dossard invalide", "red");
+          return;
+        }
+        await changerStatut(dossard, "DNS");
+        document.getElementById("dossard-dns").value = "";
+      } finally {
+        processing = false;
+      }
+    };
+
+    // Bouton de réinitialisation manuelle du cache
+    document.getElementById("btn-reset-cache").onclick = () => {
+      globalCache = {
+        locks: {},
+        scans: {},
+        coureurs: {},
+        limites: { t1:40, t2:37, t3:34, t4:31, t5:28, t6:25, t7:22, t8:19, t9:16, t10:13 },
+        startMs: null,
+        lastUpdated: 0
+      };
+      saveGlobalCache();
+      location.reload();
+    };
+
+    async function changerStatut(dossard, type) {
+      await updateGlobalCache();
+
+      let coureur = globalCache.coureurs[dossard];
+      if (!coureur) {
+        const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
+        if (coureurSnap.exists()) {
+          coureur = coureurSnap.data();
+          globalCache.coureurs[dossard] = coureur;
+        }
+      }
+
+      if (!coureur) {
+        feedback("❌ Dossard inconnu", "red");
+        beepError.play();
+        return;
+      }
+
+      try {
+        const existingDnsDnf = await getDocs(query(
+          collection(db, "resultats"),
+          where("dossard", "==", dossard),
+          where("type", "in", ["DNS", "DNF"])
+        ));
+        if (!existingDnsDnf.empty) {
+          const existingData = existingDnsDnf.docs[0].data();
+          feedback(`⛔ Ce coureur a déjà un statut ${existingData.type} T${existingData.tour}`, "red");
+          beepError.play();
+          return;
+        }
+      } catch (e) {
+        console.error("Erreur vérification DNS/DNF:", e);
+        feedback("❌ Erreur de vérification", "red");
+        beepError.play();
+        return;
+      }
+
+      if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+        feedback(`⛔ Déjà ${coureur.statut}`, "red");
+        beepError.play();
+        return;
+      }
+
+      const dernierTour = await getDernierTourCommence(dossard);
+      const tour = Math.min(10, dernierTour + 1);
+
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        feedback("❌ Dossard inconnu", "red");
+        beepError.play();
+        return;
+      }
+      const coureurDoc = snap.docs[0];
+
+      try {
+        await runTransaction(db, async (transaction) => {
+          const existingRef = query(
+            collection(db, "resultats"),
+            where("dossard", "==", dossard),
+            where("type", "in", ["DNS", "DNF"])
+          );
+          const existingSnap = await getDocs(existingRef);
+          if (!existingSnap.empty) {
+            throw new Error("DNS/DNF déjà existant");
+          }
+
+          transaction.update(doc(db, "coureurs", coureurDoc.id), { statut: type });
+          const newDocRef = doc(collection(db, "resultats"));
+          transaction.set(newDocRef, {
+            dossard,
+            type,
+            tour: tour,
+            source: "MANUEL",
+            timestamp: serverTimestamp()
+          });
+          const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
+          transaction.set(lockRef, {
+            dossard: dossard,
+            tour: tour,
+            createdAt: serverTimestamp()
+          });
+        });
+
+        globalCache.coureurs[dossard].statut = type;
+        globalCache.locks[`${dossard}_t${tour}`] = true;
+        saveGlobalCache();
+
+        feedback(
+          type === "DNF" ? `🏳️ DNF ${dossard} T${tour}` : `🚫 DNS ${dossard} T${tour}`,
+          "orange"
+        );
+        beepError.play();
+      } catch (e) {
+        feedback("⛔ Erreur : " + (e.message || "Conflit détecté"), "red");
+        beepError.play();
+      }
+    }
+
+    window.addEventListener("beforeunload", () => {
+      if (scanner) scanner.clear();
+      cacheChannel.close();
+    });
+  </script>
 </body>
 </html>
