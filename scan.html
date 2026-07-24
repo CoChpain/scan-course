@@ -194,7 +194,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
     import {
       getFirestore, collection, query, where, getDocs, addDoc, updateDoc,
-      doc, serverTimestamp, onSnapshot, getDoc, setDoc, runTransaction, enableIndexedDbPersistence
+      doc, serverTimestamp, onSnapshot, getDoc, setDoc, runTransaction, enableIndexedDbPersistence, deleteDoc
     } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
@@ -299,6 +299,14 @@
       return 10;
     }
 
+    // ======================
+    // 🔊 Bips sonores
+    // ======================
+    const beepSuccess = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"); // ✅ Coureur dans les délais
+    const beepEliminated = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg"); // 🚨 Coureur hors délai/éliminé
+    const beepDuplicate = new Audio("https://actions.google.com/sounds/v1/alarms/buzzer.ogg"); // ⛔ Coureur déjà scanné
+    const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg"); // ❌ Erreur générale
+
     let scanner = null;
     let startMs = null;
     let limites = {};
@@ -327,9 +335,6 @@
       }
     };
 
-    const beepOk = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
-    const beepError = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-
     window.feedback = function(message, couleur) {
       const zone = document.getElementById("feedback");
       zone.innerHTML = message;
@@ -348,7 +353,6 @@
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
-      // 1. Chercher dans le cache global
       for (const key in globalCache.scans) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
@@ -358,7 +362,6 @@
         }
       }
 
-      // 2. Chercher dans les verrous
       for (const key in globalCache.locks) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
@@ -368,7 +371,6 @@
         }
       }
 
-      // 3. Chercher dans Firestore
       if (dernierTour === 0) {
         try {
           const scans = await getDocs(query(
@@ -391,7 +393,9 @@
       return dernierTour;
     }
 
-    // ✅ NOUVELLE FONCTION INITSCANNER (corrigée)
+    // ======================
+    // 📷 Scanner
+    // ======================
     function initScanner() {
       if (scanner) {
         scanner.stop().catch(() => {});
@@ -402,10 +406,8 @@
       controlsContainer.innerHTML = "";
 
       try {
-        // Crée un nouveau scanner
         scanner = new Html5Qrcode("reader");
 
-        // Ajoute les boutons personnalisés
         const startButton = document.createElement("button");
         startButton.textContent = "📷 Démarrer";
         startButton.className = "scanner-button";
@@ -418,7 +420,6 @@
         stopButton.onclick = stopScanning;
         controlsContainer.appendChild(stopButton);
 
-        // Démarre automatiquement le scan
         startScanning();
       } catch (err) {
         console.error("Erreur initScanner :", err);
@@ -426,54 +427,47 @@
       }
     }
 
-    // ✅ Démarre le scan avec la caméra arrière
     async function startScanning() {
       if (!scanner) return;
 
       try {
-        // Récupère les caméras disponibles
         const cameras = await Html5Qrcode.getCameras();
         if (cameras.length === 0) {
           feedback("⚠️ Aucune caméra détectée", "orange");
           return;
         }
 
-        // Trouve la caméra arrière (environment)
         const backCam = cameras.find(cam =>
           cam.label.toLowerCase().includes("back") ||
           cam.label.toLowerCase().includes("environment")
         );
 
-        // Utilise la caméra arrière ou la première disponible
         const cameraId = backCam ? backCam.id : cameras[0].id;
 
-        // Démarre le scan
         await scanner.start(
           { facingMode: "environment" },
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
+            fps: 5,
+            qrbox: { width: 200, height: 200 },
             rememberLastUsedCamera: true,
             showTorchButtonIfSupported: false,
             disableFlip: true,
+            verbose: false,
           },
           onScan,
-          () => {} // <-- Callback vide : ignore toutes les erreurs
-);
+          () => {} // Ignore toutes les erreurs de détection
+        );
 
         feedback("📷 Scanner démarré", "lime");
       } catch (err) {
         console.error("Erreur startScanning :", err);
         feedback("⚠️ Impossible d'accéder à la caméra. Vérifiez les permissions.", "red");
-
-        // Affiche un message pour guider l'utilisateur
         setTimeout(() => {
           feedback("💡 Astuce : Autorisez l'accès à la caméra dans les paramètres du navigateur.", "orange");
         }, 3000);
       }
     }
 
-    // ✅ Arrête le scan
     function stopScanning() {
       if (scanner) {
         scanner.stop().catch(() => {});
@@ -481,8 +475,43 @@
       }
     }
 
+    async function onScan(text) {
+      const dossard = Number(text.replace(/\D/g, ""));
+      if (!dossard) {
+        feedback("❌ QR invalide", "red");
+        beepError.play();
+        return;
+      }
+
+      if (processing) return;
+      processing = true;
+      try {
+        await traiterArrivee(dossard, "SCAN");
+      } catch (e) {
+        console.error("Erreur dans onScan:", e);
+      } finally {
+        processing = false;
+      }
+    }
+
+    // ======================
+    // 🏁 Traitement des arrivées
+    // ======================
     async function traiterArrivee(dossard, source) {
       const now = Date.now();
+
+      // Vérifie si ce dossard a déjà été scanné récemment (3 minutes = 180000 ms)
+      const lastScanRef = doc(db, "lastScans", dossard.toString());
+      const lastScanSnap = await getDoc(lastScanRef);
+
+      if (lastScanSnap.exists()) {
+        const lastScanTime = lastScanSnap.data().timestamp.toMillis();
+        if (now - lastScanTime < 180000) {
+          feedback(`⛔ ${dossard} déjà scanné récemment`, "orange");
+          beepDuplicate.play();
+          return;
+        }
+      }
 
       if (!window._lastScan) {
         window._lastScan = { dossard: null, time: 0 };
@@ -521,7 +550,7 @@
 
       if (coureur && ["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
         feedback(`⛔ ${coureur.statut}`, "red");
-        beepError.play();
+        beepEliminated.play();
         return;
       }
 
@@ -536,7 +565,7 @@
 
       if (dernierTour === prochainTour) {
         feedback(`⛔ ${dossard} a déjà validé le tour ${prochainTour}`, "orange");
-        beepError.play();
+        beepDuplicate.play();
         return;
       }
 
@@ -561,7 +590,7 @@
 
       if (globalCache.locks[lockKey]) {
         feedback(`⛔ Déjà scanné T${prochainTour}`, "orange");
-        beepError.play();
+        beepDuplicate.play();
         return;
       }
 
@@ -572,7 +601,7 @@
         globalCache.locks[lockKey] = true;
         saveGlobalCache();
         feedback(`⛔ Déjà scanné T${prochainTour}`, "orange");
-        beepError.play();
+        beepDuplicate.play();
         return;
       }
 
@@ -582,6 +611,12 @@
         dossard,
         tour: prochainTour,
         createdAt: serverTimestamp()
+      });
+
+      // Met à jour le dernier scan réussi pour ce dossard
+      await setDoc(lastScanRef, {
+        dossard,
+        timestamp: serverTimestamp()
       });
 
       globalCache.locks[lockKey] = true;
@@ -630,29 +665,35 @@
         couleur
       );
 
-      horsDelai ? beepError.play() : beepOk.play();
-    }
-
-    async function onScan(text) {
-      const dossard = Number(text.replace(/\D/g, ""));
-      if (!dossard) {
-        feedback("❌ QR invalide", "red");
-        beepError.play();
-        return;
-      }
-
-      if (processing) return;
-
-      processing = true;
-      try {
-        await traiterArrivee(dossard, "SCAN");
-      } catch (e) {
-        console.error("Erreur dans onScan:", e);
-      } finally {
-        processing = false;
+      // Bips sonores
+      if (horsDelai) {
+        beepEliminated.play();
+      } else {
+        beepSuccess.play();
       }
     }
 
+    // ======================
+    // 🗑️ Nettoyage des anciens scans
+    // ======================
+    async function cleanupOldScans() {
+      const oneHourAgo = new Date(Date.now() - 3600000); // 1 heure en arrière
+      const lastScansSnap = await getDocs(collection(db, "lastScans"));
+
+      lastScansSnap.forEach(async (doc) => {
+        const data = doc.data();
+        if (data.timestamp && data.timestamp.toDate() < oneHourAgo) {
+          await deleteDoc(doc.ref);
+        }
+      });
+    }
+
+    // Nettoie les anciens scans toutes les 5 minutes
+    setInterval(cleanupOldScans, 300000);
+
+    // ======================
+    // 📥 Initialisation
+    // ======================
     window.addEventListener("DOMContentLoaded", async () => {
       loadGlobalCache();
       const lock = document.getElementById("lock");
@@ -758,6 +799,9 @@
       observer.observe(document.getElementById("lock"), { attributes: true });
     });
 
+    // ======================
+    // 🖥️ Boutons manuels
+    // ======================
     document.getElementById("btn-arrivee").onclick = async () => {
       if (processing) return;
       processing = true;
