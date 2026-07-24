@@ -125,6 +125,7 @@
     };
     function unlock() {
       document.getElementById("lock").style.display = "none";
+      initScanner(); // <-- Ajoute cette ligne
     }
     function checkSession() {
       const saved = localStorage.getItem("scanAuthTime");
@@ -405,7 +406,7 @@ async function traiterArrivee(dossard, source) {
   // ======================
   // ⚠️ Coureur en retard → autorisé
   // ======================
-  if (dernierTour <  - 1) {
+  if (dernierTour < currentTour - 1) {
     console.warn(`⚠️ En retard : ${dossard}`);
     // ON LAISSE PASSER
   }
@@ -414,7 +415,7 @@ async function traiterArrivee(dossard, source) {
   // ======================
   // ⛔ Empêche double validation du même tour
   // ======================
-  if (dernierTour === ) {
+  if (dernierTour === prochainTour) {
     feedback(`⛔ ${dossard} a déjà validé le tour ${}`, "orange");
     beepError.play();
     return;
@@ -424,7 +425,7 @@ async function traiterArrivee(dossard, source) {
   // ======================
   // ⛔ Tour pas encore ouvert
   // ======================
-  if (prochainTour > ) {
+  if (prochainTour > currentTour) {
     feedback(`⛔ Tour ${prochainTour} non encore ouvert`, "orange");
     beepError.play();
     return;
@@ -434,7 +435,7 @@ async function traiterArrivee(dossard, source) {
   // ======================
   // ⛔ Règle des 3 minutes
   // ======================
-  if (dernierTour ===  - 1 && lastTourStartTime) {
+  if (dernierTour === currentTour - 1 && lastTourStartTime) {
     const timeSinceStart = Date.now() - lastTourStartTime;
 
     if (timeSinceStart < 180000) {
@@ -578,10 +579,12 @@ async function traiterArrivee(dossard, source) {
       processing = true;
       try {
         await traiterArrivee(dossard, "SCAN");
-      } finally {
-        setTimeout(() => { processing = false; }, 1500);
-      }
-    }
+     } catch (e) {
+    console.error("Erreur dans onScan:", e);
+  } finally {
+    processing = false; // Réinitialisation immédiate
+  }
+}
 
     window.addEventListener("DOMContentLoaded", () => {
       loadGlobalCache();
@@ -593,9 +596,9 @@ async function traiterArrivee(dossard, source) {
         Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
           runnerStatuses[dossard] = data.statut;
         });
-        if (startMs &&  > 0) {
+        if (startMs && currentTour > 0) {
           let cumulMs = 0;
-          for (let i = 1; i < ; i++) {
+          for (let i = 1; i < currentTour; i++) {
             cumulMs += (limites[`t${i}`] || 0) * 60000;
           }
           lastTourStartTime = startMs + cumulMs;
