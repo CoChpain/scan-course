@@ -597,7 +597,28 @@
 
       horsDelai ? beepError.play() : beepOk.play();
     }
+async function checkCameraAccess() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+    });
+    stream.getTracks().forEach((track) => track.stop());
+    return true;
+  } catch (err) {
+    console.error("Erreur d'accès à la caméra :", err);
+    return false;
+  }
+}
 
+// Appelle cette fonction avant initScanner()
+checkCameraAccess().then((hasAccess) => {
+  if (!hasAccess) {
+    feedback("⚠️ Accès à la caméra refusé. Vérifiez les permissions.", "red");
+  } else {
+    initScanner();
+  }
+});
+    
 function initScanner() {
   if (scanner) {
     scanner.clear();
@@ -608,30 +629,25 @@ function initScanner() {
   controlsContainer.innerHTML = "";
 
   try {
-    // Configuration ultra-minimale pour éviter les contrôles natifs
+    // Configuration optimisée pour éviter les erreurs
     scanner = new Html5Qrcode("reader", {
-      fps: 10,
-      qrbox: { width: 280, height: 280 },
-      aspectRatio: 1,
-      cameraFacing: "environment",
-      rememberLastUsedCamera: true,
-      showTorchButtonIfSupported: false,
-      disableFlip: true,
-      // Désactive TOUS les contrôles natifs
-      qrCodeSuccessCallback: onScan,
-      qrCodeErrorCallback: (error) => {
-        console.error("Erreur de scan :", error);
+      qrbox: {
+        width: 250,
+        height: 250,
       },
-      // Option critique : désactive l'interface native
+      fps: 5, // Réduit la charge CPU
+      disableFlip: false, // Permet de basculer entre caméras
+      cameraFacing: "environment", // Caméra arrière par défaut
+      rememberLastUsedCamera: true,
       supportedFileExtensions: [], // Désactive le scan de fichiers
-      verbose: false, // Désactive les logs
+      verbose: false,
     });
 
-    // Ajoute tes boutons personnalisés
+    // Boutons personnalisés
     const startButton = document.createElement("button");
     startButton.textContent = "📷 Démarrer";
     startButton.className = "scanner-button";
-    startButton.onclick = () => scanner.render(onScan);
+    startButton.onclick = () => startScanning();
     controlsContainer.appendChild(startButton);
 
     const stopButton = document.createElement("button");
@@ -640,17 +656,37 @@ function initScanner() {
     stopButton.onclick = () => scanner.clear();
     controlsContainer.appendChild(stopButton);
 
-    // Démarre automatiquement avec la caméra arrière
-    Html5Qrcode.getCameras().then(devices => {
-      const backCam = devices.find(d =>
+    // Fonction pour démarrer le scan
+    async function startScanning() {
+      try {
+        const devices = await Html5Qrcode.getCameras()
+  .then((devices) => {
+    if (devices.length === 0) {
+      feedback("⚠️ Aucune caméra détectée", "orange");
+      return;
+    }
+    const backCam = devices.find(
+      (d) =>
         d.label.toLowerCase().includes("back") ||
         d.label.toLowerCase().includes("environment")
-      );
-      scanner.render(onScan, null, backCam ? backCam.id : devices[0]?.id);
-    }).catch(err => {
-      console.error("Erreur caméra :", err);
-      feedback("⚠️ Impossible d'accéder à la caméra", "orange");
-    });
+    );
+    scanner.start(
+      backCam ? backCam.id : devices[0].id,
+      { fps: 5 },
+      onScan,
+      (error) => {
+        console.error("Erreur de caméra :", error);
+        feedback("⚠️ Erreur : " + error, "orange");
+      }
+    );
+  })
+  .catch((err) => {
+    console.error("Erreur getCameras :", err);
+    feedback("⚠️ Impossible de lister les caméras : " + err, "orange");
+  });
+
+    // Démarre automatiquement
+    startScanning();
 
   } catch (err) {
     console.error("Erreur initScanner :", err);
