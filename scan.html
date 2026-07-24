@@ -458,13 +458,8 @@
             disableFlip: true,
           },
           onScan,
-          (error) => {
-            // Ignore uniquement l'erreur "no multiformat readers were able to detect the code"
-    if (!error.message || !error.message.includes("no multiformat readers were able to detect the code")) {
-            console.error("Erreur de scan :", error);
-            feedback("⚠️ Erreur de scan : " + error, "orange");
-          }
-        );
+          () => {} // <-- Callback vide : ignore toutes les erreurs
+);
 
         feedback("📷 Scanner démarré", "lime");
       } catch (err) {
