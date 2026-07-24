@@ -110,6 +110,9 @@
       <input id="dossard-dns" placeholder="Dossard DNS">
       <button id="btn-dns">🚫 DNS</button>
     </div>
+    <div class="zone">
+      <button id="btn-reset-cache" style="background: red;">🔄 Réinitialiser le cache</button>
+    </div>
   </div>
 
   <script>
@@ -569,76 +572,96 @@
       }
     }
 
-    window.addEventListener("DOMContentLoaded", () => {
+    window.addEventListener("DOMContentLoaded", async () => {
       loadGlobalCache();
-      updateGlobalCache().then(() => {
-        startMs = globalCache.startMs;
-        limites = globalCache.limites;
-        currentTour = calculateCurrentTour(startMs, limites);
-        runnerStatuses = {};
-        Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
-          runnerStatuses[dossard] = data.statut;
-        });
-        if (startMs && currentTour > 0) {
-          let cumulMs = 0;
-          for (let i = 1; i < currentTour; i++) {
-            cumulMs += (limites[`t${i}`] || 0) * 60000;
-          }
-          lastTourStartTime = startMs + cumulMs;
-        }
 
-        onSnapshot(doc(db, "course", "depart"), async (snap) => {
-          if (snap.exists()) {
-            startMs = snap.data().startMs;
-            globalCache.startMs = startMs;
-            currentTour = calculateCurrentTour(startMs, limites);
-
-            if (startMs && currentTour > 0) {
-              let cumulMs = 0;
-              for (let i = 1; i < currentTour; i++) {
-                cumulMs += (limites[`t${i}`] || 0) * 60000;
-              }
-              lastTourStartTime = startMs + cumulMs;
-            }
-            globalCache.startMs = startMs;
-            saveGlobalCache();
-            feedback("✅ Nouvelle course démarrée", "lime");
-          } else {
-            startMs = null;
-            currentTour = 0;
-            lastTourStartTime = null;
-            globalCache.startMs = null;
-            saveGlobalCache();
-            feedback("⚠️ Course terminée ou non démarrée", "orange");
-          }
-        });
-
-        onSnapshot(doc(db, "course", "limitesTours"), snap => {
-          if (snap.exists()) {
-            limites = snap.data();
-            globalCache.limites = limites;
-            saveGlobalCache();
-            currentTour = calculateCurrentTour(startMs, limites);
-          }
-        });
-
-        onSnapshot(collection(db, "coureurs"), snap => {
-          runnerStatuses = {};
-          snap.forEach(d => {
-            const data = d.data();
-            if (data.dossard) {
-              runnerStatuses[data.dossard] = data.statut;
-              globalCache.coureurs[data.dossard] = data;
-            }
-          });
+      // ⚠️ Vérifie si une nouvelle course a démarré depuis la dernière sauvegarde
+      const departDoc = await getDoc(doc(db, "course", "depart"));
+      if (departDoc.exists()) {
+        const newStartMs = departDoc.data().startMs;
+        if (newStartMs && newStartMs !== globalCache.startMs) {
+          // Réinitialise le cache si une nouvelle course a démarré
+          globalCache.locks = {};
+          globalCache.scans = {};
+          globalCache.startMs = newStartMs;
           saveGlobalCache();
-        });
+        }
+      }
 
-        setInterval(updateGlobalCache, 15000);
-        setInterval(() => {
-          if (startMs) currentTour = calculateCurrentTour(startMs, limites);
-        }, 5000);
+      await updateGlobalCache();
+      startMs = globalCache.startMs;
+      limites = globalCache.limites;
+      currentTour = calculateCurrentTour(startMs, limites);
+      runnerStatuses = {};
+      Object.entries(globalCache.coureurs).forEach(([dossard, data]) => {
+        runnerStatuses[dossard] = data.statut;
       });
+
+      if (startMs && currentTour > 0) {
+        let cumulMs = 0;
+        for (let i = 1; i < currentTour; i++) {
+          cumulMs += (limites[`t${i}`] || 0) * 60000;
+        }
+        lastTourStartTime = startMs + cumulMs;
+      }
+
+      onSnapshot(doc(db, "course", "depart"), async (snap) => {
+        if (snap.exists()) {
+          startMs = snap.data().startMs;
+          globalCache.startMs = startMs;
+          currentTour = calculateCurrentTour(startMs, limites);
+
+          if (startMs && currentTour > 0) {
+            let cumulMs = 0;
+            for (let i = 1; i < currentTour; i++) {
+              cumulMs += (limites[`t${i}`] || 0) * 60000;
+            }
+            lastTourStartTime = startMs + cumulMs;
+          }
+
+          // ⚠️ Réinitialise les locks et scans du cache global
+          globalCache.locks = {};
+          globalCache.scans = {};
+          globalCache.lastUpdated = 0; // Force une mise à jour complète
+          saveGlobalCache();
+          feedback("✅ Nouvelle course démarrée", "lime");
+        } else {
+          startMs = null;
+          currentTour = 0;
+          lastTourStartTime = null;
+          globalCache.startMs = null;
+          globalCache.locks = {};
+          globalCache.scans = {};
+          saveGlobalCache();
+          feedback("⚠️ Course terminée ou non démarrée", "orange");
+        }
+      });
+
+      onSnapshot(doc(db, "course", "limitesTours"), snap => {
+        if (snap.exists()) {
+          limites = snap.data();
+          globalCache.limites = limites;
+          saveGlobalCache();
+          currentTour = calculateCurrentTour(startMs, limites);
+        }
+      });
+
+      onSnapshot(collection(db, "coureurs"), snap => {
+        runnerStatuses = {};
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.dossard) {
+            runnerStatuses[data.dossard] = data.statut;
+            globalCache.coureurs[data.dossard] = data;
+          }
+        });
+        saveGlobalCache();
+      });
+
+      setInterval(updateGlobalCache, 15000);
+      setInterval(() => {
+        if (startMs) currentTour = calculateCurrentTour(startMs, limites);
+      }, 5000);
 
       const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
@@ -700,6 +723,20 @@
       } finally {
         processing = false;
       }
+    };
+
+    // Bouton de réinitialisation manuelle du cache
+    document.getElementById("btn-reset-cache").onclick = () => {
+      globalCache = {
+        locks: {},
+        scans: {},
+        coureurs: {},
+        limites: { t1:40, t2:37, t3:34, t4:31, t5:28, t6:25, t7:22, t8:19, t9:16, t10:13 },
+        startMs: null,
+        lastUpdated: 0
+      };
+      saveGlobalCache();
+      location.reload();
     };
 
     async function changerStatut(dossard, type) {
