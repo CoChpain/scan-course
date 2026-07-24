@@ -844,12 +844,11 @@
       }
 
       // 6. Vérifier si le coureur peut scanner le tour actuel
-      if (dernierTour < currentTour - 1) {
-        btn.disabled = true;
-        btn.classList.add("invalid");
-        btn.title = `Tour ${currentTour} non accessible (dernier validé: ${dernierTour})`;
-        return;
-      }
+    if (dernierTour < currentTour - 1) {
+  btn.classList.add("invalid");
+  btn.title = `En retard (dernier tour: ${dernierTour})`;
+  // IMPORTANT : ne plus désactiver le bouton
+}
 
       // 7. Attente de 3 minutes après le début du tour
       if (dernierTour === currentTour - 1 && lastTourStartTime) {
@@ -921,13 +920,10 @@
       const nextTour = lastScannedTour + 1;
 
       // Vérifier si le coureur peut scanner le tour actuel
-      if (lastScannedTour < currentTour - 1) {
-        if (statusDiv) {
-          statusDiv.innerHTML = `❌ Impossible : dernier tour validé = ${lastScannedTour} (tour actuel: ${currentTour})`;
-          statusDiv.className = "message error";
-        }
-        return false;
-      }
+    if (lastScannedTour < currentTour - 1) {
+  console.warn(`⚠️ Coureur en retard : dernier tour = ${lastScannedTour}, tour actuel = ${currentTour}`);
+  // On laisse passer le scan volontairement
+}
 
       if (nextTour > currentTour) {
         if (statusDiv) {
