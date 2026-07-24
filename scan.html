@@ -80,23 +80,26 @@
   position: relative; /* Assure que la caméra remplit bien l'espace */
 }
 
-/* Force la vidéo de la caméra à prendre toute la place */
+/* Force la vidéo à prendre toute la place */
 #reader video {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
   display: block !important;
+  border-radius: 8px !important; /* Pour respecter le border-radius de #reader */
 }
+    
 /* Masque les boutons par défaut du scanner (on les recrée manuellement) */
 .html5qrcode-scanner-tool-container {
   display: none !important;
 }
 
-   /* Masque TOUS les éléments natifs du scanner */
-.html5qrcode-scanner-tool-container,
-.html5qrcode-scanner-tool,
-.html5qrcode-scanner-tool-button,
-.html5qrcode-scanner-tool-select {
+/* Masque ABSOLUMENT TOUS les éléments natifs du scanner */
+#reader .html5qrcode-scanner-tool-container,
+#reader .html5qrcode-scanner-tool,
+#reader .html5qrcode-scanner-tool-button,
+#reader .html5qrcode-scanner-tool-select,
+#reader .html5qrcode-scanner-tool-button-container {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -104,7 +107,9 @@
   width: 0 !important;
   position: absolute !important;
   clip: rect(0 0 0 0) !important;
-} 
+  z-index: -1 !important; /* Place derrière tout */
+  pointer-events: none !important; /* Désactive les clics */
+}
 
 /* Style pour les boutons personnalisés (optionnel) */
 .scanner-button {
@@ -600,88 +605,69 @@ function initScanner() {
 
   const readerElement = document.getElementById("reader");
   const controlsContainer = document.getElementById("scanner-controls");
-
-  // Efface les anciens boutons (si ils existent)
   controlsContainer.innerHTML = "";
 
   try {
+    // Configuration ultra-minimale pour éviter les contrôles natifs
     scanner = new Html5QrcodeScanner("reader", {
       fps: 10,
-      qrbox: {
-        width: 280,  // Prend presque toute la largeur de #reader
-        height: 280,
-      },
+      qrbox: { width: 280, height: 280 },
       aspectRatio: 1,
+      cameraFacing: "environment",
       rememberLastUsedCamera: true,
-      showTorchButtonIfSupported: false, // Désactive le bouton de torche natif
-      disableFlip: true, // Désactive le bouton de retour caméra natif
-      cameraFacing: "environment", // Force la caméra arrière
-      // Désactive tous les contrôles natifs
+      showTorchButtonIfSupported: false,
+      disableFlip: true,
+      // Désactive TOUS les contrôles natifs
       qrCodeSuccessCallback: onScan,
       qrCodeErrorCallback: (error) => {
         console.error("Erreur de scan :", error);
       },
+      // Option critique : désactive l'interface native
+      supportedFileExtensions: [], // Désactive le scan de fichiers
+      verbose: false, // Désactive les logs
     });
 
-    // Ajoute nos propres boutons dans #scanner-controls
+    // Ajoute tes boutons personnalisés
     const startButton = document.createElement("button");
-    startButton.textContent = "📷 Démarrer le scan";
+    startButton.textContent = "📷 Démarrer";
     startButton.className = "scanner-button";
-    startButton.onclick = () => {
-      scanner.render(onScan);
-    };
+    startButton.onclick = () => scanner.render(onScan);
     controlsContainer.appendChild(startButton);
 
     const stopButton = document.createElement("button");
-    stopButton.textContent = "⏹️ Arrêter le scan";
+    stopButton.textContent = "⏹️ Arrêter";
     stopButton.className = "scanner-button";
-    stopButton.onclick = () => {
-      scanner.clear();
-    };
+    stopButton.onclick = () => scanner.clear();
     controlsContainer.appendChild(stopButton);
 
-    const cameraButton = document.createElement("button");
-    cameraButton.textContent = "📹 Changer de caméra";
-    cameraButton.className = "scanner-button";
-    cameraButton.onclick = async () => {
-      const cameras = await Html5Qrcode.getCameras();
-      if (cameras.length > 1) {
-        const currentCamera = scanner.getState().currentCameraId;
-        const otherCamera = cameras.find(cam => cam.id !== currentCamera);
-        if (otherCamera) {
-          scanner.clear();
-          scanner.render(onScan, null, otherCamera.id);
-        }
-      }
-    };
-    controlsContainer.appendChild(cameraButton);
+    // Démarre automatiquement avec la caméra arrière
+    Html5Qrcode.getCameras().then(devices => {
+      const backCam = devices.find(d =>
+        d.label.toLowerCase().includes("back") ||
+        d.label.toLowerCase().includes("environment")
+      );
+      scanner.render(onScan, null, backCam ? backCam.id : devices[0]?.id);
+    }).catch(err => {
+      console.error("Erreur caméra :", err);
+      feedback("⚠️ Impossible d'accéder à la caméra", "orange");
+    });
 
-    // Démarre le scanner par défaut avec la caméra arrière
-    Html5Qrcode.getCameras()
-      .then(devices => {
-        if (devices && devices.length) {
-          const backCam = devices.find(d =>
-            d.label.toLowerCase().includes("back") ||
-            d.label.toLowerCase().includes("environment")
-          );
-          if (backCam) {
-            scanner.render(onScan, null, backCam.id);
-          } else {
-            scanner.render(onScan, null, devices[0].id);
-          }
-        } else {
-          scanner.render(onScan);
-        }
-      })
-      .catch(err => {
-        console.error("Erreur caméra :", err);
-        feedback("⚠️ Impossible d'accéder à la caméra", "orange");
-      });
   } catch (err) {
-    console.error("Erreur initialisation scanner :", err);
+    console.error("Erreur initScanner :", err);
     feedback("⚠️ Erreur initialisation scanner", "orange");
   }
 }
+    // Masque les éléments natifs après un court délai (au cas où)
+setTimeout(() => {
+  const nativeTools = document.querySelectorAll('#reader .html5qrcode-scanner-tool-container, #reader .html5qrcode-scanner-tool');
+  nativeTools.forEach(el => {
+    el.style.display = 'none';
+    el.style.visibility = 'hidden';
+    el.style.opacity = '0';
+    el.style.position = 'absolute';
+    el.style.zIndex = '-1';
+  });
+}, 100);
 
     async function onScan(text) {
       const dossard = Number(text.replace(/\D/g, ""));
