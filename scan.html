@@ -63,12 +63,43 @@
   margin-bottom: 10px;
 }
 
+/* Style pour la zone de la caméra */
+#reader {
+  width: 100%;
+  max-width: 300px;
+  height: 300px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 4px solid white; /* Cadre blanc */
+  background: black;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  position: relative; /* Assure que la caméra remplit bien l'espace */
+}
 
+/* Force la vidéo à prendre toute la place */
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 8px !important; /* Pour respecter le border-radius de #reader */
+}
     
-/* Masque TOUS les éléments natifs du scanner */
-div[class*="html5qrcode-scanner-tool"],
-div[class*="html5qrcode-scanner-tool"] *,
-#reader > div:not(#scanner-controls):not(video) {
+/* Masque les boutons par défaut du scanner (on les recrée manuellement) */
+.html5qrcode-scanner-tool-container {
+  display: none !important;
+}
+
+/* Masque ABSOLUMENT TOUS les éléments natifs du scanner */
+#reader .html5qrcode-scanner-tool-container,
+#reader .html5qrcode-scanner-tool,
+#reader .html5qrcode-scanner-tool-button,
+#reader .html5qrcode-scanner-tool-select,
+#reader .html5qrcode-scanner-tool-button-container {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -76,26 +107,10 @@ div[class*="html5qrcode-scanner-tool"] *,
   width: 0 !important;
   position: absolute !important;
   clip: rect(0 0 0 0) !important;
-  z-index: -1000 !important;
-  pointer-events: none !important;
+  z-index: -1 !important; /* Place derrière tout */
+  pointer-events: none !important; /* Désactive les clics */
 }
 
-/* Force la vidéo à prendre toute la place dans #reader */
-#reader {
-  position: relative !important;
-  overflow: hidden !important;
-}
-
-#reader video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  display: block !important;
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  z-index: 1 !important;
-}
 /* Style pour les boutons personnalisés (optionnel) */
 .scanner-button {
   font-size: 12px;
@@ -593,7 +608,7 @@ function initScanner() {
   controlsContainer.innerHTML = "";
 
   try {
-    // Configuration minimale pour éviter les contrôles natifs
+    // Configuration ultra-minimale pour éviter les contrôles natifs
     scanner = new Html5QrcodeScanner("reader", {
       fps: 10,
       qrbox: { width: 280, height: 280 },
@@ -602,22 +617,21 @@ function initScanner() {
       rememberLastUsedCamera: true,
       showTorchButtonIfSupported: false,
       disableFlip: true,
+      // Désactive TOUS les contrôles natifs
       qrCodeSuccessCallback: onScan,
       qrCodeErrorCallback: (error) => {
         console.error("Erreur de scan :", error);
       },
+      // Option critique : désactive l'interface native
       supportedFileExtensions: [], // Désactive le scan de fichiers
-      verbose: false,
+      verbose: false, // Désactive les logs
     });
 
     // Ajoute tes boutons personnalisés
     const startButton = document.createElement("button");
     startButton.textContent = "📷 Démarrer";
     startButton.className = "scanner-button";
-    startButton.onclick = () => {
-      scanner.clear();
-      scanner.render(onScan);
-    };
+    startButton.onclick = () => scanner.render(onScan);
     controlsContainer.appendChild(startButton);
 
     const stopButton = document.createElement("button");
@@ -633,46 +647,27 @@ function initScanner() {
         d.label.toLowerCase().includes("environment")
       );
       scanner.render(onScan, null, backCam ? backCam.id : devices[0]?.id);
-
-      // Masque les éléments natifs après le rendu
-      setTimeout(() => {
-        const nativeElements = document.querySelectorAll('#reader > div:not(#scanner-controls):not(video)');
-        nativeElements.forEach(el => {
-          el.style.display = 'none';
-          el.style.visibility = 'hidden';
-          el.style.opacity = '0';
-          el.style.position = 'absolute';
-          el.style.zIndex = '-1000';
-        });
-      }, 200);
     }).catch(err => {
       console.error("Erreur caméra :", err);
       feedback("⚠️ Impossible d'accéder à la caméra", "orange");
     });
-
-    // Observateur pour masquer les éléments natifs ajoutés dynamiquement
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.ELEMENT_NODE &&
-              (node.className.includes('html5qrcode-scanner-tool') ||
-               node.tagName === 'DIV' && !node.id)) {
-            node.style.display = 'none';
-            node.style.visibility = 'hidden';
-            node.style.opacity = '0';
-            node.style.position = 'absolute';
-            node.style.zIndex = '-1000';
-          }
-        });
-      });
-    });
-    observer.observe(readerElement, { childList: true, subtree: true });
 
   } catch (err) {
     console.error("Erreur initScanner :", err);
     feedback("⚠️ Erreur initialisation scanner", "orange");
   }
 }
+    // Masque les éléments natifs après un court délai (au cas où)
+setTimeout(() => {
+  const nativeTools = document.querySelectorAll('#reader .html5qrcode-scanner-tool-container, #reader .html5qrcode-scanner-tool');
+  nativeTools.forEach(el => {
+    el.style.display = 'none';
+    el.style.visibility = 'hidden';
+    el.style.opacity = '0';
+    el.style.position = 'absolute';
+    el.style.zIndex = '-1';
+  });
+}, 100);
 
     async function onScan(text) {
       const dossard = Number(text.replace(/\D/g, ""));
