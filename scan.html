@@ -375,11 +375,10 @@
       const prochainTour = dernierTour + 1;
 
       // Vérifier que le coureur n'a pas sauté de tour
-      if (dernierTour < currentTour - 1) {
-        feedback(`⛔ Impossible : dernier tour validé = ${dernierTour} (tour actuel: ${currentTour})`, "red");
-        beepError.play();
-        return;
-      }
+    if (dernierTour < currentTour - 1) {
+  console.warn(`⚠️ Coureur en retard : dernier tour = ${dernierTour}, tour actuel = ${currentTour}`);
+  // IMPORTANT : on autorise le scan
+}
 
       if (prochainTour > currentTour) {
         feedback(`⛔ Tour ${prochainTour} non encore ouvert (tour actuel: ${currentTour})`, "orange");
