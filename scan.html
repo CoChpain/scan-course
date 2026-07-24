@@ -45,51 +45,54 @@
 /* Style pour le conteneur du scanner */
 #scanner-container {
   display: flex;
-  flex-direction: column; /* Empile les éléments verticalement */
-  align-items: center; /* Centre horizontalement */
-  gap: 10px; /* Espace entre la caméra et les boutons */
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
 }
 
+/* Conteneur pour les boutons du scanner */
+#scanner-controls {
+  width: 100%;
+  max-width: 300px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 /* Style pour la zone de la caméra */
 #reader {
   width: 100%;
-  max-width: 300px; /* Largeur maximale pour la zone de scan */
-  height: 300px; /* Hauteur fixe pour une zone carrée */
+  max-width: 300px;
+  height: 300px;
   border-radius: 12px;
   overflow: hidden;
-  border: 4px solid white; /* Cadre blanc pour mieux voir la zone de scan */
+  border: 4px solid white; /* Cadre blanc */
   background: black;
-  margin: 0 auto; /* Centre la zone de scan */
+  margin: 0 auto;
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5); /* Ombre pour améliorer la visibilité */
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
-/* Style pour les boutons du scanner */
+/* Masque les boutons par défaut du scanner (on les recrée manuellement) */
 .html5qrcode-scanner-tool-container {
-  display: flex !important;
-  flex-direction: row !important; /* Garde les boutons en ligne */
-  justify-content: center !important;
-  align-items: center !important;
-  gap: 10px !important;
-  width: 100% !important;
-  margin-top: 0 !important; /* Pas de marge en haut pour éviter un espace inutile */
+  display: none !important;
 }
 
-/* Réduit la taille des boutons du scanner */
-.html5qrcode-scanner-tool {
-  font-size: 12px !important;
-  padding: 6px 10px !important;
-  margin: 0 !important;
-  width: auto !important;
-  background: #333 !important;
-  color: white !important;
-  border: none !important;
-  border-radius: 6px !important;
+/* Style pour les boutons personnalisés (optionnel) */
+.scanner-button {
+  font-size: 12px;
+  padding: 6px 10px;
+  background: #333;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
 }
     #input-zone {
       width: 100%;
@@ -126,11 +129,13 @@
   </div>
 
   <div id="scanner-container">
-    <h1>🏁 ARRIVÉES COURSE</h1>
-    <div id="reader"></div>
-    <div id="feedback"></div>
-  </div>
-
+  <h1>🏁 ARRIVÉES COURSE</h1>
+  <!-- Conteneur pour les boutons du scanner -->
+  <div id="scanner-controls"></div>
+  <!-- Zone de scan -->
+  <div id="reader"></div>
+  <div id="feedback"></div>
+</div>
   <div id="input-zone">
     <div class="zone">
       <input id="arrivee-manuel" placeholder="Dossard arrivée">
@@ -566,27 +571,61 @@
       horsDelai ? beepError.play() : beepOk.play();
     }
 
- function initScanner() {
+function initScanner() {
   if (scanner) {
     scanner.clear();
   }
 
   const readerElement = document.getElementById("reader");
-  const size = readerElement.offsetWidth;
+  const controlsContainer = document.getElementById("scanner-controls");
+
+  // Efface les anciens boutons (si ils existent)
+  controlsContainer.innerHTML = "";
 
   try {
     scanner = new Html5QrcodeScanner("reader", {
       fps: 10,
-      qrbox: { width: 250, height: 250 },
+      qrbox: {
+        width: 280,  // Prend presque toute la largeur de #reader (300px - bordures)
+        height: 280,
+      },
       aspectRatio: 1,
       rememberLastUsedCamera: true,
-      cameraFacing: "environment"
+      showTorchButtonIfSupported: false, // Désactive les boutons par défaut
+      cameraFacing: "environment", // Force la caméra arrière
     });
 
+    // Ajoute nos propres boutons dans #scanner-controls
+    const startButton = document.createElement("button");
+    startButton.textContent = "Start Scanning";
+    startButton.className = "scanner-button";
+    startButton.onclick = () => scanner.render(onScan);
+    controlsContainer.appendChild(startButton);
+
+    const stopButton = document.createElement("button");
+    stopButton.textContent = "Stop Scanning";
+    stopButton.className = "scanner-button";
+    stopButton.onclick = () => scanner.clear();
+    controlsContainer.appendChild(stopButton);
+
+    const cameraButton = document.createElement("button");
+    cameraButton.textContent = "Select Camera";
+    cameraButton.className = "scanner-button";
+    cameraButton.onclick = async () => {
+      const cameras = await Html5Qrcode.getCameras();
+      // Logique pour changer de caméra (optionnel)
+      console.log("Cameras disponibles:", cameras);
+    };
+    controlsContainer.appendChild(cameraButton);
+
+    // Démarre le scanner par défaut
     Html5Qrcode.getCameras()
       .then(devices => {
         if (devices && devices.length) {
-          const backCam = devices.find(d => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("environment"));
+          const backCam = devices.find(d =>
+            d.label.toLowerCase().includes("back") ||
+            d.label.toLowerCase().includes("environment")
+          );
           if (backCam) {
             scanner.render(onScan, null, backCam.id);
           } else {
