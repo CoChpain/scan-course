@@ -48,15 +48,19 @@
       align-items: center;
       gap: 8px;
     }
-    #reader {
-      width: 100%;
-      max-width: 320px;
-      aspect-ratio: 1/1;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 2px solid #444;
-      background: black;
-    }
+   #reader {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1/1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #444;
+  background: black;
+  margin: 0 auto; /* Centre horizontalement */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
     #input-zone {
       width: 100%;
       max-width: 320px;
@@ -532,25 +536,46 @@
       horsDelai ? beepError.play() : beepOk.play();
     }
 
-    function initScanner() {
-      if (scanner) {
-        scanner.clear();
-      }
-      const readerElement = document.getElementById("reader");
-      const size = readerElement.offsetWidth;
-      scanner = new Html5QrcodeScanner("reader", {
-        fps: 10,
-        qrbox: { width: size * 0.7, height: size * 0.7 },
-        aspectRatio: 1,
-        rememberLastUsedCamera: true,
-        showTorchButtonIfSupported: true
+ function initScanner() {
+  if (scanner) {
+    scanner.clear();
+  }
+
+  const readerElement = document.getElementById("reader");
+  const size = readerElement.offsetWidth;
+
+  try {
+    scanner = new Html5QrcodeScanner("reader", {
+      fps: 10,
+      qrbox: { width: size * 0.7, height: size * 0.7 },
+      aspectRatio: 1,
+      rememberLastUsedCamera: true,
+      showTorchButtonIfSupported: true,
+      cameraFacing: "environment"
+    });
+
+    Html5Qrcode.getCameras()
+      .then(devices => {
+        if (devices && devices.length) {
+          const backCam = devices.find(d => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("environment"));
+          if (backCam) {
+            scanner.render(onScan, null, backCam.id);
+          } else {
+            scanner.render(onScan, null, devices[0].id);
+          }
+        } else {
+          scanner.render(onScan);
+        }
+      })
+      .catch(err => {
+        console.error("Erreur caméra :", err);
+        feedback("⚠️ Impossible d'accéder à la caméra", "orange");
       });
-      Html5Qrcode.getCameras().then(devices => {
-        const backCam = devices.find(d => d.label.toLowerCase().includes("back"));
-        if (backCam) scanner.render(onScan, null, backCam.id);
-        else scanner.render(onScan);
-      });
-    }
+  } catch (err) {
+    console.error("Erreur initialisation scanner :", err);
+    feedback("⚠️ Erreur initialisation scanner", "orange");
+  }
+}
 
     async function onScan(text) {
       const dossard = Number(text.replace(/\D/g, ""));
@@ -574,7 +599,10 @@
 
     window.addEventListener("DOMContentLoaded", async () => {
       loadGlobalCache();
-
+const lock = document.getElementById("lock");
+  if (lock.style.display === "none") {
+    initScanner();
+  }
       // ⚠️ Vérifie si une nouvelle course a démarré depuis la dernière sauvegarde
       const departDoc = await getDoc(doc(db, "course", "depart"));
       if (departDoc.exists()) {
