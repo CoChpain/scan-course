@@ -682,10 +682,14 @@
           statutOrdre = 2;
         }
         else {
-          if (tourAtteint === 0 && startMs) {
-            tourAtteint = 1;
-          }
-          statutTxt = `En course T${tourAtteint}`;
+        if (tourAtteint === 0 && startMs) {
+  tourAtteint = 1;
+}
+// Si le coureur est en course et que currentTour > lastValidTour, on affiche currentTour
+if (statutOrdre === 1 && currentTour > tourAtteint) {
+  tourAtteint = currentTour;
+}
+statutTxt = `En course T${tourAtteint}`;
           statutOrdre = 1;
         }
 
