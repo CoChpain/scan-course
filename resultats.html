@@ -685,8 +685,8 @@
         if (tourAtteint === 0 && startMs) {
   tourAtteint = 1;
 }
-// Si le coureur est en course et que currentTour > lastValidTour, on affiche currentTour
-if (statutOrdre === 1 && currentTour > tourAtteint) {
+// CORRECTION : Toujours utiliser currentTour pour les coureurs "En course"
+if (statutOrdre === 1) {
   tourAtteint = currentTour;
 }
 statutTxt = `En course T${tourAtteint}`;
