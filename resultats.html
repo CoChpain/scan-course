@@ -663,38 +663,31 @@
           }
         });
 
-       let statutTxt = "", statutOrdre = 0;
-let tourAtteint = lastValidTour;
+        let statutTxt = "", statutOrdre = 0;
+        let tourAtteint = lastValidTour;
 
-// Cas d'abandon ou DNS
-if (abandon) {
-  const tourAbandon = abandon.tour;
-  tourAtteint = tourAbandon;
-  if (abandon.type === "DNF") {
-    statutTxt = `DNF T${tourAbandon}`;
-    statutOrdre = 3;
-  } else {
-    statutTxt = `DNS T${tourAbandon}`;
-    statutOrdre = 4;
-  }
-}
-// Cas hors délai
-else if (horsDelaiTour) {
-  statutTxt = `Hors délai T${horsDelaiTour}`;
-  statutOrdre = 2;
-}
-// Cas normal : coureur en course
-else {
-  // Si la course a commencé, on affiche TOUJOURS currentTour pour les coureurs actifs
-  if (startMs) {
-    tourAtteint = currentTour;
-  } else {
-    // Avant le départ, on affiche T0
-    tourAtteint = 0;
-  }
-  statutTxt = `En course T${tourAtteint}`;
-  statutOrdre = 1;
-}
+        if (abandon) {
+          const tourAbandon = abandon.tour;
+          tourAtteint = tourAbandon;
+          if (abandon.type === "DNF") {
+            statutTxt = `DNF T${tourAbandon}`;
+            statutOrdre = 3;
+          } else {
+            statutTxt = `DNS T${tourAbandon}`;
+            statutOrdre = 4;
+          }
+        }
+        else if (horsDelaiTour) {
+          statutTxt = `Hors délai T${horsDelaiTour}`;
+          statutOrdre = 2;
+        }
+        else {
+          if (tourAtteint === 0 && startMs) {
+            tourAtteint = 1;
+          }
+          statutTxt = `En course T${tourAtteint}`;
+          statutOrdre = 1;
+        }
 
         classement.push({
           dossard: c.dossard,
