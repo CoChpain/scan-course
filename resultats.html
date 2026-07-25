@@ -666,6 +666,7 @@
        let statutTxt = "", statutOrdre = 0;
 let tourAtteint = lastValidTour;
 
+// Cas d'abandon ou DNS
 if (abandon) {
   const tourAbandon = abandon.tour;
   tourAtteint = tourAbandon;
@@ -676,16 +677,20 @@ if (abandon) {
     statutTxt = `DNS T${tourAbandon}`;
     statutOrdre = 4;
   }
-} else if (horsDelaiTour) {
+}
+// Cas hors délai
+else if (horsDelaiTour) {
   statutTxt = `Hors délai T${horsDelaiTour}`;
   statutOrdre = 2;
-} else {
-  if (tourAtteint === 0 && startMs) {
-    tourAtteint = 1;
-  }
-  // CORRECTION : Toujours utiliser currentTour pour les coureurs "En course"
-  if (statutOrdre === 1) {
+}
+// Cas normal : coureur en course
+else {
+  // Si la course a commencé, on affiche TOUJOURS currentTour pour les coureurs actifs
+  if (startMs) {
     tourAtteint = currentTour;
+  } else {
+    // Avant le départ, on affiche T0
+    tourAtteint = 0;
   }
   statutTxt = `En course T${tourAtteint}`;
   statutOrdre = 1;
