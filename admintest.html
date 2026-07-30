@@ -975,8 +975,9 @@
         const snap = await getDocs(q);
         if (!snap.empty) {
           const coureurDoc = snap.docs[0];
-          await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "ELIMINE" });
+          await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "ELIMINE", horsDelai: true });
           globalCache.coureurs[dossard].statut = "ELIMINE";
+          globalCache.coureurs[dossard].horsDelai = true;
           runnerStatuses[dossard] = "ELIMINE";
           saveGlobalCache();
         }
@@ -1314,8 +1315,8 @@
       document.getElementById("add-time").value = "";
     };
 
-    // ========== FONCTIONS CORRIGÉES POUR SYNCHRONISATION ==========
-    // Réintégrer un coureur (DNS/DNF/ELIMINE → OK)
+    // ========== FONCTIONS CORRIGÉES POUR LA RÉINTÉGRATION ==========
+    // Réintégrer un coureur (DNS/DNF → OK)
     window.reintegrateRunner = async function() {
       const dossard = document.getElementById("reintegrate-dossard").value.trim();
       const statusDiv = document.getElementById("reintegrate-status");
@@ -1327,13 +1328,23 @@
       }
 
       try {
-        const coureur = globalCache.coureurs[dossard];
+        // Vérifier si le coureur existe
+        let coureur = globalCache.coureurs[dossard];
+        if (!coureur) {
+          const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
+          if (coureurSnap.exists()) {
+            coureur = coureurSnap.data();
+            globalCache.coureurs[dossard] = coureur;
+          }
+        }
+
         if (!coureur) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
           statusDiv.className = "message error";
           return;
         }
 
+        // Vérifier si le coureur est DNS/DNF/ELIMINE
         if (!["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
           statusDiv.innerHTML = "⚠️ Ce coureur n'a pas un statut DNS, DNF ou ELIMINE.";
           statusDiv.className = "message warning";
@@ -1341,59 +1352,51 @@
         }
 
         // Mettre à jour le statut du coureur en "OK" dans Firebase
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snap = await getDocs(q);
-        if (snap.empty) {
+        const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const snapCoureur = await getDocs(qCoureur);
+        if (snapCoureur.empty) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
           statusDiv.className = "message error";
           return;
         }
 
-        const coureurDoc = snap.docs[0];
-        await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "OK" });
+        const coureurDoc = snapCoureur.docs[0];
+        await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "OK", horsDelai: false });
 
-        // Supprimer tous les verrous et scans associés à ce coureur
-        const locksToDelete = [];
-        const scansToDelete = [];
-
-        for (const key in globalCache.locks) {
-          if (key.startsWith(`${dossard}_t`)) {
-            locksToDelete.push(key);
-          }
-        }
-
-        for (const key in globalCache.scans) {
-          if (key.startsWith(`${dossard}_t`)) {
-            scansToDelete.push(key);
-          }
-        }
+        // Supprimer UNIQUEMENT les entrées DNS/DNF dans "resultats"
+        const dnsDnfQuery = query(
+          collection(db, "resultats"),
+          where("dossard", "==", dossard),
+          where("type", "in", ["DNS", "DNF"])
+        );
+        const dnsDnfSnap = await getDocs(dnsDnfQuery);
 
         const batch = writeBatch(db);
-
-        // Supprimer les verrous dans Firebase
-        locksToDelete.forEach(key => {
-          const lockRef = doc(db, "scansLocks", key);
-          batch.delete(lockRef);
+        dnsDnfSnap.forEach(doc => {
+          batch.delete(doc.ref);
         });
 
-        // Supprimer les scans dans Firebase
-        scansToDelete.forEach(key => {
-          const scanRef = doc(db, "resultats", key);
-          batch.delete(scanRef);
-        });
+        // Supprimer les verrous associés aux DNS/DNF
+        for (const key in globalCache.locks) {
+          if (key.startsWith(`${dossard}_t`)) {
+            const lockRef = doc(db, "scansLocks", key);
+            batch.delete(lockRef);
+          }
+        }
 
         await batch.commit();
 
         // Rafraîchir le cache global
         await updateGlobalCache();
         globalCache.coureurs[dossard].statut = "OK";
+        globalCache.coureurs[dossard].horsDelai = false;
         runnerStatuses[dossard] = "OK";
         saveGlobalCache();
 
         // Rafraîchir les boutons
         await updateDossardButtonsState();
 
-        statusDiv.innerHTML = `✅ Dossard ${dossard} réintégré avec succès !`;
+        statusDiv.innerHTML = `✅ Dossard ${dossard} réintégré avec succès ! Il peut maintenant être scanné.`;
         statusDiv.className = "message success";
         document.getElementById("reintegrate-dossard").value = "";
       } catch (error) {
@@ -1423,20 +1426,30 @@
       }
 
       try {
-        const coureur = globalCache.coureurs[dossard];
+        // Vérifier si le coureur existe
+        let coureur = globalCache.coureurs[dossard];
+        if (!coureur) {
+          const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
+          if (coureurSnap.exists()) {
+            coureur = coureurSnap.data();
+            globalCache.coureurs[dossard] = coureur;
+          }
+        }
+
         if (!coureur) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
           statusDiv.className = "message error";
           return;
         }
 
-        if (coureur.statut !== "ELIMINE") {
-          statusDiv.innerHTML = "⚠️ Ce coureur n'est pas éliminé.";
+        // Vérifier si le coureur est ELIMINE ou horsDelai
+        if (coureur.statut !== "ELIMINE" && !coureur.horsDelai) {
+          statusDiv.innerHTML = "⚠️ Ce coureur n'est pas éliminé ou hors délai.";
           statusDiv.className = "message warning";
           return;
         }
 
-        // Mettre à jour le statut du coureur en "OK" dans Firebase
+        // Mettre à jour le statut du coureur en "OK"
         const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snapCoureur = await getDocs(qCoureur);
         if (snapCoureur.empty) {
@@ -1446,9 +1459,9 @@
         }
 
         const coureurDoc = snapCoureur.docs[0];
-        await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "OK" });
+        await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "OK", horsDelai: false });
 
-        // Mettre à jour le temps du scan pour le tour spécifié
+        // Trouver le scan pour le tour spécifié
         const scanQuery = query(
           collection(db, "resultats"),
           where("dossard", "==", dossard),
@@ -1462,10 +1475,12 @@
           return;
         }
 
+        // Calculer le nouveau timestamp
         const [h, m, s] = time.split(":").map(Number);
         const ms = (h * 3600 + m * 60 + s) * 1000;
         const newTimestamp = new Date(startMs + ms);
 
+        // Mettre à jour le scan
         const scanDoc = scanSnap.docs[0];
         await updateDoc(scanDoc.ref, {
           timestamp: newTimestamp,
@@ -1473,22 +1488,40 @@
           source: "admin (réactivé)"
         });
 
-        // Rafraîchir le cache global
-        await updateGlobalCache();
-        globalCache.coureurs[dossard].statut = "OK";
+        // Mettre à jour le cache global
         globalCache.scans[`${dossard}_t${tour}`] = {
           dossard,
           tour,
           timestamp: newTimestamp.getTime(),
           horsDelai: false
         };
+
+        // Supprimer les verrous pour les tours FUTURS (pour permettre un nouveau scan)
+        const locksToDelete = [];
+        for (const key in globalCache.locks) {
+          if (key.startsWith(`${dossard}_t`) && parseInt(key.split('_t')[1]) > tour) {
+            locksToDelete.push(key);
+          }
+        }
+
+        const batch = writeBatch(db);
+        locksToDelete.forEach(key => {
+          const lockRef = doc(db, "scansLocks", key);
+          batch.delete(lockRef);
+        });
+
+        await batch.commit();
+
+        // Rafraîchir le cache global
+        globalCache.coureurs[dossard].statut = "OK";
+        globalCache.coureurs[dossard].horsDelai = false;
         runnerStatuses[dossard] = "OK";
         saveGlobalCache();
 
         // Rafraîchir les boutons
         await updateDossardButtonsState();
 
-        statusDiv.innerHTML = `✅ Dossard ${dossard} réactivé avec succès (Tour ${tour}) !`;
+        statusDiv.innerHTML = `✅ Dossard ${dossard} réactivé avec succès (Tour ${tour}) ! Il peut maintenant être scanné sur les tours suivants.`;
         statusDiv.className = "message success";
         document.getElementById("reactivate-dossard").value = "";
         document.getElementById("reactivate-tour").value = "";
