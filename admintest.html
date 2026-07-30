@@ -199,7 +199,7 @@
   </div>
 
   <a href="index.html">⬅ Retour</a>
-  <h1>🛠️ ADMIN – Gestion de la course-</h1>
+  <h1>🛠️ ADMIN – Gestion de la course</h1>
 
   <div class="tabs">
     <button class="tab-btn active" onclick="openTab('chrono-tab', this)">⏱️ Chrono</button>
@@ -363,9 +363,7 @@
         }
       });
 
-    // ======================
-    // 💾 Cache global partagé entre onglets
-    // ======================
+    // Cache global
     const GLOBAL_CACHE_KEY = "apolloRunGlobalCache";
     let globalCache = {
       locks: {},
@@ -463,7 +461,6 @@
     let lastTourStartTime = null;
     let buttonsInitialized = false;
 
-    // Écouter les mises à jour du cache depuis d'autres onglets (ex: scan.html)
     cacheChannel.onmessage = async (e) => {
       if (e.data.type === 'cache-updated') {
         globalCache = e.data.data;
@@ -1286,7 +1283,7 @@
       document.getElementById("add-time").value = "";
     };
 
-    // ========== FONCTIONS POUR LA RÉINTÉGRATION ==========
+    // Fonction pour réintégrer un coureur DNS/DNF
     window.reintegrateRunner = async function() {
       const dossard = document.getElementById("reintegrate-dossard").value.trim();
       const statusDiv = document.getElementById("reintegrate-status");
@@ -1366,7 +1363,7 @@
       }
     };
 
-    // Fonction simplifiée pour modifier un scan
+    // Fonction corrigée pour modifier un scan
     window.modifyRunnerScan = async function() {
       const dossard = document.getElementById("reactivate-dossard").value.trim();
       const tour = Number(document.getElementById("reactivate-tour").value);
@@ -1418,7 +1415,7 @@
           horsDelai: false
         });
 
-        // 3. Trouver et mettre à jour le scan pour le tour spécifié
+        // 3. Trouver le scan pour le tour spécifié (SANS filtrer par type)
         const scanQuery = query(
           collection(db, "resultats"),
           where("dossard", "==", dossard),
@@ -1445,39 +1442,33 @@
           source: "admin (modifié)"
         });
 
-        // 6. Supprimer les verrous pour les tours FUTURS
-        const locksToDelete = [];
-        for (const key in globalCache.locks) {
-          if (key.startsWith(`${dossard}_t`) && parseInt(key.split('_t')[1]) >= tour) {
-            locksToDelete.push(key);
-          }
-        }
-
-        const batch = writeBatch(db);
-        locksToDelete.forEach(key => {
-          const lockRef = doc(db, "scansLocks", key);
-          batch.delete(lockRef);
-        });
-
-        await batch.commit();
+        // 6. Recréer un verrou pour le tour modifié avec le nouveau timestamp
+        const lockKey = `${dossard}_t${tour}`;
+        const lockRef = doc(db, "scansLocks", lockKey);
+        await setDoc(lockRef, {
+          dossard: dossard,
+          tour: tour,
+          createdAt: newTimestamp
+        }, { merge: true });
 
         // 7. Rafraîchir le cache global
         await updateGlobalCache();
         globalCache.coureurs[dossard].statut = "OK";
         globalCache.coureurs[dossard].horsDelai = false;
-        globalCache.scans[`${dossard}_t${tour}`] = {
+        globalCache.scans[lockKey] = {
           dossard,
           tour,
           timestamp: newTimestamp.getTime(),
           horsDelai: false
         };
+        globalCache.locks[lockKey] = true;
         runnerStatuses[dossard] = "OK";
         saveGlobalCache();
 
         // 8. Rafraîchir les boutons
         await updateDossardButtonsState();
 
-        statusDiv.innerHTML = `✅ Dossard ${dossard} modifié avec succès (Tour ${tour}) ! Il peut maintenant être scanné.`;
+        statusDiv.innerHTML = `✅ Dossard ${dossard} modifié avec succès (Tour ${tour}) ! Il peut maintenant être scanné avec le nouveau temps.`;
         statusDiv.className = "message success";
         document.getElementById("reactivate-dossard").value = "";
         document.getElementById("reactivate-tour").value = "";
