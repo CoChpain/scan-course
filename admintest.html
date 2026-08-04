@@ -364,7 +364,6 @@
         const data = doc.data();
         scans[`${data.dossard}_t${data.tour}`] = data;
       });
-      console.log("Scans mis à jour :", scans);
       if (buttonsInitialized) updateDossardButtonsState();
     });
 
@@ -375,7 +374,6 @@
         const data = doc.data();
         locks[`${data.dossard}_t${data.tour}`] = true;
       });
-      console.log("Verrous mis à jour :", locks);
       if (buttonsInitialized) updateDossardButtonsState();
     });
 
@@ -387,7 +385,6 @@
         coureurs[data.dossard] = data;
         runnerStatuses[data.dossard] = data.statut;
       });
-      console.log("Coureurs mis à jour :", coureurs);
       if (buttonsInitialized) updateDossardButtonsState();
     });
 
@@ -675,13 +672,21 @@
         const snap = await getDocs(q);
         if (snap.empty) {
           await addDoc(collection(db, "coureurs"), {
-            dossard, nom, prenom, categorie: sexe, statut: "OK"
+            dossard: String(dossard),
+            nom,
+            prenom,
+            categorie: sexe,
+            statut: "OK"
           });
           statusDiv.innerHTML = "✅ Coureur ajouté avec succès.";
           statusDiv.className = "message success";
         } else {
           const id = snap.docs[0].id;
-          await updateDoc(doc(db, "coureurs", id), { nom, prenom, categorie: sexe });
+          await updateDoc(doc(db, "coureurs", id), {
+            nom,
+            prenom,
+            categorie: sexe
+          });
           statusDiv.innerHTML = "✏️ Coureur mis à jour.";
           statusDiv.className = "message success";
         }
@@ -805,8 +810,8 @@
 
       try {
         await setDoc(lockRef, {
-          dossard: dossard,
-          tour: nextTour,
+          dossard: String(dossard),
+          tour: Number(nextTour),
           createdAt: serverTimestamp()
         });
 
@@ -816,15 +821,22 @@
         const formattedTime = formatTime(elapsedTime);
 
         await addDoc(collection(db, "resultats"), {
-          dossard, tour: nextTour, timestamp: new Date(), horsDelai: horsDelai, source: "admin"
+          dossard: String(dossard),
+          tour: Number(nextTour),
+          timestamp: new Date(),
+          horsDelai: horsDelai,
+          source: "admin"
         });
 
         if (horsDelai) {
-          const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+          const q = query(collection(db, "coureurs"), where("dossard", "==", String(dossard)));
           const snap = await getDocs(q);
           if (!snap.empty) {
             const coureurDoc = snap.docs[0];
-            await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "ELIMINE", horsDelai: true });
+            await updateDoc(doc(db, "coureurs", coureurDoc.id), {
+              statut: "ELIMINE",
+              horsDelai: true
+            });
           }
         }
 
@@ -895,7 +907,7 @@
 
         const existingDnsDnf = await getDocs(query(
           collection(db, "resultats"),
-          where("dossard", "==", dossard),
+          where("dossard", "==", String(dossard)),
           where("type", "in", ["DNS", "DNF"])
         ));
         if (!existingDnsDnf.empty) {
@@ -908,7 +920,7 @@
         const dernierTour = await getDernierTour(dossard);
         const tour = Math.min(10, dernierTour + 1);
 
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const q = query(collection(db, "coureurs"), where("dossard", "==", String(dossard)));
         const snap = await getDocs(q);
         if (snap.empty) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
@@ -921,16 +933,16 @@
           transaction.update(doc(db, "coureurs", docRef.id), { statut: "DNF" });
           const newDocRef = doc(collection(db, "resultats"));
           transaction.set(newDocRef, {
-            dossard,
+            dossard: String(dossard),
             timestamp: new Date(),
             type: "DNF",
-            tour: tour,
+            tour: Number(tour),
             source: "admin"
           });
           const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
           transaction.set(lockRef, {
-            dossard: dossard,
-            tour: tour,
+            dossard: String(dossard),
+            tour: Number(tour),
             createdAt: serverTimestamp()
           });
         });
@@ -973,7 +985,7 @@
 
         const existingDnsDnf = await getDocs(query(
           collection(db, "resultats"),
-          where("dossard", "==", dossard),
+          where("dossard", "==", String(dossard)),
           where("type", "in", ["DNS", "DNF"])
         ));
         if (!existingDnsDnf.empty) {
@@ -986,7 +998,7 @@
         const dernierTour = await getDernierTour(dossard);
         const tour = Math.min(10, dernierTour + 1);
 
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const q = query(collection(db, "coureurs"), where("dossard", "==", String(dossard)));
         const snap = await getDocs(q);
         if (snap.empty) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
@@ -999,16 +1011,16 @@
           transaction.update(doc(db, "coureurs", docRef.id), { statut: "DNS" });
           const newDocRef = doc(collection(db, "resultats"));
           transaction.set(newDocRef, {
-            dossard,
+            dossard: String(dossard),
             timestamp: new Date(),
             type: "DNS",
-            tour: tour,
+            tour: Number(tour),
             source: "admin"
           });
           const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
           transaction.set(lockRef, {
-            dossard: dossard,
-            tour: tour,
+            dossard: String(dossard),
+            tour: Number(tour),
             createdAt: serverTimestamp()
           });
         });
@@ -1028,7 +1040,7 @@
       const tour = Number(document.getElementById("add-tour").value);
       const time = document.getElementById("add-time").value.trim();
       const statusDiv = document.getElementById("scan-add-status");
-      if (!dossard || !tour || !time) {
+      if (!dossard || isNaN(tour) || !time) {
         statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
         statusDiv.className = "message error";
         return;
@@ -1080,8 +1092,8 @@
 
       try {
         await setDoc(lockRef, {
-          dossard: dossard,
-          tour: tour,
+          dossard: String(dossard),
+          tour: Number(tour),
           createdAt: serverTimestamp()
         });
 
@@ -1089,7 +1101,11 @@
         const ms = (h * 3600 + m * 60 + s) * 1000;
         const timestamp = new Date(startMs + ms);
         await addDoc(collection(db, "resultats"), {
-          dossard, tour, timestamp, horsDelai: false, source: "admin"
+          dossard: String(dossard),
+          tour: Number(tour),
+          timestamp: timestamp,
+          horsDelai: false,
+          source: "admin"
         });
 
         statusDiv.innerHTML = "✅ Scan ajouté avec succès !";
@@ -1128,7 +1144,7 @@
           return;
         }
 
-        const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", String(dossard)));
         const snapCoureur = await getDocs(qCoureur);
         if (snapCoureur.empty) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
@@ -1137,11 +1153,14 @@
         }
 
         const coureurDoc = snapCoureur.docs[0];
-        await updateDoc(doc(db, "coureurs", coureurDoc.id), { statut: "OK", horsDelai: false });
+        await updateDoc(doc(db, "coureurs", coureurDoc.id), {
+          statut: "OK",
+          horsDelai: false
+        });
 
         const dnsDnfQuery = query(
           collection(db, "resultats"),
-          where("dossard", "==", dossard),
+          where("dossard", "==", String(dossard)),
           where("type", "in", ["DNS", "DNF"])
         );
         const dnsDnfSnap = await getDocs(dnsDnfQuery);
@@ -1169,15 +1188,22 @@
       }
     };
 
-    // Fonction pour modifier un scan
+    // Fonction ULTIME pour modifier un scan
     window.modifyRunnerScan = async function() {
       const dossard = document.getElementById("reactivate-dossard").value.trim();
-      const tour = Number(document.getElementById("reactivate-tour").value);
+      const tourInput = document.getElementById("reactivate-tour").value.trim();
       const time = document.getElementById("reactivate-time").value.trim();
       const statusDiv = document.getElementById("reactivate-status");
 
-      if (!dossard || !tour || !time) {
+      if (!dossard || !tourInput || !time) {
         statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
+        statusDiv.className = "message error";
+        return;
+      }
+
+      const tour = Number(tourInput);
+      if (isNaN(tour)) {
+        statusDiv.innerHTML = "❌ Le tour doit être un nombre valide.";
         statusDiv.className = "message error";
         return;
       }
@@ -1190,6 +1216,7 @@
       }
 
       try {
+        // 1. Vérifier si le coureur existe
         const coureur = coureurs[dossard];
         if (!coureur) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
@@ -1197,7 +1224,7 @@
           return;
         }
 
-        // Vérifier si le coureur est ELIMINE ou a un scan hors délai
+        // 2. Vérifier si le coureur est ELIMINE ou a un scan hors délai
         let isEliminedOrHorsDelai = coureur.statut === "ELIMINE" || coureur.horsDelai;
         if (!isEliminedOrHorsDelai) {
           for (const key in scans) {
@@ -1214,7 +1241,8 @@
           return;
         }
 
-        const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+        // 3. Mettre à jour le statut du coureur en "OK"
+        const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", String(dossard)));
         const snapCoureur = await getDocs(qCoureur);
         if (snapCoureur.empty) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
@@ -1228,45 +1256,71 @@
           horsDelai: false
         });
 
-        // Trouver le scan pour le tour spécifié (SANS filtrer par tour)
+        // 4. Trouver le scan pour le tour spécifié (version ULTIME)
         const scanQuery = query(
           collection(db, "resultats"),
-          where("dossard", "==", dossard)
+          where("dossard", "==", String(dossard))
         );
         const scanSnap = await getDocs(scanQuery);
 
-        let targetScanDoc = null;
-        scanSnap.forEach(doc => {
-          const data = doc.data();
-          if (data.tour === tour) {
-            targetScanDoc = doc;
-          }
-        });
-
-        if (!targetScanDoc) {
-          statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.`;
+        if (scanSnap.empty) {
+          statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard}.`;
           statusDiv.className = "message error";
           return;
         }
 
-        // Calculer le nouveau timestamp
+        // Parcourir tous les scans pour trouver celui qui correspond au tour
+        let targetScanDoc = null;
+        let closestScanDoc = null;
+        let minDiff = Infinity;
+
+        scanSnap.forEach(doc => {
+          const data = doc.data();
+          const scanTour = parseInt(data.tour) || 0;
+          const diff = Math.abs(scanTour - tour);
+
+          if (scanTour === tour) {
+            targetScanDoc = doc;
+          }
+
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestScanDoc = doc;
+          }
+        });
+
+        if (!targetScanDoc) {
+          if (closestScanDoc) {
+            const data = closestScanDoc.data();
+            statusDiv.innerHTML = `⚠️ Aucun scan trouvé pour le tour ${tour}, mais un scan existe pour le tour ${data.tour}. Voulez-vous le modifier à la place ?`;
+            statusDiv.className = "message warning";
+            return;
+          } else {
+            statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour} ou proche.`;
+            statusDiv.className = "message error";
+            return;
+          }
+        }
+
+        // 5. Calculer le nouveau timestamp
         const [h, m, s] = time.split(":").map(Number);
         const ms = (h * 3600 + m * 60 + s) * 1000;
         const newTimestamp = new Date(startMs + ms);
 
-        // Mettre à jour le scan avec le nouveau temps et horsDelai = false
+        // 6. Mettre à jour le scan avec le nouveau temps et horsDelai = false
         await updateDoc(targetScanDoc.ref, {
           timestamp: newTimestamp,
           horsDelai: false,
-          source: "admin (modifié)"
+          source: "admin (modifié)",
+          tour: Number(tour)  // Forcer le type number
         });
 
-        // Recréer un verrou pour le tour modifié avec le nouveau timestamp
+        // 7. Recréer un verrou pour le tour modifié avec le nouveau timestamp
         const lockKey = `${dossard}_t${tour}`;
         const lockRef = doc(db, "scansLocks", lockKey);
         await setDoc(lockRef, {
-          dossard: dossard,
-          tour: tour,
+          dossard: String(dossard),
+          tour: Number(tour),
           createdAt: newTimestamp
         }, { merge: true });
 
@@ -1278,6 +1332,7 @@
       } catch (error) {
         statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
         statusDiv.className = "message error";
+        console.error("Erreur détaillée :", error);
       }
     };
 
