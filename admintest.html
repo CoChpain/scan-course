@@ -1240,25 +1240,13 @@
           return;
         }
 
-        // 2. Vérifier si le coureur est ELIMINE ou a un scan hors délai
-        let isEliminedOrHorsDelai = coureur.statut === "ELIMINE" || coureur.horsDelai;
-        if (!isEliminedOrHorsDelai) {
-          for (const key in scans) {
-            if (key.startsWith(`${dossard}_t`) && scans[key].horsDelai) {
-              isEliminedOrHorsDelai = true;
-              break;
-            }
-          }
-        }
-
-        if (!isEliminedOrHorsDelai) {
-          statusDiv.innerHTML = "⚠️ Ce coureur n'est pas éliminé ou hors délai.";
-          statusDiv.className = "message warning";
-          return;
-        }
+        
 
         // 3. Mettre à jour le statut du coureur en "OK"
-        const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", Number(dossard)));
+        const qCoureur = query(
+  collection(db, "coureurs"),
+  where("dossard", "==", String(dossard))
+);
         const snapCoureur = await getDocs(qCoureur);
         if (snapCoureur.empty) {
           statusDiv.innerHTML = "❌ Coureur introuvable";
@@ -1267,10 +1255,10 @@
         }
 
         const coureurDoc = snapCoureur.docs[0];
-        await updateDoc(doc(db, "coureurs", coureurDoc.id), {
-          statut: "OK",
-          horsDelai: false
-        });
+       await updateDoc(doc(db, "coureurs", coureurDoc.id), {
+  statut: horsDelai ? "ELIMINE" : "OK",
+  horsDelai: horsDelai
+});
 
         // 4. Trouver le scan pour le tour spécifié (version ULTIME)
         const scanQuery = query(collection(db, "resultats"), where("dossard", "==", Number(dossard)));
@@ -1343,7 +1331,18 @@
         const newTimestamp = new Date(startMs + ms);
 
         // 6. Mettre à jour le scan avec le nouveau temps et horsDelai = false
-        await updateDoc(targetScanDoc.ref, {
+        await 
+          
+        let cumulMin = 0;
+
+for (let i = 1; i <= tour; i++) {
+  cumulMin += Number(limites[`t${i}`] || 0);
+}
+
+const limiteMs = cumulMin * 60 * 1000;
+
+const horsDelai = ms > limiteMs;
+        updateDoc(targetScanDoc.ref, {
           timestamp: newTimestamp,
           horsDelai: false,
           source: "admin (modifié)",
@@ -1354,11 +1353,15 @@
         // 7. Recréer un verrou pour le tour modifié
         const lockKey = `${dossard}_t${tour}`;
         const lockRef = doc(db, "scansLocks", lockKey);
-        await setDoc(lockRef, {
-          dossard: String(dossard),
-          tour: Number(tour),
-          createdAt: newTimestamp
-        }, { merge: true });
+        const lockSnap = await getDoc(lockRef);
+
+if (!lockSnap.exists()) {
+  await setDoc(lockRef, {
+    dossard: String(dossard),
+    tour: Number(tour),
+    createdAt: serverTimestamp()
+  });
+}
 
         statusDiv.innerHTML = `✅ Dossard ${dossard} modifié avec succès (Tour ${tour}) ! Il peut maintenant être scanné avec le nouveau temps.`;
         statusDiv.className = "message success";
