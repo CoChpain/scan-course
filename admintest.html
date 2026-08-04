@@ -101,7 +101,6 @@
       gap: 10px;
       margin: 20px 0;
     }
-
     .tab-btn {
       padding: 12px 20px;
       background: var(--bg-secondary);
@@ -1229,37 +1228,42 @@
           horsDelai: false
         });
 
-        const scanKey = `${dossard}_t${tour}`;
-        if (!scans[scanKey]) {
+        // Trouver le scan pour le tour spécifié (SANS filtrer par tour)
+        const scanQuery = query(
+          collection(db, "resultats"),
+          where("dossard", "==", dossard)
+        );
+        const scanSnap = await getDocs(scanQuery);
+
+        let targetScanDoc = null;
+        scanSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.tour === tour) {
+            targetScanDoc = doc;
+          }
+        });
+
+        if (!targetScanDoc) {
           statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.`;
           statusDiv.className = "message error";
           return;
         }
 
+        // Calculer le nouveau timestamp
         const [h, m, s] = time.split(":").map(Number);
         const ms = (h * 3600 + m * 60 + s) * 1000;
         const newTimestamp = new Date(startMs + ms);
 
-        const scanQuery = query(
-          collection(db, "resultats"),
-          where("dossard", "==", dossard),
-          where("tour", "==", tour)
-        );
-        const scanSnap = await getDocs(scanQuery);
-        if (scanSnap.empty) {
-          statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.`;
-          statusDiv.className = "message error";
-          return;
-        }
-
-        const scanDoc = scanSnap.docs[0];
-        await updateDoc(scanDoc.ref, {
+        // Mettre à jour le scan avec le nouveau temps et horsDelai = false
+        await updateDoc(targetScanDoc.ref, {
           timestamp: newTimestamp,
           horsDelai: false,
           source: "admin (modifié)"
         });
 
-        const lockRef = doc(db, "scansLocks", scanKey);
+        // Recréer un verrou pour le tour modifié avec le nouveau timestamp
+        const lockKey = `${dossard}_t${tour}`;
+        const lockRef = doc(db, "scansLocks", lockKey);
         await setDoc(lockRef, {
           dossard: dossard,
           tour: tour,
