@@ -724,17 +724,21 @@
       setTimeout(() => updateDossardButtonsState(), 200);
     }
 
+    // --- FONCTION MODIFIÉE : updateDossardButton ---
     async function updateDossardButton(dossard) {
       const btn = document.getElementById(`dossard-btn-${dossard}`);
       if (!btn) return;
+
+      // Réinitialiser l'état du bouton
       btn.disabled = false;
       btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
 
+      // NOUVEAU : Vérifier si le coureur est ELIMINE ou horsDelai
       const coureur = globalCache.coureurs[dossard];
-      if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+      if (coureur && (coureur.statut === "ELIMINE" || coureur.horsDelai)) {
         btn.disabled = true;
         btn.classList.add("invalid");
-        btn.title = coureur.statut;
+        btn.title = coureur.statut === "ELIMINE" ? "Éliminé (hors délai)" : "Hors délai (ELIMINÉ)";
         return;
       }
 
@@ -791,6 +795,7 @@
 
       btn.title = `Prêt tour ${currentTour}`;
     }
+    // --- FIN MODIFICATION ---
 
     async function updateDossardButtonsState() {
       if (isUpdatingButtons) return;
@@ -833,6 +838,26 @@
       }
     };
 
+    // --- FONCTION MODIFIÉE : isHorsDelai ---
+    async function isHorsDelai(dossard, tour) {
+      // NOUVEAU : Vérifier si le coureur est déjà marqué comme ELIMINE ou horsDelai
+      const coureur = globalCache.coureurs[dossard];
+      if (coureur && (coureur.statut === "ELIMINE" || coureur.horsDelai)) {
+        return true;
+      }
+
+      if (!startMs || tour < 1 || tour > 10) return false;
+
+      let cumulMin = 0;
+      for (let i = 1; i <= tour; i++) {
+        cumulMin += (limites[`t${i}`] || 0);
+      }
+      const limiteMs = cumulMin * 60 * 1000;
+      return (Date.now() - startMs) > limiteMs;
+    }
+    // --- FIN MODIFICATION ---
+
+    // --- FONCTION MODIFIÉE : performScan ---
     async function performScan(dossard, statusDiv = null) {
       if (!startMs) {
         if (statusDiv) {
@@ -842,6 +867,7 @@
         return false;
       }
 
+      // NOUVEAU : Vérification immédiate du statut ELIMINE ou horsDelai
       let coureur = globalCache.coureurs[dossard];
       if (!coureur) {
         const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
@@ -852,9 +878,10 @@
         }
       }
 
-      if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+      // Si le coureur est ELIMINE ou a déjà un scan hors délai, bloquer le scan
+      if (coureur && (coureur.statut === "ELIMINE" || coureur.horsDelai)) {
         if (statusDiv) {
-          statusDiv.innerHTML = `❌ Coureur ${coureur.statut}`;
+          statusDiv.innerHTML = `❌ Coureur ${coureur.statut === "ELIMINE" ? "éliminé" : "hors délai"} (ne peut plus être scanné).`;
           statusDiv.className = "message error";
         }
         return false;
@@ -938,6 +965,7 @@
       globalCache.scans[lockKey] = { dossard, tour: nextTour, horsDelai: horsDelai, timestamp: now };
       saveGlobalCache();
 
+      // NOUVEAU : Si hors délai, marquer le coureur comme ELIMINE
       if (horsDelai) {
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
@@ -960,16 +988,7 @@
       }
       return true;
     }
-
-    async function isHorsDelai(dossard, tour) {
-      if (!startMs || tour < 1 || tour > 10) return false;
-      let cumulMin = 0;
-      for (let i = 1; i <= tour; i++) {
-        cumulMin += (limites[`t${i}`] || 0);
-      }
-      const limiteMs = cumulMin * 60 * 1000;
-      return (Date.now() - startMs) > limiteMs;
-    }
+    // --- FIN MODIFICATION ---
 
     window.quickScan = async function() {
       const dossard = document.getElementById("quick-scan-dossard").value.trim();
@@ -1200,28 +1219,20 @@
       }
     };
 
+    // --- FONCTION MODIFIÉE : addScan ---
     window.addScan = async function() {
       const dossard = document.getElementById("add-dossard").value.trim();
       const tour = Number(document.getElementById("add-tour").value);
       const time = document.getElementById("add-time").value.trim();
       const statusDiv = document.getElementById("scan-add-status");
+
       if (!dossard || !tour || !time) {
         statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
         statusDiv.className = "message error";
         return;
       }
-      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
-      if (!timeRegex.test(time)) {
-        statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
-        statusDiv.className = "message error";
-        return;
-      }
-      if (!startMs) {
-        statusDiv.innerHTML = "❌ Chrono non défini.";
-        statusDiv.className = "message error";
-        return;
-      }
 
+      // NOUVEAU : Vérification du statut ELIMINE ou horsDelai
       let coureur = globalCache.coureurs[dossard];
       if (!coureur) {
         const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
@@ -1230,8 +1241,21 @@
           globalCache.coureurs[dossard] = coureur;
         }
       }
-      if (coureur && ["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
-        statusDiv.innerHTML = `❌ Coureur ${coureur.statut}`;
+
+      if (coureur && (coureur.statut === "ELIMINE" || coureur.horsDelai)) {
+        statusDiv.innerHTML = `❌ Coureur ${coureur.statut === "ELIMINE" ? "éliminé" : "hors délai"} (ne peut plus être scanné).`;
+        statusDiv.className = "message error";
+        return;
+      }
+
+      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+      if (!timeRegex.test(time)) {
+        statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
+        statusDiv.className = "message error";
+        return;
+      }
+      if (!startMs) {
+        statusDiv.innerHTML = "❌ Chrono non défini.";
         statusDiv.className = "message error";
         return;
       }
@@ -1282,8 +1306,8 @@
       document.getElementById("add-tour").value = "";
       document.getElementById("add-time").value = "";
     };
+    // --- FIN MODIFICATION ---
 
-    // Fonction pour réintégrer un coureur DNS/DNF
     window.reintegrateRunner = async function() {
       const dossard = document.getElementById("reintegrate-dossard").value.trim();
       const statusDiv = document.getElementById("reintegrate-status");
@@ -1363,7 +1387,7 @@
       }
     };
 
-    // Fonction corrigée pour modifier un scan
+    // --- FONCTION MODIFIÉE : modifyRunnerScan ---
     window.modifyRunnerScan = async function() {
       const dossard = document.getElementById("reactivate-dossard").value.trim();
       const tour = Number(document.getElementById("reactivate-tour").value);
@@ -1498,6 +1522,7 @@
         statusDiv.className = "message error";
       }
     };
+    // --- FIN MODIFICATION ---
 
     window.resetCoureurs = async function() {
       if (!confirm("⚠️ Supprimer TOUS les coureurs ?")) return;
