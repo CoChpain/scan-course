@@ -1220,167 +1220,166 @@
       }
     };
 
-    // Fonction ULTIME pour modifier un scan (corrigée)
     window.modifyRunnerScan = async function() {
-      const dossardInput = document.getElementById("reactivate-dossard").value.trim();
-      const tourInput = document.getElementById("reactivate-tour").value.trim();
-      const time = document.getElementById("reactivate-time").value.trim();
-      const statusDiv = document.getElementById("reactivate-status");
+  const dossardInput = document.getElementById("reactivate-dossard").value.trim();
+  const tourInput = document.getElementById("reactivate-tour").value.trim();
+  const time = document.getElementById("reactivate-time").value.trim();
+  const statusDiv = document.getElementById("reactivate-status");
 
-      // Validation des champs
-      if (!dossardInput || !tourInput || !time) {
-        statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
-        statusDiv.className = "message error";
-        return;
+  // Validation des champs
+  if (!dossardInput || !tourInput || !time) {
+    statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
+    statusDiv.className = "message error";
+    return;
+  }
+
+  const dossard = String(dossardInput);
+  const tour = Number(tourInput);
+  if (isNaN(tour)) {
+    statusDiv.innerHTML = "❌ Le tour doit être un nombre valide.";
+    statusDiv.className = "message error";
+    return;
+  }
+
+  // Validation du format du temps (HH:MM:SS)
+  const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+  if (!timeRegex.test(time)) {
+    statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
+    statusDiv.className = "message error";
+    return;
+  }
+
+  try {
+    // 1. Vérifier si le coureur existe
+    const coureur = coureurs[dossard];
+    if (!coureur) {
+      statusDiv.innerHTML = "❌ Coureur introuvable";
+      statusDiv.className = "message error";
+      return;
+    }
+
+    // 2. Trouver le scan à modifier (recherche étendue)
+    const scanQuery = query(collection(db, "resultats"), where("dossard", "==", dossard));
+    const scanSnap = await getDocs(scanQuery);
+
+    let targetScanDoc = null;
+    let closestScanDoc = null;
+    let minDiff = Infinity;
+
+    scanSnap.forEach(doc => {
+      const data = doc.data();
+      let scanTour = data.tour !== undefined ? Number(data.tour) : null;
+
+      // Si le tour n'est pas défini, le calculer à partir du timestamp
+      if (scanTour === null && data.timestamp) {
+        const scanTimeMs = data.timestamp.toMillis ? data.timestamp.toMillis() : data.timestamp.seconds * 1000;
+        const elapsedMs = scanTimeMs - startMs;
+        let cumulMin = 0;
+        for (let i = 1; i <= 10; i++) {
+          cumulMin += (limites[`t${i}`] || 0);
+          if (elapsedMs <= cumulMin * 60 * 1000) {
+            scanTour = i;
+            break;
+          }
+        }
       }
 
-      const dossard = String(dossardInput);
-      const tour = Number(tourInput);
-      if (isNaN(tour)) {
-        statusDiv.innerHTML = "❌ Le tour doit être un nombre valide.";
-        statusDiv.className = "message error";
-        return;
+      // Si on a trouvé le bon tour
+      if (scanTour === tour) {
+        targetScanDoc = doc;
       }
 
-      // Validation du format du temps (HH:MM:SS)
-      const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
-      if (!timeRegex.test(time)) {
-        statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
-        statusDiv.className = "message error";
-        return;
+      // Sinon, garder le scan le plus proche
+      if (scanTour !== null) {
+        const diff = Math.abs(scanTour - tour);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestScanDoc = doc;
+        }
       }
+    });
 
-      try {
-        // 1. Vérifier si le coureur existe
-        const coureur = coureurs[dossard];
-        if (!coureur) {
-          statusDiv.innerHTML = "❌ Coureur introuvable";
-          statusDiv.className = "message error";
+    // Si aucun scan exact trouvé, utiliser le plus proche (avec confirmation)
+    if (!targetScanDoc) {
+      if (closestScanDoc) {
+        const data = closestScanDoc.data();
+        const scanTour = data.tour !== undefined ? data.tour : "calculé via timestamp";
+        if (!confirm(`⚠️ Aucun scan trouvé pour le tour ${tour}. Voulez-vous modifier le scan du tour ${scanTour} à la place ?`)) {
           return;
         }
-
-        // 2. Trouver le scan à modifier
-        const scanQuery = query(collection(db, "resultats"), where("dossard", "==", dossard));
-        const scanSnap = await getDocs(scanQuery);
-
-        let targetScanDoc = null;
-        let closestScanDoc = null;
-        let minDiff = Infinity;
-
-        scanSnap.forEach(doc => {
-          const data = doc.data();
-          let scanTour = data.tour !== undefined ? Number(data.tour) : null;
-
-          // Si le tour n'est pas défini, le calculer à partir du timestamp
-          if (scanTour === null && data.timestamp && startMs) {
-            const scanTimeMs = data.timestamp.toMillis ? data.timestamp.toMillis() : data.timestamp.seconds * 1000;
-            const elapsedMs = scanTimeMs - startMs;
-            let cumulMin = 0;
-            for (let i = 1; i <= 10; i++) {
-              cumulMin += (limites[`t${i}`] || 0);
-              if (elapsedMs <= cumulMin * 60 * 1000) {
-                scanTour = i;
-                break;
-              }
-            }
-          }
-
-          // Si on a trouvé le bon tour
-          if (scanTour === tour) {
-            targetScanDoc = doc;
-          }
-
-          // Sinon, garder le scan le plus proche
-          if (scanTour !== null) {
-            const diff = Math.abs(scanTour - tour);
-            if (diff < minDiff) {
-              minDiff = diff;
-              closestScanDoc = doc;
-            }
-          }
-        });
-
-        // Si aucun scan exact trouvé, utiliser le plus proche (avec confirmation)
-        if (!targetScanDoc) {
-          if (closestScanDoc) {
-            const data = closestScanDoc.data();
-            const scanTour = data.tour !== undefined ? data.tour : "calculé via timestamp";
-            if (!confirm(`⚠️ Aucun scan trouvé pour le tour ${tour}. Voulez-vous modifier le scan du tour ${scanTour} à la place ?`)) {
-              return;
-            }
-            targetScanDoc = closestScanDoc;
-          } else {
-            statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour} ou proche.`;
-            statusDiv.className = "message error";
-            return;
-          }
-        }
-
-        // 3. Calculer le nouveau timestamp et horsDelai
-        const [h, m, s] = time.split(":").map(Number);
-        const ms = (h * 3600 + m * 60 + s) * 1000;
-        const newTimestamp = new Date(startMs + ms);
-
-        // Calculer horsDelai
-        let cumulMin = 0;
-        for (let i = 1; i <= tour; i++) {
-          cumulMin += (limites[`t${i}`] || 0);
-        }
-        const limiteMs = cumulMin * 60 * 1000;
-        const horsDelai = ms > limiteMs;
-
-        // 4. Mettre à jour le scan
-        await updateDoc(targetScanDoc.ref, {
-          timestamp: newTimestamp,
-          horsDelai: horsDelai,
-          source: "admin (modifié)",
-          tour: tour,
-          dossard: dossard
-        });
-
-        // 5. Mettre à jour le statut du coureur
-        const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snapCoureur = await getDocs(qCoureur);
-        if (!snapCoureur.empty) {
-          const coureurDoc = snapCoureur.docs[0];
-          await updateDoc(doc(db, "coureurs", coureurDoc.id), {
-            statut: horsDelai ? "ELIMINE" : "OK",
-            horsDelai: horsDelai
-          });
-        }
-
-        // 6. Gérer les verrous (scansLocks)
-        // Supprimer l'ancien verrou (s'il existe)
-        const oldTour = targetScanDoc.data().tour || tour;
-        const oldLockKey = `${dossard}_t${oldTour}`;
-        const oldLockRef = doc(db, "scansLocks", oldLockKey);
-        await deleteDoc(oldLockRef).catch(() => {}); // Ignorer l'erreur si le verrou n'existe pas
-
-        // Recréer un nouveau verrou
-        const lockKey = `${dossard}_t${tour}`;
-        const lockRef = doc(db, "scansLocks", lockKey);
-        await setDoc(lockRef, {
-          dossard: dossard,
-          tour: tour,
-          createdAt: serverTimestamp()
-        });
-
-        // 7. Rafraîchir l'interface
-        await updateDossardButton(dossard);
-
-        // 8. Afficher un message de succès
-        statusDiv.innerHTML = `✅ Dossard ${dossard} modifié avec succès (Tour ${tour}) !`;
-        statusDiv.className = "message success";
-        document.getElementById("reactivate-dossard").value = "";
-        document.getElementById("reactivate-tour").value = "";
-        document.getElementById("reactivate-time").value = "";
-
-      } catch (error) {
-        statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+        targetScanDoc = closestScanDoc;
+      } else {
+        statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard}.`;
         statusDiv.className = "message error";
-        console.error("Erreur détaillée :", error);
+        return;
       }
-    };
+    }
+
+    // 3. Calculer le nouveau timestamp et horsDelai
+    const [h, m, s] = time.split(":").map(Number);
+    const ms = (h * 3600 + m * 60 + s) * 1000;
+    const newTimestamp = new Date(startMs + ms);
+
+    // Calculer horsDelai
+    let cumulMin = 0;
+    for (let i = 1; i <= tour; i++) {
+      cumulMin += (limites[`t${i}`] || 0);
+    }
+    const limiteMs = cumulMin * 60 * 1000;
+    const horsDelai = ms > limiteMs;
+
+    // 4. Mettre à jour le scan
+    await updateDoc(targetScanDoc.ref, {
+      timestamp: newTimestamp,
+      horsDelai: horsDelai,
+      source: "admin (modifié)",
+      tour: tour,  // <-- Forcer le tour à la valeur spécifiée
+      dossard: dossard
+    });
+
+    // 5. Mettre à jour le statut du coureur
+    const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+    const snapCoureur = await getDocs(qCoureur);
+    if (!snapCoureur.empty) {
+      const coureurDoc = snapCoureur.docs[0];
+      await updateDoc(doc(db, "coureurs", coureurDoc.id), {
+        statut: horsDelai ? "ELIMINE" : "OK",
+        horsDelai: horsDelai
+      });
+    }
+
+    // 6. Gérer les verrous (scansLocks)
+    // Supprimer l'ancien verrou (s'il existe)
+    const oldTour = targetScanDoc.data().tour || tour;
+    const oldLockKey = `${dossard}_t${oldTour}`;
+    const oldLockRef = doc(db, "scansLocks", oldLockKey);
+    await deleteDoc(oldLockRef).catch(() => {}); // Ignorer l'erreur si le verrou n'existe pas
+
+    // Recréer un nouveau verrou
+    const lockKey = `${dossard}_t${tour}`;
+    const lockRef = doc(db, "scansLocks", lockKey);
+    await setDoc(lockRef, {
+      dossard: dossard,
+      tour: tour,
+      createdAt: serverTimestamp()
+    });
+
+    // 7. Rafraîchir l'interface
+    await updateDossardButton(dossard);
+
+    // 8. Afficher un message de succès
+    statusDiv.innerHTML = `✅ Dossard ${dossard} modifié avec succès (Tour ${tour}) !`;
+    statusDiv.className = "message success";
+    document.getElementById("reactivate-dossard").value = "";
+    document.getElementById("reactivate-tour").value = "";
+    document.getElementById("reactivate-time").value = "";
+
+  } catch (error) {
+    statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+    statusDiv.className = "message error";
+    console.error("Erreur détaillée :", error);
+  }
+};
 
     // Fonction pour réinitialiser les coureurs
     window.resetCoureurs = async function() {
