@@ -1236,6 +1236,7 @@
 
   const dossard = String(dossardInput);
   const tour = Number(tourInput);
+
   if (isNaN(tour)) {
     statusDiv.innerHTML = "❌ Le tour doit être un nombre valide.";
     statusDiv.className = "message error";
@@ -1259,20 +1260,33 @@
       return;
     }
 
-    // 2. Trouver le scan à modifier (recherche étendue)
+    // 2. Trouver TOUS les scans du dossard (pas seulement celui du tour spécifié)
     const scanQuery = query(collection(db, "resultats"), where("dossard", "==", dossard));
     const scanSnap = await getDocs(scanQuery);
+
+    if (scanSnap.empty) {
+      // Si aucun scan trouvé avec dossard en String, essayer en Number
+      const scanQueryNum = query(collection(db, "resultats"), where("dossard", "==", Number(dossard)));
+      const scanSnapNum = await getDocs(scanQueryNum);
+      if (scanSnapNum.empty) {
+        statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard}.`;
+        statusDiv.className = "message error";
+        return;
+      }
+      scanSnap.docs = scanSnapNum.docs; // Utiliser les résultats de la recherche en Number
+    }
 
     let targetScanDoc = null;
     let closestScanDoc = null;
     let minDiff = Infinity;
 
+    // Parcourir tous les scans du dossard
     scanSnap.forEach(doc => {
       const data = doc.data();
       let scanTour = data.tour !== undefined ? Number(data.tour) : null;
 
       // Si le tour n'est pas défini, le calculer à partir du timestamp
-      if (scanTour === null && data.timestamp) {
+      if (scanTour === null && data.timestamp && startMs) {
         const scanTimeMs = data.timestamp.toMillis ? data.timestamp.toMillis() : data.timestamp.seconds * 1000;
         const elapsedMs = scanTimeMs - startMs;
         let cumulMin = 0;
@@ -1304,7 +1318,7 @@
     if (!targetScanDoc) {
       if (closestScanDoc) {
         const data = closestScanDoc.data();
-        const scanTour = data.tour !== undefined ? data.tour : "calculé via timestamp";
+        const scanTour = data.tour !== undefined ? data.tour : "inconnu (calculé via timestamp)";
         if (!confirm(`⚠️ Aucun scan trouvé pour le tour ${tour}. Voulez-vous modifier le scan du tour ${scanTour} à la place ?`)) {
           return;
         }
@@ -1334,7 +1348,7 @@
       timestamp: newTimestamp,
       horsDelai: horsDelai,
       source: "admin (modifié)",
-      tour: tour,  // <-- Forcer le tour à la valeur spécifiée
+      tour: tour,  // Forcer le tour à la valeur spécifiée
       dossard: dossard
     });
 
