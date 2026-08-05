@@ -153,7 +153,7 @@
       <input id="arrivee-manuel" placeholder="Dossard arrivée">
       <button id="btn-arrivee">✅ ARRIVÉE</button>
     </div>
-   
+
     <div class="zone">
       <button id="btn-reset-cache" style="background: red;">🔄 Réinitialiser le cache</button>
     </div>
@@ -334,7 +334,7 @@
       zone.style.color = couleur;
     };
 
-    async function isHorsDelai(tour) {
+    async function isHorsDelai(dossard, tour) {
       if (!startMs) return false;
       let cumul = 0;
       for (let i = 1; i <= tour; i++) {
@@ -346,24 +346,22 @@
     async function getDernierTourCommence(dossard) {
       let dernierTour = 0;
 
+      // Vérifier dans le cache global
       for (const key in globalCache.scans) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
-          if (tour > dernierTour) {
-            dernierTour = tour;
-          }
+          if (tour > dernierTour) dernierTour = tour;
         }
       }
 
       for (const key in globalCache.locks) {
         if (key.startsWith(`${dossard}_t`)) {
           const tour = parseInt(key.split('_t')[1]);
-          if (tour > dernierTour) {
-            dernierTour = tour;
-          }
+          if (tour > dernierTour) dernierTour = tour;
         }
       }
 
+      // Si pas trouvé dans le cache, vérifier dans Firestore
       if (dernierTour === 0) {
         try {
           const scans = await getDocs(query(
@@ -372,10 +370,8 @@
           ));
           scans.forEach(doc => {
             const data = doc.data();
-            if (data.tour) {
-              if (data.tour > dernierTour) {
-                dernierTour = data.tour;
-              }
+            if (data.tour && data.tour > dernierTour) {
+              dernierTour = data.tour;
             }
           });
         } catch (e) {
@@ -488,7 +484,7 @@
     }
 
     // ======================
-    // 🏁 Traitement des arrivées
+    // 🏁 Traitement des arrivées (FONCTION CORRIGÉE)
     // ======================
     async function traiterArrivee(dossard, source) {
       const now = Date.now();
@@ -531,7 +527,6 @@
       await updateGlobalCache();
 
       let coureur = globalCache.coureurs[dossard];
-
       if (!coureur) {
         const snap = await getDoc(doc(db, "coureurs", dossard));
         if (snap.exists()) {
@@ -556,7 +551,7 @@
         console.warn(`⚠️ En retard : ${dossard}`);
       }
 
-      if (dernierTour === prochainTour) {
+      if (dernierTour >= prochainTour) {
         feedback(`⛔ ${dossard} a déjà validé le tour ${prochainTour}`, "orange");
         beepDuplicate.play();
         return;
@@ -570,7 +565,6 @@
 
       if (dernierTour === currentTour - 1 && lastTourStartTime) {
         const timeSinceStart = Date.now() - lastTourStartTime;
-
         if (timeSinceStart < 180000) {
           const sec = Math.ceil((180000 - timeSinceStart) / 1000);
           feedback(`⏳ Attendre ${sec}s pour le tour ${prochainTour}`, "orange");
@@ -580,7 +574,6 @@
       }
 
       const lockKey = `${dossard}_t${prochainTour}`;
-
       if (globalCache.locks[lockKey]) {
         feedback(`⛔ Déjà scanné T${prochainTour}`, "orange");
         beepDuplicate.play();
@@ -598,56 +591,63 @@
         return;
       }
 
+      // Calculer si le coureur est hors délai
       const horsDelai = await isHorsDelai(prochainTour);
 
+      // Créer le verrou
       await setDoc(lockRef, {
-        dossard,
+        dossard: dossard,
         tour: prochainTour,
         createdAt: serverTimestamp()
       });
 
       // Met à jour le dernier scan réussi pour ce dossard
       await setDoc(lastScanRef, {
-        dossard,
+        dossard: dossard,
         timestamp: serverTimestamp()
       });
 
       globalCache.locks[lockKey] = true;
       saveGlobalCache();
 
+      // Enregistrer le scan avec TOUJOURS un tour explicite
       await addDoc(collection(db, "resultats"), {
-        dossard,
-        tour: prochainTour,
-        horsDelai,
-        source,
+        dossard: dossard,
+        tour: prochainTour,  // <-- TOUJOURS inclus
+        horsDelai: horsDelai,
+        source: source,
         timestamp: serverTimestamp()
       });
 
       globalCache.scans[lockKey] = {
-        dossard,
+        dossard: dossard,
         tour: prochainTour,
-        horsDelai,
+        horsDelai: horsDelai,
         timestamp: Date.now()
       };
-
       saveGlobalCache();
 
+      // Mettre à jour le statut du coureur si hors délai
       if (horsDelai) {
         const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
 
         if (!snap.empty) {
           const docRef = snap.docs[0];
-          await updateDoc(doc(db, "coureurs", docRef.id), { statut: "ELIMINE" });
+          await updateDoc(doc(db, "coureurs", docRef.id), {
+            statut: "ELIMINE",
+            horsDelai: true
+          });
 
           globalCache.coureurs[dossard].statut = "ELIMINE";
+          globalCache.coureurs[dossard].horsDelai = true;
           saveGlobalCache();
           runnerStatuses[dossard] = "ELIMINE";
         }
       }
 
+      // Feedback visuel et sonore
       let couleur = horsDelai ? "orange" : "lime";
-
       if (coureur?.sexe === "F") couleur = "violet";
       if (coureur?.sexe === "H" && !horsDelai) couleur = "cyan";
 
@@ -658,7 +658,6 @@
         couleur
       );
 
-      // Bips sonores
       if (horsDelai) {
         beepEliminated.play();
       } else {
@@ -812,38 +811,6 @@
       }
     };
 
-    document.getElementById("btn-dnf").onclick = async () => {
-      if (processing) return;
-      processing = true;
-      try {
-        const dossard = document.getElementById("dossard-dnf").value.replace(/\D/g, "");
-        if(!dossard) {
-          feedback("❌ Dossard invalide", "red");
-          return;
-        }
-        await changerStatut(dossard, "DNF");
-        document.getElementById("dossard-dnf").value = "";
-      } finally {
-        processing = false;
-      }
-    };
-
-    document.getElementById("btn-dns").onclick = async () => {
-      if (processing) return;
-      processing = true;
-      try {
-        const dossard = document.getElementById("dossard-dns").value.replace(/\D/g, "");
-        if(!dossard) {
-          feedback("❌ Dossard invalide", "red");
-          return;
-        }
-        await changerStatut(dossard, "DNS");
-        document.getElementById("dossard-dns").value = "";
-      } finally {
-        processing = false;
-      }
-    };
-
     document.getElementById("btn-reset-cache").onclick = () => {
       globalCache = {
         locks: {},
@@ -927,8 +894,8 @@
           transaction.update(doc(db, "coureurs", coureurDoc.id), { statut: type });
           const newDocRef = doc(collection(db, "resultats"));
           transaction.set(newDocRef, {
-            dossard,
-            type,
+            dossard: dossard,
+            type: type,
             tour: tour,
             source: "MANUEL",
             timestamp: serverTimestamp()
