@@ -286,7 +286,7 @@
     </div>
 
     <div class="section">
-      <div class="section-title">🔢 Scan manuel (boutons 1 à 160)</div>
+      <div class="section-title">🔢 Scan manuel (boutons des coureurs chargés)</div>
       <div style="margin-bottom: 10px; text-align: center;">
         <button onclick="forceRefreshDossardButtons()" class="btn-success">🔄 Rafraîchir les boutons</button>
       </div>
@@ -391,6 +391,14 @@
     function saveGlobalCache() {
       localStorage.setItem(GLOBAL_CACHE_KEY, JSON.stringify(globalCache));
       cacheChannel.postMessage({ type: 'cache-updated', data: globalCache });
+    }
+
+    // Fonction utilitaire pour obtenir les dossards existants triés
+    function getExistingDossards() {
+      return Object.keys(globalCache.coureurs)
+        .map(d => parseInt(d))
+        .filter(d => !isNaN(d))
+        .sort((a, b) => a - b);
     }
 
     async function updateGlobalCache() {
@@ -709,17 +717,28 @@
       }
     };
 
+    // ===== FONCTIONS MODIFIÉES POUR LES BOUTONS DYNAMIQUES =====
     function generateDossardButtons() {
       const grid = document.getElementById("dossard-buttons-grid");
       grid.innerHTML = "";
-      for (let i = 1; i <= 160; i++) {
+
+      const existingDossards = getExistingDossards();
+
+      if (existingDossards.length === 0) {
+        grid.innerHTML = "<p class='message warning'>⚠️ Aucun coureur chargé dans Firebase.</p>";
+        buttonsInitialized = true;
+        return;
+      }
+
+      for (const dossard of existingDossards) {
         const btn = document.createElement("button");
-        btn.textContent = i;
+        btn.textContent = dossard;
         btn.className = "dossard-btn";
-        btn.id = `dossard-btn-${i}`;
-        btn.onclick = function() { buttonScan(i); };
+        btn.id = `dossard-btn-${dossard}`;
+        btn.onclick = function() { buttonScan(dossard); };
         grid.appendChild(btn);
       }
+
       buttonsInitialized = true;
       setTimeout(() => updateDossardButtonsState(), 200);
     }
@@ -798,9 +817,12 @@
       if (isUpdatingButtons) return;
       isUpdatingButtons = true;
       currentTour = calculateCurrentTour(startMs, limites);
-      for (let i = 1; i <= 160; i++) {
-        await updateDossardButton(i);
+
+      const existingDossards = getExistingDossards();
+      for (const dossard of existingDossards) {
+        await updateDossardButton(dossard);
       }
+
       isUpdatingButtons = false;
     }
 
@@ -809,10 +831,11 @@
       statusDiv.innerHTML = "🔄 Rafraîchissement en cours...";
       statusDiv.className = "message";
       await updateGlobalCache();
-      await updateDossardButtonsState();
-      statusDiv.innerHTML = "✅ Boutons rafraîchis !";
+      generateDossardButtons(); // Recrée les boutons avec la liste mise à jour
+      statusDiv.innerHTML = "✅ Boutons recréés selon les coureurs chargés !";
       statusDiv.className = "message success";
     };
+    // ===== FIN MODIFICATIONS =====
 
     window.forceSyncWithFirebase = async function() {
       const statusDiv = document.getElementById("reintegrate-status") || document.getElementById("reactivate-status");
@@ -1371,7 +1394,6 @@
       }
     };
 
-    // --- FONCTION MODIFIÉE : modifyRunnerScan (correction pour tous les coureurs) ---
     window.modifyRunnerScan = async function() {
       const dossard = document.getElementById("reactivate-dossard").value.trim();
       const tour = Number(document.getElementById("reactivate-tour").value);
@@ -1392,7 +1414,6 @@
       }
 
       try {
-        // 1. Vérifier si le coureur existe
         let coureur = globalCache.coureurs[dossard];
         if (!coureur) {
           const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
@@ -1408,7 +1429,6 @@
           return;
         }
 
-        // 2. Trouver le scan pour le tour spécifié
         const scanQuery = query(
           collection(db, "resultats"),
           where("dossard", "==", dossard),
@@ -1422,20 +1442,17 @@
           return;
         }
 
-        // 3. Calculer le nouveau timestamp
         const [h, m, s] = time.split(":").map(Number);
         const ms = (h * 3600 + m * 60 + s) * 1000;
         const newTimestamp = new Date(startMs + ms);
 
-        // 4. Mettre à jour le scan avec le nouveau temps
         const scanDoc = scanSnap.docs[0];
         await updateDoc(scanDoc.ref, {
           timestamp: newTimestamp,
-          horsDelai: false, // On considère que la correction annule le horsDelai
+          horsDelai: false,
           source: "admin (corrigé)"
         });
 
-        // 5. Mettre à jour le verrou pour le tour modifié
         const lockKey = `${dossard}_t${tour}`;
         const lockRef = doc(db, "scansLocks", lockKey);
         await setDoc(lockRef, {
@@ -1444,7 +1461,6 @@
           createdAt: newTimestamp
         }, { merge: true });
 
-        // 6. Mettre à jour le statut du coureur si nécessaire
         if (coureur.statut === "ELIMINE") {
           const qCoureur = query(collection(db, "coureurs"), where("dossard", "==", dossard));
           const snapCoureur = await getDocs(qCoureur);
@@ -1457,7 +1473,6 @@
           }
         }
 
-        // 7. Rafraîchir le cache global
         await updateGlobalCache();
         globalCache.coureurs[dossard].statut = "OK";
         globalCache.coureurs[dossard].horsDelai = false;
@@ -1471,7 +1486,6 @@
         runnerStatuses[dossard] = "OK";
         saveGlobalCache();
 
-        // 8. Rafraîchir les boutons
         await updateDossardButtonsState();
 
         statusDiv.innerHTML = `✅ Dossard ${dossard} corrigé avec succès (Tour ${tour}) !`;
@@ -1484,7 +1498,6 @@
         statusDiv.className = "message error";
       }
     };
-    // --- FIN MODIFICATION ---
 
     window.resetCoureurs = async function() {
       if (!confirm("⚠️ Supprimer TOUS les coureurs ?")) return;
@@ -1498,7 +1511,7 @@
         globalCache.coureurs = {};
         saveGlobalCache();
         runnerStatuses = {};
-        updateDossardButtonsState();
+        generateDossardButtons(); // Recrée les boutons (vide)
         document.getElementById("reset-coureurs-status").innerHTML = "🗑️ Coureurs supprimés.";
         document.getElementById("reset-coureurs-status").className = "message success";
       } catch (error) {
@@ -1522,8 +1535,9 @@
         globalCache.scans = {};
         saveGlobalCache();
         runnerStatuses = {};
-        for (let i = 1; i <= 160; i++) {
-          const btn = document.getElementById(`dossard-btn-${i}`);
+        const existingDossards = getExistingDossards();
+        for (const dossard of existingDossards) {
+          const btn = document.getElementById(`dossard-btn-${dossard}`);
           if (btn) {
             btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
             btn.disabled = !startMs;
@@ -1566,17 +1580,9 @@
         saveGlobalCache();
         afficherChrono();
         updateChronoButtonState();
-        for (let i = 1; i <= 160; i++) {
-          const btn = document.getElementById(`dossard-btn-${i}`);
-          if (btn) {
-            btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
-            btn.disabled = true;
-            btn.title = "Chrono non lancé";
-          }
-        }
+        generateDossardButtons(); // Recrée les boutons (vide)
         document.getElementById("reset-course-status").innerHTML = "🔄 Course complètement réinitialisée !";
         document.getElementById("reset-course-status").className = "message success";
-        setTimeout(() => updateDossardButtonsState(), 1000);
       } catch (error) {
         document.getElementById("reset-course-status").innerHTML = `❌ Erreur : ${error.message}`;
         document.getElementById("reset-course-status").className = "message error";
@@ -1590,8 +1596,9 @@
         globalCache.scans = {};
         globalCache.lastUpdated = 0;
         saveGlobalCache();
-        for (let i = 1; i <= 160; i++) {
-          const btn = document.getElementById(`dossard-btn-${i}`);
+        const existingDossards = getExistingDossards();
+        for (const dossard of existingDossards) {
+          const btn = document.getElementById(`dossard-btn-${dossard}`);
           if (btn) {
             btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
             btn.disabled = !startMs;
