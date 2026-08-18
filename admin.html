@@ -99,6 +99,17 @@ function checkPwd(){
 
 <hr>
 
+<!-- 🛠️ CORRIGER UN SCAN PAR DOSSARD + TOUR -->
+<h2>🛠️ Corriger un scan</h2>
+
+<input id="fix-dossard" type="text" placeholder="Dossard">
+<input id="fix-tour" type="number" min="1" placeholder="Tour">
+<button onclick="findScanToFix()">Rechercher le scan</button>
+
+<div id="fix-scan-result" style="margin-top:15px;"></div>
+
+<hr>
+
 <!-- ⚙️ MODIFIER STATUT -->
 <h2>⚙️ Modifier statut coureur</h2>
 
@@ -329,6 +340,127 @@ window.resetCoureurs = async function(){
 };
 
 /* ---------------------------------------------------------
+   🧰 NORMALISATION DES DONNÉES
+--------------------------------------------------------- */
+function normalizeDossard(value){
+  return String(value ?? "").trim();
+}
+
+function normalizeTour(value){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/* Recherche robuste : accepte les anciens scans où dossard/tour
+   ont éventuellement été enregistrés avec un type différent. */
+async function getScansForRunner(dossard){
+  const target = normalizeDossard(dossard);
+  const snap = await getDocs(collection(db,"resultats"));
+
+  return snap.docs.filter(docu => {
+    const r = docu.data();
+    return normalizeDossard(r.dossard) === target;
+  });
+}
+
+/* ---------------------------------------------------------
+   🛠️ CORRIGER UN SCAN PAR DOSSARD + TOUR
+--------------------------------------------------------- */
+window.findScanToFix = async function(){
+  const dossard = normalizeDossard(document.getElementById("fix-dossard").value);
+  const tour = normalizeTour(document.getElementById("fix-tour").value);
+  const zone = document.getElementById("fix-scan-result");
+
+  if(!dossard || tour === null){
+    zone.innerHTML = "<p class='red'>⚠️ Merci d'indiquer un dossard et un tour valides.</p>";
+    return;
+  }
+
+  zone.innerHTML = "🔎 Recherche du scan…";
+
+  try {
+    const docs = await getScansForRunner(dossard);
+    const matches = docs.filter(docu => normalizeTour(docu.data().tour) === tour);
+
+    if(matches.length === 0){
+      zone.innerHTML = `
+        <p class='red'>❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.</p>
+        <p style="color:#aaa;font-size:14px;">La recherche accepte maintenant les anciens enregistrements où le dossard ou le tour ont été stockés comme texte ou comme nombre.</p>
+      `;
+      return;
+    }
+
+    let html = `<h3>✅ Scan(s) trouvé(s) : ${matches.length}</h3>`;
+
+    matches.forEach(docu => {
+      const r = docu.data();
+      const id = docu.id;
+      let temps = "--:--:--";
+
+      if(r.timestamp && startMs){
+        const diff = r.timestamp.toDate().getTime() - startMs;
+        temps = format(diff);
+      }
+
+      html += `
+        <div style="border:1px solid #444;padding:12px;margin:10px auto;max-width:500px;">
+          <p><b>Dossard :</b> ${normalizeDossard(r.dossard)}</p>
+          <p><b>Tour :</b> ${normalizeTour(r.tour) ?? "-"}</p>
+          <p><b>Temps :</b> ${temps}</p>
+          <p><b>Hors délai :</b> ${r.horsDelai ? "Oui" : "Non"}</p>
+          <button onclick="editScanById('${id}', '${dossard}', ${tour})">✏️ Corriger ce scan</button>
+        </div>
+      `;
+    });
+
+    zone.innerHTML = html;
+  } catch(error){
+    console.error("Erreur recherche scan :", error);
+    zone.innerHTML = `<p class='red'>❌ Erreur lors de la recherche du scan.</p><p style="color:#aaa;">${error.message}</p>`;
+  }
+};
+
+window.editScanById = async function(id, dossard, tour){
+  const newTime = prompt(`Nouveau temps pour le dossard ${dossard}, tour ${tour} (HH:MM:SS) :`);
+  if(!newTime) return;
+
+  const parts = newTime.trim().split(":").map(Number);
+  if(parts.length !== 3 || parts.some(v => !Number.isFinite(v))){
+    alert("❌ Format invalide. Utilise HH:MM:SS.");
+    return;
+  }
+
+  const [h,m,s] = parts;
+  if(h < 0 || m < 0 || m > 59 || s < 0 || s > 59){
+    alert("❌ Temps invalide. Utilise HH:MM:SS.");
+    return;
+  }
+
+  if(!startMs){
+    alert("❌ Chrono non défini, impossible de recalculer le timestamp.");
+    return;
+  }
+
+  const ms = (h*3600 + m*60 + s) * 1000;
+  const timestamp = new Date(startMs + ms);
+
+  try {
+    await updateDoc(doc(db,"resultats",id), {
+      timestamp,
+      dossard: normalizeDossard(dossard),
+      tour: normalizeTour(tour)
+    });
+
+    alert("✅ Scan corrigé !");
+    findScanToFix();
+    loadScans(dossard);
+  } catch(error){
+    console.error("Erreur correction scan :", error);
+    alert("❌ Impossible de modifier le scan : " + error.message);
+  }
+};
+
+/* ---------------------------------------------------------
    🔍 RECHERCHE COUREUR
 --------------------------------------------------------- */
 window.searchRunner = async function(){
@@ -361,8 +493,7 @@ window.searchRunner = async function(){
 --------------------------------------------------------- */
 async function loadScans(dossard){
 
-  const q = query(collection(db,"resultats"), where("dossard","==",dossard));
-  const snap = await getDocs(q);
+  const docs = await getScansForRunner(dossard);
 
   let html = `
     <h3>Scans</h3>
@@ -376,7 +507,7 @@ async function loadScans(dossard){
       </tr>
   `;
 
-  snap.forEach(docu => {
+  docs.forEach(docu => {
     const r = docu.data();
     const id = docu.id;
 
@@ -433,11 +564,14 @@ window.editScan = async function(id, tour, oldDossard){
   const timestamp = new Date(startMs + ms);
 
   const newDossard = prompt("Modifier le dossard ? (laisser vide pour garder " + oldDossard + ")");
-  const dossardFinal = newDossard && newDossard.trim() !== "" ? newDossard.trim() : oldDossard;
+  const dossardFinal = newDossard && newDossard.trim() !== ""
+    ? normalizeDossard(newDossard)
+    : normalizeDossard(oldDossard);
 
   await updateDoc(doc(db,"resultats",id), {
     timestamp: timestamp,
-    dossard: dossardFinal
+    dossard: dossardFinal,
+    tour: normalizeTour(tour)
   });
 
   alert("Scan modifié !");
@@ -484,8 +618,8 @@ window.deleteScan = async function(id){
 --------------------------------------------------------- */
 window.addScan = async function(){
 
-  const dossard = document.getElementById("add-dossard").value.trim();
-  const tour = Number(document.getElementById("add-tour").value);
+  const dossard = normalizeDossard(document.getElementById("add-dossard").value);
+  const tour = normalizeTour(document.getElementById("add-tour").value);
   const time = document.getElementById("add-time").value;
 
   if(!dossard || !tour || !time) return alert("Champs incomplets");
@@ -643,8 +777,7 @@ window.editRunner = async function(dossard, nom, prenom, sexe){
   document.getElementById("runner-save-status").innerHTML =
     "✏️ Modification du coureur " + dossard;
 
-  const q = query(collection(db,"resultats"), where("dossard","==",dossard));
-  const snap = await getDocs(q);
+  const docs = await getScansForRunner(dossard);
 
   let html = `
     <h3>⏱️ Scans du coureur</h3>
@@ -656,7 +789,7 @@ window.editRunner = async function(dossard, nom, prenom, sexe){
       </tr>
   `;
 
-  snap.forEach(docu => {
+  docs.forEach(docu => {
     const r = docu.data();
     const id = docu.id;
 
