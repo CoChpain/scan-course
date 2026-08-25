@@ -5,90 +5,95 @@
 <title>Apollo Run - Multi Caméras</title>
 
 <style>
-
-body{
-  margin:0;
-  font-family:Arial;
-  background:#111;
-  color:white;
-  height:100vh;
-  display:flex;
-  flex-direction:column;
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #111;
+  color: white;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-#chrono{
-  margin-left:auto;
-  padding:15px 25px;
-  font-size:24px;
-  font-weight:bold;
-  color:#ffcc00;
+#chrono {
+  margin-left: auto;
+  padding: 15px 25px;
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffcc00;
 }
 
-/* barre onglets */
-.tabs{
-  display:flex;
-  background:#000;
-  border-bottom:2px solid #333;
+/* Barre d'onglets */
+.tabs {
+  display: flex;
+  background: #000;
+  border-bottom: 2px solid #333;
 }
 
-.tab{
-  padding:15px 20px;
-  cursor:pointer;
-  border-right:1px solid #333;
+.tab {
+  padding: 15px 20px;
+  cursor: pointer;
+  border-right: 1px solid #333;
 }
 
-.tab.active{
-  background:#333;
+.tab.active {
+  background: #333;
 }
 
-/* contenu */
-.content{
-  display:none;
-  padding:15px;
-  flex:1;
-  overflow:hidden;
+/* Contenu des onglets */
+.content {
+  display: none;
+  padding: 0;
+  height: calc(100vh - 60px); /* Ajusté pour tenir compte de la barre d'onglets */
+  overflow: hidden;
 }
 
-.content.active{
-  display:block;
+.content.active {
+  display: block;
 }
 
-/* grille 2x2 */
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  grid-template-rows:1fr 1fr;
-  gap:15px;
-  height:100%;
+/* Grille pour 2 caméras côte à côte */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  height: 100%;
+  width: 100%;
+  padding: 15px;
+  box-sizing: border-box;
 }
 
-.vertical-cams{
-  display:grid;
-  grid-template-rows:1fr 1fr;
-  gap:15px;
-  height:100%;
+/* Grille pour 2 caméras verticales */
+.vertical-cams {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 15px;
+  height: 100%;
+  padding: 15px;
+  box-sizing: border-box;
 }
 
-/* caméra */
-.camera{
-  background:black;
-  border:2px solid #333;
-  height:100%;
+/* Style des caméras */
+.camera {
+  background: black;
+  border: 2px solid #333;
+  height: 100%;
+  width: 100%;
 }
 
-iframe{
-  width:100%;
-  height:100%;
-  border:none;
+iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
 }
 
-@media(max-width:900px){
-  .grid{
-    grid-template-columns:1fr;
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
 
-/* 🔻 SLIDER PARTENAIRES */
+/* Slider des partenaires */
 .partners-slider {
   position: absolute;
   bottom: 0;
@@ -125,7 +130,7 @@ iframe{
 
 <body>
 
-<!-- onglets -->
+<!-- Barre d'onglets -->
 <div class="tabs">
   <div class="tab active" data-target="live">
     2 caméras + résultats
@@ -154,21 +159,11 @@ iframe{
   <div id="chrono">00:00:00</div>
 </div>
 
-<!-- COURSE LIVE -->
+<!-- Contenu : 2 caméras + résultats -->
 <div id="live" class="content active">
-  <div style="
-    display:grid;
-    grid-template-columns:40% 60%;
-    gap:15px;
-    height:100%;
-  ">
-    <!-- CAMERAS A GAUCHE -->
-    <div style="
-      display:grid;
-      grid-template-rows:1fr 1fr;
-      gap:15px;
-      height:100%;
-    ">
+  <div style="display: grid; grid-template-columns: 40% 60%; gap: 15px; height: 100%;">
+    <!-- Caméras à gauche -->
+    <div style="display: grid; grid-template-rows: 1fr 1fr; gap: 15px; height: 100%;">
       <div class="camera">
         <iframe src="https://vdo.ninja/?view=ApolloRunAcam1&cleanoutput&transparent&autoplay"></iframe>
       </div>
@@ -176,15 +171,14 @@ iframe{
         <iframe src="https://vdo.ninja/?view=ApolloRunBcam2&cleanoutput&transparent&autoplay"></iframe>
       </div>
     </div>
-
-    <!-- RESULTATS A DROITE -->
-    <div class="camera" id="resultatsContainer" style="overflow-y:auto; height:100%;">
+    <!-- Résultats à droite -->
+    <div class="camera" id="resultatsContainer" style="overflow-y: auto; height: 100%;">
       <iframe src="https://cochpain.github.io/scan-course/resultats.html"></iframe>
     </div>
   </div>
 </div>
 
-<!-- vue globale horizontale -->
+<!-- Contenu : 2 caméras H -->
 <div id="all" class="content">
   <div class="grid">
     <div class="camera">
@@ -196,7 +190,7 @@ iframe{
   </div>
 </div>
 
-<!-- vue globale verticale -->
+<!-- Contenu : 2 caméras V -->
 <div id="all1" class="content">
   <div class="vertical-cams">
     <div class="camera">
@@ -208,35 +202,35 @@ iframe{
   </div>
 </div>
 
-<!-- cam1 -->
+<!-- Contenu : Caméra 1 -->
 <div id="cam1" class="content">
   <div class="camera">
     <iframe src="https://vdo.ninja/?view=ApolloRunAcam1&cleanoutput&transparent&autoplay"></iframe>
   </div>
 </div>
 
-<!-- cam2 -->
+<!-- Contenu : Caméra 2 -->
 <div id="cam2" class="content">
   <div class="camera">
     <iframe src="https://vdo.ninja/?view=ApolloRunBcam2&cleanoutput&transparent&autoplay"></iframe>
   </div>
 </div>
 
-<!-- cam3 -->
+<!-- Contenu : Caméra 3 -->
 <div id="cam3" class="content">
   <div class="camera">
     <iframe src="https://vdo.ninja/?view=ApolloRunCcam3&cleanoutput&transparent&autoplay"></iframe>
   </div>
 </div>
 
-<!-- cam4 -->
+<!-- Contenu : Résultats -->
 <div id="cam4" class="content">
   <div class="camera">
     <iframe src="https://cochpain.github.io/scan-course/resultats.html"></iframe>
   </div>
 </div>
 
-<!-- Chrono -->
+<!-- Contenu : Chrono -->
 <div id="chrono-content" class="content" style="position: relative; height: 100%;">
   <div style="display: flex; justify-content: center; align-items: center; height: calc(100% - 100px);">
     <div id="big-chrono" style="font-size: 200px; font-weight: bold; color: #ffcc00;">00:00:00</div>
@@ -265,6 +259,7 @@ iframe{
   </div>
 </div>
 
+<!-- Scripts -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
   import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
@@ -301,9 +296,9 @@ iframe{
     }, 1000);
   }
 
-  /* 🔥 écoute en temps réel du chrono */
-  onSnapshot(doc(db,"course","depart"), snap=>{
-    if(snap.exists()){
+  /* Écoute en temps réel du chrono */
+  onSnapshot(doc(db, "course", "depart"), snap => {
+    if (snap.exists()) {
       startMs = snap.data().startMs ?? null;
     } else {
       startMs = null;
@@ -313,7 +308,7 @@ iframe{
 </script>
 
 <script>
-  /* gestion onglets */
+  /* Gestion des onglets */
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -321,7 +316,6 @@ iframe{
 
       tab.classList.add("active");
 
-      // Gestion spéciale pour l'onglet "Chrono"
       if (tab.textContent.trim() === "Chrono") {
         document.getElementById("chrono-content").classList.add("active");
       } else {
@@ -337,34 +331,34 @@ iframe{
 
   setInterval(() => {
     const liveTab = document.getElementById("live");
-    if(!liveTab.classList.contains("active")) return;
+    if (!liveTab.classList.contains("active")) return;
 
     const container = document.getElementById("resultatsContainer");
-    if(!container) return;
+    if (!container) return;
 
     const maxScroll = container.scrollHeight - container.clientHeight;
-    if(maxScroll <= 0) return;
+    if (maxScroll <= 0) return;
 
-    if(pause) return;
+    if (pause) return;
 
     container.scrollTop += dir;
 
-    if(container.scrollTop >= maxScroll){
+    if (container.scrollTop >= maxScroll) {
       pause = true;
       setTimeout(() => {
         dir = -1;
         pause = false;
-      },3000);
+      }, 3000);
     }
 
-    if(container.scrollTop <= 0 && dir < 0){
+    if (container.scrollTop <= 0 && dir < 0) {
       pause = true;
       setTimeout(() => {
         dir = 1;
         pause = false;
-      },3000);
+      }, 3000);
     }
-  },40);
+  }, 40);
 </script>
 </body>
 </html>
