@@ -627,24 +627,33 @@
       };
       saveGlobalCache();
 
-      // Mettre à jour le statut du coureur si hors délai
-      if (horsDelai) {
-        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
-        const snap = await getDocs(q);
+     const nouveauStatut = horsDelai ? "ELIMINE" : "OK";
 
-        if (!snap.empty) {
-          const docRef = snap.docs[0];
-          await updateDoc(doc(db, "coureurs", docRef.id), {
-            statut: "ELIMINE",
-            horsDelai: true
-          });
+const q = query(
+  collection(db, "coureurs"),
+  where("dossard", "==", dossard)
+);
 
-          globalCache.coureurs[dossard].statut = "ELIMINE";
-          globalCache.coureurs[dossard].horsDelai = true;
-          saveGlobalCache();
-          runnerStatuses[dossard] = "ELIMINE";
-        }
-      }
+const snap = await getDocs(q);
+
+if (!snap.empty) {
+  const docRef = snap.docs[0];
+
+  await updateDoc(
+    doc(db, "coureurs", docRef.id),
+    {
+      statut: nouveauStatut,
+      horsDelai: horsDelai
+    }
+  );
+
+  globalCache.coureurs[dossard].statut = nouveauStatut;
+  globalCache.coureurs[dossard].horsDelai = horsDelai;
+
+  runnerStatuses[dossard] = nouveauStatut;
+
+  saveGlobalCache();
+}
 
       // Feedback visuel et sonore
       let couleur = horsDelai ? "orange" : "lime";
