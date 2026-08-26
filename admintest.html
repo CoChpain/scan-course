@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ADMIN – APOLLO RUN</title>
 
+  
+
   <style>
     :root {
       --bg-primary: #000;
@@ -675,6 +677,7 @@
   </div>
 
   <div id="resultats-tab" class="tab-content">
+
     <h2>🏆 Réinitialisation des données</h2>
 
     <h3>🗑️ Réinitialiser la base coureurs</h3>
@@ -771,6 +774,7 @@
 
   </div>
 
+
 <script type="module">
 
 import { initializeApp }
@@ -800,12 +804,14 @@ from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { firebaseConfig }
   from "./firebase-config.js";
 
+
 /* ============================================================
    FIREBASE
 ============================================================ */
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
 
 enableIndexedDbPersistence(db)
   .catch((err) => {
@@ -822,6 +828,7 @@ enableIndexedDbPersistence(db)
     }
 
   });
+
 
 /* ============================================================
    CACHE GLOBAL
@@ -840,8 +847,10 @@ let globalCache = {
 
 };
 
+
 const cacheChannel =
   new BroadcastChannel('apollo-run-cache');
+
 
 function loadGlobalCache() {
 
@@ -873,6 +882,7 @@ function loadGlobalCache() {
 
 }
 
+
 function saveGlobalCache() {
 
   localStorage.setItem(
@@ -886,6 +896,7 @@ function saveGlobalCache() {
   });
 
 }
+
 
 /* ============================================================
    STATUTS BLOQUANTS
@@ -923,8 +934,9 @@ function estCoureurElimine(coureur) {
 
 }
 
+
 /* ============================================================
-   DOSSARDS
+   DOSSSARDS
 ============================================================ */
 
 function getExistingDossards() {
@@ -935,6 +947,7 @@ function getExistingDossards() {
     .sort((a, b) => a - b);
 
 }
+
 
 /* ============================================================
    SYNCHRONISATION CACHE
@@ -964,6 +977,7 @@ async function updateGlobalCache() {
 
     }
 
+
     const departDoc =
       await getDoc(
         doc(db, "course", "depart")
@@ -975,6 +989,7 @@ async function updateGlobalCache() {
         departDoc.data().startMs;
 
     }
+
 
     const coureursSnap =
       await getDocs(
@@ -997,6 +1012,7 @@ async function updateGlobalCache() {
 
     });
 
+
     const locksSnap =
       await getDocs(
         collection(db, "scansLocks")
@@ -1013,6 +1029,7 @@ async function updateGlobalCache() {
       ] = true;
 
     });
+
 
     const scansSnap =
       await getDocs(
@@ -1031,6 +1048,7 @@ async function updateGlobalCache() {
 
     });
 
+
     globalCache.lastUpdated = now;
 
     saveGlobalCache();
@@ -1045,6 +1063,7 @@ async function updateGlobalCache() {
   }
 
 }
+
 
 /* ============================================================
    CALCUL TOUR
@@ -1085,6 +1104,7 @@ function calculateCurrentTour(
 
 }
 
+
 /* ============================================================
    VARIABLES
 ============================================================ */
@@ -1098,6 +1118,7 @@ let runnerStatuses = {};
 let isUpdatingButtons = false;
 let lastTourStartTime = null;
 let buttonsInitialized = false;
+
 
 /* ============================================================
    BROADCAST CACHE
@@ -1137,6 +1158,7 @@ cacheChannel.onmessage = async (e) => {
       }
     );
 
+
     if (
       startMs &&
       currentTour > 0
@@ -1162,6 +1184,7 @@ cacheChannel.onmessage = async (e) => {
 
     }
 
+
     if (buttonsInitialized) {
 
       await updateDossardButtonsState();
@@ -1174,6 +1197,7 @@ cacheChannel.onmessage = async (e) => {
   }
 
 };
+
 
 /* ============================================================
    ONGLETS
@@ -1202,6 +1226,7 @@ window.openTab =
 
   };
 
+
 window.toggleCoureurs =
   function() {
 
@@ -1217,6 +1242,7 @@ window.toggleCoureurs =
 
   };
 
+
 /* ============================================================
    DERNIER TOUR
 ============================================================ */
@@ -1226,6 +1252,7 @@ async function getDernierTourCommence(
 ) {
 
   let dernierTour = 0;
+
 
   for (
     const key in globalCache.scans
@@ -1248,6 +1275,7 @@ async function getDernierTourCommence(
 
   }
 
+
   for (
     const key in globalCache.locks
   ) {
@@ -1268,6 +1296,7 @@ async function getDernierTourCommence(
     }
 
   }
+
 
   if (dernierTour === 0) {
 
@@ -1317,6 +1346,7 @@ async function getDernierTourCommence(
 
 }
 
+
 /* ============================================================
    MOT DE PASSE
 ============================================================ */
@@ -1351,6 +1381,7 @@ window.checkPwd =
 
     }
 
+
     document.getElementById(
       "lock"
     ).style.display = "none";
@@ -1359,9 +1390,11 @@ window.checkPwd =
       "err"
     ).textContent = "";
 
+
     loadGlobalCache();
 
     await updateGlobalCache();
+
 
     startMs =
       globalCache.startMs;
@@ -1375,6 +1408,7 @@ window.checkPwd =
         limites
       );
 
+
     runnerStatuses = {};
 
     Object.entries(
@@ -1387,6 +1421,7 @@ window.checkPwd =
 
       }
     );
+
 
     if (
       startMs &&
@@ -1413,6 +1448,7 @@ window.checkPwd =
 
     }
 
+
     generateDossardButtons();
 
     afficherChrono();
@@ -1425,6 +1461,7 @@ window.checkPwd =
     );
 
   };
+
 
 /* ============================================================
    CHRONO
@@ -1442,6 +1479,7 @@ function afficherChrono() {
       "scans-chrono-value"
     );
 
+
   if (chronoInterval) {
 
     clearInterval(
@@ -1451,6 +1489,7 @@ function afficherChrono() {
     chronoInterval = null;
 
   }
+
 
   function updateChronos() {
 
@@ -1470,14 +1509,17 @@ function afficherChrono() {
 
     }
 
+
     const diff =
       Date.now() - startMs;
 
     const temps =
       formatTime(diff);
 
+
     zone.innerHTML =
       `⏱ Temps écoulé : <b>${temps}</b>`;
+
 
     if (scansChrono) {
 
@@ -1486,11 +1528,13 @@ function afficherChrono() {
 
     }
 
+
     currentTour =
       calculateCurrentTour(
         startMs,
         limites
       );
+
 
     if (
       currentTour > 0 &&
@@ -1519,7 +1563,9 @@ function afficherChrono() {
 
   }
 
+
   updateChronos();
+
 
   if (startMs) {
 
@@ -1532,6 +1578,7 @@ function afficherChrono() {
   }
 
 }
+
 
 function formatTime(ms) {
 
@@ -1558,6 +1605,7 @@ function formatTime(ms) {
   return `${h}:${m}:${sec}`;
 
 }
+
 
 /* ============================================================
    BOUTON CHRONO
@@ -1588,6 +1636,7 @@ function updateChronoButtonState() {
 
 }
 
+
 /* ============================================================
    LANCER CHRONO
 ============================================================ */
@@ -1606,6 +1655,7 @@ window.startChrono =
 
     }
 
+
     if (
       !confirm(
         "⚠️ Lancer le chrono ? Cette action est irréversible."
@@ -1613,6 +1663,7 @@ window.startChrono =
     ) {
       return;
     }
+
 
     try {
 
@@ -1633,18 +1684,24 @@ window.startChrono =
         }
       );
 
+
       startMs = now;
+
       globalCache.startMs =
         now;
 
       saveGlobalCache();
 
+
       currentTour = 1;
+
       lastTourStartTime =
         now;
 
       afficherChrono();
+
       updateChronoButtonState();
+
 
       setTimeout(
         () =>
@@ -1662,6 +1719,7 @@ window.startChrono =
     }
 
   };
+
 
 /* ============================================================
    RESET CHRONO
@@ -1686,6 +1744,7 @@ window.resetChrono =
       return;
     }
 
+
     try {
 
       await setDoc(
@@ -1702,18 +1761,24 @@ window.resetChrono =
         }
       );
 
+
       startMs = null;
+
       globalCache.startMs =
         null;
 
       saveGlobalCache();
 
+
       currentTour = 0;
+
       lastTourStartTime =
         null;
 
       afficherChrono();
+
       updateChronoButtonState();
+
 
       setTimeout(
         () =>
@@ -1732,6 +1797,7 @@ window.resetChrono =
 
   };
 
+
 /* ============================================================
    RECHERCHE COUREUR
 ============================================================ */
@@ -1744,6 +1810,7 @@ window.searchRunner =
         "search-dossard"
       ).value.trim();
 
+
     if (!dossard) {
 
       document.getElementById(
@@ -1755,10 +1822,12 @@ window.searchRunner =
 
     }
 
+
     const coureur =
       globalCache.coureurs[
         dossard
       ];
+
 
     if (!coureur) {
 
@@ -1774,36 +1843,45 @@ window.searchRunner =
 
     }
 
+
     currentRunnerDossard =
       dossard;
 
+
     document.getElementById(
       "runner-info"
-    ).innerHTML =
-      `
+    ).innerHTML = `
+
       <div class="message success">
+
         <h3>
           ${coureur.nom}
           ${coureur.prenom}
         </h3>
+
         <p>
           Dossard :
           ${coureur.dossard}
         </p>
+
         <p>
           Catégorie :
           ${coureur.categorie === "H"
             ? "Homme"
             : "Femme"}
         </p>
+
         <p>
           Statut :
-          ${coureur.statut || "OK"}
+          ${coureur.statut}
         </p>
+
       </div>
+
     `;
 
   };
+
 
 /* ============================================================
    AJOUT / MODIFICATION COUREUR
@@ -1837,6 +1915,7 @@ window.saveRunner =
         "runner-save-status"
       );
 
+
     if (
       !dossard ||
       !nom ||
@@ -1853,6 +1932,7 @@ window.saveRunner =
 
     }
 
+
     try {
 
       const q =
@@ -1868,8 +1948,10 @@ window.saveRunner =
           )
         );
 
+
       const snap =
         await getDocs(q);
+
 
       if (snap.empty) {
 
@@ -1887,6 +1969,7 @@ window.saveRunner =
           }
         );
 
+
         globalCache.coureurs[
           dossard
         ] = {
@@ -1897,7 +1980,9 @@ window.saveRunner =
           statut: "OK"
         };
 
+
         saveGlobalCache();
+
 
         statusDiv.innerHTML =
           "✅ Coureur ajouté avec succès.";
@@ -1923,6 +2008,7 @@ window.saveRunner =
           }
         );
 
+
         globalCache.coureurs[
           dossard
         ] = {
@@ -1934,7 +2020,9 @@ window.saveRunner =
           categorie: sexe
         };
 
+
         saveGlobalCache();
+
 
         statusDiv.innerHTML =
           "✏️ Coureur mis à jour.";
@@ -1943,6 +2031,7 @@ window.saveRunner =
           "message success";
 
       }
+
 
       document.getElementById(
         "c-dossard"
@@ -1956,6 +2045,7 @@ window.saveRunner =
         "c-prenom"
       ).value = "";
 
+
     } catch (error) {
 
       statusDiv.innerHTML =
@@ -1967,6 +2057,7 @@ window.saveRunner =
     }
 
   };
+
 
 /* ============================================================
    BOUTONS DOSSARDS
@@ -1981,8 +2072,10 @@ function generateDossardButtons() {
 
   grid.innerHTML = "";
 
+
   const existingDossards =
     getExistingDossards();
+
 
   if (
     existingDossards.length === 0
@@ -1996,6 +2089,7 @@ function generateDossardButtons() {
     return;
 
   }
+
 
   for (
     const dossard of existingDossards
@@ -2015,16 +2109,20 @@ function generateDossardButtons() {
     btn.id =
       `dossard-btn-${dossard}`;
 
+
     btn.onclick =
       function() {
         buttonScan(dossard);
       };
 
+
     grid.appendChild(btn);
 
   }
 
+
   buttonsInitialized = true;
+
 
   setTimeout(
     () =>
@@ -2033,6 +2131,7 @@ function generateDossardButtons() {
   );
 
 }
+
 
 /* ============================================================
    ETAT BOUTON DOSSARD
@@ -2047,9 +2146,11 @@ async function updateDossardButton(
       `dossard-btn-${dossard}`
     );
 
+
   if (!btn) {
     return;
   }
+
 
   btn.disabled = false;
 
@@ -2061,10 +2162,12 @@ async function updateDossardButton(
     "banned"
   );
 
+
   const coureur =
     globalCache.coureurs[
       dossard
     ];
+
 
   /*
      CORRECTION PRINCIPALE :
@@ -2083,10 +2186,12 @@ async function updateDossardButton(
       "invalid"
     );
 
+
     const statut =
       String(
         coureur.statut
       ).toUpperCase();
+
 
     if (statut === "DNS") {
 
@@ -2107,9 +2212,11 @@ async function updateDossardButton(
 
     }
 
+
     return;
 
   }
+
 
   if (!startMs) {
 
@@ -2122,14 +2229,17 @@ async function updateDossardButton(
 
   }
 
+
   currentTour =
     calculateCurrentTour(
       startMs,
       limites
     );
 
+
   const scanKey =
     `${dossard}_t${currentTour}`;
+
 
   if (
     globalCache.scans[
@@ -2142,10 +2252,12 @@ async function updateDossardButton(
 
     btn.disabled = true;
 
+
     const scanData =
       globalCache.scans[
         scanKey
       ];
+
 
     if (scanData) {
 
@@ -2154,6 +2266,7 @@ async function updateDossardButton(
           ? "invalid"
           : "valid"
       );
+
 
       btn.title =
         scanData.horsDelai
@@ -2171,11 +2284,14 @@ async function updateDossardButton(
 
     }
 
+
     return;
 
   }
 
+
   let dernierTour = 0;
+
 
   for (
     const key in globalCache.scans
@@ -2205,6 +2321,7 @@ async function updateDossardButton(
 
   }
 
+
   for (
     const key in globalCache.locks
   ) {
@@ -2233,6 +2350,7 @@ async function updateDossardButton(
 
   }
 
+
   if (
     dernierTour <
     currentTour - 1
@@ -2247,6 +2365,7 @@ async function updateDossardButton(
 
   }
 
+
   if (
     dernierTour ===
     currentTour - 1 &&
@@ -2256,6 +2375,7 @@ async function updateDossardButton(
     const attente =
       Date.now() -
       lastTourStartTime;
+
 
     if (
       attente < 180000
@@ -2268,7 +2388,11 @@ async function updateDossardButton(
       );
 
       btn.title =
-        `Disponible dans ${Math.ceil((180000 - attente) / 1000)}s`;
+        `Disponible dans ${
+          Math.ceil(
+            (180000 - attente) / 1000
+          )
+        }s`;
 
       return;
 
@@ -2276,10 +2400,12 @@ async function updateDossardButton(
 
   }
 
+
   btn.title =
     `Prêt tour ${currentTour}`;
 
 }
+
 
 /* ============================================================
    UPDATE TOUS LES BOUTONS
@@ -2293,14 +2419,17 @@ async function updateDossardButtonsState() {
 
   isUpdatingButtons = true;
 
+
   currentTour =
     calculateCurrentTour(
       startMs,
       limites
     );
 
+
   const existingDossards =
     getExistingDossards();
+
 
   for (
     const dossard of existingDossards
@@ -2312,9 +2441,11 @@ async function updateDossardButtonsState() {
 
   }
 
+
   isUpdatingButtons = false;
 
 }
+
 
 /* ============================================================
    REFRESH BOUTONS
@@ -2328,15 +2459,18 @@ window.forceRefreshDossardButtons =
         "button-scan-status"
       );
 
+
     statusDiv.innerHTML =
       "🔄 Rafraîchissement en cours...";
 
     statusDiv.className =
       "message";
 
+
     await updateGlobalCache();
 
     generateDossardButtons();
+
 
     statusDiv.innerHTML =
       "✅ Boutons recréés selon les coureurs chargés !";
@@ -2345,6 +2479,7 @@ window.forceRefreshDossardButtons =
       "message success";
 
   };
+
 
 /* ============================================================
    SYNCHRONISATION
@@ -2361,6 +2496,7 @@ window.forceSyncWithFirebase =
         "reactivate-status"
       );
 
+
     if (statusDiv) {
 
       statusDiv.innerHTML =
@@ -2371,11 +2507,13 @@ window.forceSyncWithFirebase =
 
     }
 
+
     try {
 
       await updateGlobalCache();
 
       await updateDossardButtonsState();
+
 
       if (statusDiv) {
 
@@ -2386,6 +2524,7 @@ window.forceSyncWithFirebase =
           "message success";
 
       }
+
 
     } catch (error) {
 
@@ -2403,6 +2542,7 @@ window.forceSyncWithFirebase =
 
   };
 
+
 /* ============================================================
    HORS DELAI
 ============================================================ */
@@ -2417,6 +2557,7 @@ async function isHorsDelai(
       dossard
     ];
 
+
   if (
     coureur &&
     estCoureurElimine(coureur)
@@ -2425,6 +2566,7 @@ async function isHorsDelai(
     return true;
 
   }
+
 
   if (
     !startMs ||
@@ -2436,7 +2578,9 @@ async function isHorsDelai(
 
   }
 
+
   let cumulMin = 0;
+
 
   for (
     let i = 1;
@@ -2449,16 +2593,19 @@ async function isHorsDelai(
 
   }
 
+
   const limiteMs =
     cumulMin *
     60 *
     1000;
+
 
   return (
     Date.now() - startMs
   ) > limiteMs;
 
 }
+
 
 /* ============================================================
    PERFORM SCAN
@@ -2485,26 +2632,31 @@ async function performScan(
 
   }
 
-  // Synchroniser le cache avant de vérifier le coureur
-  await updateGlobalCache();
 
   let coureur =
     globalCache.coureurs[
       dossard
     ];
 
+
   if (!coureur) {
 
     const coureurSnap =
       await getDoc(
-        doc(db, "coureurs", dossard)
+        doc(
+          db,
+          "coureurs",
+          dossard
+        )
       );
+
 
     if (
       coureurSnap.exists()
     ) {
 
-      coureur = coureurSnap.data();
+      coureur =
+        coureurSnap.data();
 
       globalCache.coureurs[
         dossard
@@ -2516,8 +2668,10 @@ async function performScan(
 
   }
 
+
   /*
      CORRECTION PRINCIPALE :
+
      BLOQUE DNS / DNF / ELIMINE
   */
 
@@ -2529,6 +2683,7 @@ async function performScan(
       String(
         coureur.statut
       ).toUpperCase();
+
 
     if (statusDiv) {
 
@@ -2548,21 +2703,24 @@ async function performScan(
 
   }
 
+
   currentTour =
     calculateCurrentTour(
       startMs,
       limites
     );
 
+
   const lastScannedTour =
     await getDernierTourCommence(
       dossard
     );
 
+
   const nextTour =
     lastScannedTour + 1;
 
-  // Vérifier si le tour est valide
+
   if (
     lastScannedTour <
     currentTour - 1
@@ -2573,6 +2731,7 @@ async function performScan(
     );
 
   }
+
 
   if (
     nextTour > currentTour
@@ -2592,7 +2751,7 @@ async function performScan(
 
   }
 
-  // Vérifier le délai entre les tours
+
   if (
     lastScannedTour ===
     currentTour - 1 &&
@@ -2603,6 +2762,7 @@ async function performScan(
       Date.now() -
       lastTourStartTime;
 
+
     if (
       timeSinceStart < 180000
     ) {
@@ -2612,6 +2772,7 @@ async function performScan(
           (180000 - timeSinceStart)
           / 1000
         );
+
 
       if (statusDiv) {
 
@@ -2629,8 +2790,10 @@ async function performScan(
 
   }
 
+
   const lockKey =
     `${dossard}_t${nextTour}`;
+
 
   if (
     globalCache.locks[
@@ -2656,14 +2819,20 @@ async function performScan(
 
   }
 
-  // Vérifier dans Firebase si le verrou existe
+
   const lockRef =
-    doc(db, "scansLocks", lockKey);
+    doc(
+      db,
+      "scansLocks",
+      lockKey
+    );
+
 
   const lockSnap =
     await getDoc(
       lockRef
     );
+
 
   if (
     lockSnap.exists()
@@ -2674,6 +2843,7 @@ async function performScan(
     ] = true;
 
     saveGlobalCache();
+
 
     if (statusDiv) {
 
@@ -2693,7 +2863,7 @@ async function performScan(
 
   }
 
-  // Créer le verrou
+
   try {
 
     await setDoc(
@@ -2705,6 +2875,7 @@ async function performScan(
           serverTimestamp()
       }
     );
+
 
     globalCache.locks[
       lockKey
@@ -2728,25 +2899,28 @@ async function performScan(
 
   }
 
-  // Calculer si le coureur est hors délai
+
   const horsDelai =
     await isHorsDelai(
       dossard,
       nextTour
     );
 
+
   const now =
     Date.now();
 
+
   const elapsedTime =
     now - startMs;
+
 
   const formattedTime =
     formatTime(
       elapsedTime
     );
 
-  // Enregistrer le scan
+
   await addDoc(
     collection(
       db,
@@ -2761,6 +2935,7 @@ async function performScan(
     }
   );
 
+
   globalCache.scans[
     lockKey
   ] = {
@@ -2770,9 +2945,15 @@ async function performScan(
     timestamp: now
   };
 
+
   saveGlobalCache();
 
-  // Mettre à jour le statut du coureur si hors délai
+
+  /*
+     SI HORS DELAI :
+     LE COUREUR PASSE A ELIMINE
+  */
+
   if (horsDelai) {
 
     const q =
@@ -2788,13 +2969,16 @@ async function performScan(
         )
       );
 
+
     const snap =
       await getDocs(q);
+
 
     if (!snap.empty) {
 
       const coureurDoc =
         snap.docs[0];
+
 
       await updateDoc(
         doc(
@@ -2808,6 +2992,7 @@ async function performScan(
         }
       );
 
+
       globalCache.coureurs[
         dossard
       ].statut =
@@ -2818,22 +3003,34 @@ async function performScan(
       ].horsDelai =
         true;
 
+
+      runnerStatuses[
+        dossard
+      ] =
+        "ELIMINE";
+
+
       saveGlobalCache();
 
     }
 
   }
 
+
   await updateDossardButton(
     dossard
   );
+
 
   if (statusDiv) {
 
     statusDiv.innerHTML =
       horsDelai
+
         ? `⚠️ Dossard ${dossard} hors délai T${nextTour} à ${formattedTime} (ELIMINÉ)`
+
         : `✅ Tour ${nextTour} enregistré à ${formattedTime} !`;
+
 
     statusDiv.className =
       horsDelai
@@ -2842,9 +3039,11 @@ async function performScan(
 
   }
 
+
   return true;
 
 }
+
 
 /* ============================================================
    SCAN RAPIDE
@@ -2858,10 +3057,12 @@ window.quickScan =
         "quick-scan-dossard"
       ).value.trim();
 
+
     const statusDiv =
       document.getElementById(
         "quick-scan-status"
       );
+
 
     if (!dossard) {
 
@@ -2875,11 +3076,13 @@ window.quickScan =
 
     }
 
+
     const success =
       await performScan(
         dossard,
         statusDiv
       );
+
 
     if (success) {
 
@@ -2890,6 +3093,7 @@ window.quickScan =
     }
 
   };
+
 
 /* ============================================================
    SCAN BOUTON
@@ -2910,6 +3114,7 @@ window.buttonScan =
 
   };
 
+
 /* ============================================================
    DNF
 ============================================================ */
@@ -2922,10 +3127,12 @@ window.quickDnfScan =
         "quick-dnf-dossard"
       ).value.trim();
 
+
     const statusDiv =
       document.getElementById(
         "quick-scan-status"
       );
+
 
     if (!dossard) {
 
@@ -2939,6 +3146,7 @@ window.quickDnfScan =
 
     }
 
+
     if (!startMs) {
 
       statusDiv.innerHTML =
@@ -2951,12 +3159,14 @@ window.quickDnfScan =
 
     }
 
+
     try {
 
       let coureur =
         globalCache.coureurs[
           dossard
         ];
+
 
       if (!coureur) {
 
@@ -2968,6 +3178,7 @@ window.quickDnfScan =
               dossard
             )
           );
+
 
         if (
           coureurSnap.exists()
@@ -2984,6 +3195,7 @@ window.quickDnfScan =
 
       }
 
+
       if (!coureur) {
 
         statusDiv.innerHTML =
@@ -2995,6 +3207,7 @@ window.quickDnfScan =
         return;
 
       }
+
 
       /*
          DNS / DNF / ELIMINE :
@@ -3015,6 +3228,7 @@ window.quickDnfScan =
 
       }
 
+
       const existingDnsDnf =
         await getDocs(
           query(
@@ -3038,6 +3252,7 @@ window.quickDnfScan =
           )
         );
 
+
       if (
         !existingDnsDnf.empty
       ) {
@@ -3045,6 +3260,7 @@ window.quickDnfScan =
         const existingData =
           existingDnsDnf.docs[0]
             .data();
+
 
         statusDiv.innerHTML =
           `⛔ Ce coureur a déjà un statut ${existingData.type}.`;
@@ -3056,18 +3272,22 @@ window.quickDnfScan =
 
       }
 
+
       await updateGlobalCache();
+
 
       const dernierTour =
         await getDernierTourCommence(
           dossard
         );
 
+
       const tour =
         Math.min(
           10,
           dernierTour + 1
         );
+
 
       const q =
         query(
@@ -3082,8 +3302,10 @@ window.quickDnfScan =
           )
         );
 
+
       const snap =
         await getDocs(q);
+
 
       if (snap.empty) {
 
@@ -3097,8 +3319,10 @@ window.quickDnfScan =
 
       }
 
+
       const docRef =
         snap.docs[0];
+
 
       await runTransaction(
         db,
@@ -3115,6 +3339,7 @@ window.quickDnfScan =
             }
           );
 
+
           const newDocRef =
             doc(
               collection(
@@ -3122,6 +3347,7 @@ window.quickDnfScan =
                 "resultats"
               )
             );
+
 
           transaction.set(
             newDocRef,
@@ -3135,12 +3361,14 @@ window.quickDnfScan =
             }
           );
 
+
           const lockRef =
             doc(
               db,
               "scansLocks",
               `${dossard}_t${tour}`
             );
+
 
           transaction.set(
             lockRef,
@@ -3155,35 +3383,44 @@ window.quickDnfScan =
         }
       );
 
+
       globalCache.coureurs[
         dossard
       ].statut =
         "DNF";
 
+
       globalCache.locks[
         `${dossard}_t${tour}`
       ] = true;
+
 
       runnerStatuses[
         dossard
       ] =
         "DNF";
 
+
       saveGlobalCache();
+
 
       await updateDossardButton(
         dossard
       );
 
+
       statusDiv.innerHTML =
         `⛔ Dossard ${dossard} marqué DNF T${tour}. Il ne peut plus être scanné.`;
+
 
       statusDiv.className =
         "message success";
 
+
       document.getElementById(
         "quick-dnf-dossard"
       ).value = "";
+
 
     } catch (error) {
 
@@ -3197,6 +3434,7 @@ window.quickDnfScan =
 
   };
 
+
 /* ============================================================
    DNS
 ============================================================ */
@@ -3209,10 +3447,12 @@ window.quickDnsScan =
         "quick-dns-dossard"
       ).value.trim();
 
+
     const statusDiv =
       document.getElementById(
         "quick-scan-status"
       );
+
 
     if (!dossard) {
 
@@ -3226,6 +3466,7 @@ window.quickDnsScan =
 
     }
 
+
     if (!startMs) {
 
       statusDiv.innerHTML =
@@ -3238,12 +3479,14 @@ window.quickDnsScan =
 
     }
 
+
     try {
 
       let coureur =
         globalCache.coureurs[
           dossard
         ];
+
 
       if (!coureur) {
 
@@ -3255,6 +3498,7 @@ window.quickDnsScan =
               dossard
             )
           );
+
 
         if (
           coureurSnap.exists()
@@ -3271,6 +3515,7 @@ window.quickDnsScan =
 
       }
 
+
       if (!coureur) {
 
         statusDiv.innerHTML =
@@ -3282,6 +3527,7 @@ window.quickDnsScan =
         return;
 
       }
+
 
       if (
         estCoureurElimine(coureur)
@@ -3296,6 +3542,7 @@ window.quickDnsScan =
         return;
 
       }
+
 
       const existingDnsDnf =
         await getDocs(
@@ -3320,6 +3567,7 @@ window.quickDnsScan =
           )
         );
 
+
       if (
         !existingDnsDnf.empty
       ) {
@@ -3327,6 +3575,7 @@ window.quickDnsScan =
         const existingData =
           existingDnsDnf.docs[0]
             .data();
+
 
         statusDiv.innerHTML =
           `⛔ Ce coureur a déjà un statut ${existingData.type}.`;
@@ -3338,18 +3587,22 @@ window.quickDnsScan =
 
       }
 
+
       await updateGlobalCache();
+
 
       const dernierTour =
         await getDernierTourCommence(
           dossard
         );
 
+
       const tour =
         Math.min(
           10,
           dernierTour + 1
         );
+
 
       const q =
         query(
@@ -3364,8 +3617,10 @@ window.quickDnsScan =
           )
         );
 
+
       const snap =
         await getDocs(q);
+
 
       if (snap.empty) {
 
@@ -3379,8 +3634,10 @@ window.quickDnsScan =
 
       }
 
+
       const docRef =
         snap.docs[0];
+
 
       await runTransaction(
         db,
@@ -3397,6 +3654,7 @@ window.quickDnsScan =
             }
           );
 
+
           const newDocRef =
             doc(
               collection(
@@ -3404,6 +3662,7 @@ window.quickDnsScan =
                 "resultats"
               )
             );
+
 
           transaction.set(
             newDocRef,
@@ -3417,12 +3676,14 @@ window.quickDnsScan =
             }
           );
 
+
           const lockRef =
             doc(
               db,
               "scansLocks",
               `${dossard}_t${tour}`
             );
+
 
           transaction.set(
             lockRef,
@@ -3437,35 +3698,44 @@ window.quickDnsScan =
         }
       );
 
+
       globalCache.coureurs[
         dossard
       ].statut =
         "DNS";
 
+
       globalCache.locks[
         `${dossard}_t${tour}`
       ] = true;
+
 
       runnerStatuses[
         dossard
       ] =
         "DNS";
 
+
       saveGlobalCache();
+
 
       await updateDossardButton(
         dossard
       );
 
+
       statusDiv.innerHTML =
         `⛔ Dossard ${dossard} marqué DNS. Il ne peut plus être scanné.`;
+
 
       statusDiv.className =
         "message success";
 
+
       document.getElementById(
         "quick-dns-dossard"
       ).value = "";
+
 
     } catch (error) {
 
@@ -3479,6 +3749,7 @@ window.quickDnsScan =
 
   };
 
+
 /* ============================================================
    AJOUT SCAN MANUEL
 ============================================================ */
@@ -3491,6 +3762,7 @@ window.addScan =
         "add-dossard"
       ).value.trim();
 
+
     const tour =
       Number(
         document.getElementById(
@@ -3498,15 +3770,18 @@ window.addScan =
         ).value
       );
 
+
     const time =
       document.getElementById(
         "add-time"
       ).value.trim();
 
+
     const statusDiv =
       document.getElementById(
         "scan-add-status"
       );
+
 
     if (
       !dossard ||
@@ -3524,10 +3799,12 @@ window.addScan =
 
     }
 
+
     let coureur =
       globalCache.coureurs[
         dossard
       ];
+
 
     if (!coureur) {
 
@@ -3539,6 +3816,7 @@ window.addScan =
             dossard
           )
         );
+
 
       if (
         coureurSnap.exists()
@@ -3554,6 +3832,7 @@ window.addScan =
       }
 
     }
+
 
     /*
        CORRECTION :
@@ -3571,6 +3850,7 @@ window.addScan =
           coureur.statut
         ).toUpperCase();
 
+
       statusDiv.innerHTML =
         `❌ Coureur ${dossard} éliminé : statut ${statut}. Impossible d'ajouter un scan.`;
 
@@ -3581,8 +3861,10 @@ window.addScan =
 
     }
 
+
     const timeRegex =
       /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+
 
     if (
       !timeRegex.test(time)
@@ -3598,6 +3880,7 @@ window.addScan =
 
     }
 
+
     if (!startMs) {
 
       statusDiv.innerHTML =
@@ -3609,6 +3892,7 @@ window.addScan =
       return;
 
     }
+
 
     if (
       tour > currentTour
@@ -3624,8 +3908,10 @@ window.addScan =
 
     }
 
+
     const lockKey =
       `${dossard}_t${tour}`;
+
 
     if (
       globalCache.locks[
@@ -3643,6 +3929,7 @@ window.addScan =
 
     }
 
+
     const lockRef =
       doc(
         db,
@@ -3650,10 +3937,12 @@ window.addScan =
         lockKey
       );
 
+
     const lockSnap =
       await getDoc(
         lockRef
       );
+
 
     if (
       lockSnap.exists()
@@ -3665,6 +3954,7 @@ window.addScan =
 
       saveGlobalCache();
 
+
       statusDiv.innerHTML =
         `❌ Déjà scanné pour le tour ${tour}.`;
 
@@ -3674,6 +3964,7 @@ window.addScan =
       return;
 
     }
+
 
     await setDoc(
       lockRef,
@@ -3685,15 +3976,19 @@ window.addScan =
       }
     );
 
+
     globalCache.locks[
       lockKey
     ] = true;
 
+
     saveGlobalCache();
+
 
     const [h, m, s] =
       time.split(":")
         .map(Number);
+
 
     const ms =
       (
@@ -3702,10 +3997,12 @@ window.addScan =
         s
       ) * 1000;
 
+
     const timestamp =
       new Date(
         startMs + ms
       );
+
 
     await addDoc(
       collection(
@@ -3721,6 +4018,7 @@ window.addScan =
       }
     );
 
+
     globalCache.scans[
       lockKey
     ] = {
@@ -3731,17 +4029,21 @@ window.addScan =
         timestamp.getTime()
     };
 
+
     saveGlobalCache();
+
 
     await updateDossardButton(
       dossard
     );
+
 
     statusDiv.innerHTML =
       "✅ Scan ajouté avec succès !";
 
     statusDiv.className =
       "message success";
+
 
     document.getElementById(
       "add-dossard"
@@ -3757,6 +4059,7 @@ window.addScan =
 
   };
 
+
 /* ============================================================
    REINTEGRATION
 ============================================================ */
@@ -3769,10 +4072,12 @@ window.reintegrateRunner =
         "reintegrate-dossard"
       ).value.trim();
 
+
     const statusDiv =
       document.getElementById(
         "reintegrate-status"
       );
+
 
     if (!dossard) {
 
@@ -3786,12 +4091,14 @@ window.reintegrateRunner =
 
     }
 
+
     try {
 
       let coureur =
         globalCache.coureurs[
           dossard
         ];
+
 
       if (!coureur) {
 
@@ -3803,6 +4110,7 @@ window.reintegrateRunner =
               dossard
             )
           );
+
 
         if (
           coureurSnap.exists()
@@ -3819,6 +4127,7 @@ window.reintegrateRunner =
 
       }
 
+
       if (!coureur) {
 
         statusDiv.innerHTML =
@@ -3830,6 +4139,7 @@ window.reintegrateRunner =
         return;
 
       }
+
 
       if (
         ![
@@ -3853,6 +4163,7 @@ window.reintegrateRunner =
 
       }
 
+
       const qCoureur =
         query(
           collection(
@@ -3866,10 +4177,12 @@ window.reintegrateRunner =
           )
         );
 
+
       const snapCoureur =
         await getDocs(
           qCoureur
         );
+
 
       if (
         snapCoureur.empty
@@ -3885,8 +4198,10 @@ window.reintegrateRunner =
 
       }
 
+
       const coureurDoc =
         snapCoureur.docs[0];
+
 
       await updateDoc(
         doc(
@@ -3899,6 +4214,7 @@ window.reintegrateRunner =
           horsDelai: false
         }
       );
+
 
       const dnsDnfQuery =
         query(
@@ -3921,13 +4237,16 @@ window.reintegrateRunner =
           )
         );
 
+
       const dnsDnfSnap =
         await getDocs(
           dnsDnfQuery
         );
 
+
       const batch =
         writeBatch(db);
+
 
       dnsDnfSnap.forEach(
         doc => {
@@ -3936,6 +4255,7 @@ window.reintegrateRunner =
           );
         }
       );
+
 
       /*
          On supprime les anciens verrous
@@ -3968,28 +4288,36 @@ window.reintegrateRunner =
 
       }
 
+
       await batch.commit();
 
+
       await updateGlobalCache();
+
 
       globalCache.coureurs[
         dossard
       ].statut =
         "OK";
 
+
       globalCache.coureurs[
         dossard
       ].horsDelai =
         false;
+
 
       runnerStatuses[
         dossard
       ] =
         "OK";
 
+
       saveGlobalCache();
 
+
       await updateDossardButtonsState();
+
 
       statusDiv.innerHTML =
         `✅ Dossard ${dossard} réintégré avec succès ! Il peut maintenant être scanné.`;
@@ -3997,9 +4325,11 @@ window.reintegrateRunner =
       statusDiv.className =
         "message success";
 
+
       document.getElementById(
         "reintegrate-dossard"
       ).value = "";
+
 
     } catch (error) {
 
@@ -4013,6 +4343,7 @@ window.reintegrateRunner =
 
   };
 
+
 /* ============================================================
    MODIFIER UN SCAN
 ============================================================ */
@@ -4025,6 +4356,7 @@ window.modifyRunnerScan =
         "reactivate-dossard"
       ).value.trim();
 
+
     const tour =
       Number(
         document.getElementById(
@@ -4032,15 +4364,18 @@ window.modifyRunnerScan =
         ).value
       );
 
+
     const time =
       document.getElementById(
         "reactivate-time"
       ).value.trim();
 
+
     const statusDiv =
       document.getElementById(
         "reactivate-status"
       );
+
 
     if (
       !dossard ||
@@ -4058,8 +4393,10 @@ window.modifyRunnerScan =
 
     }
 
+
     const timeRegex =
       /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+
 
     if (
       !timeRegex.test(time)
@@ -4075,12 +4412,14 @@ window.modifyRunnerScan =
 
     }
 
+
     try {
 
       let coureur =
         globalCache.coureurs[
           dossard
         ];
+
 
       if (!coureur) {
 
@@ -4092,6 +4431,7 @@ window.modifyRunnerScan =
               dossard
             )
           );
+
 
         if (
           coureurSnap.exists()
@@ -4108,6 +4448,7 @@ window.modifyRunnerScan =
 
       }
 
+
       if (!coureur) {
 
         statusDiv.innerHTML =
@@ -4119,6 +4460,7 @@ window.modifyRunnerScan =
         return;
 
       }
+
 
       /*
          IMPORTANT :
@@ -4144,6 +4486,7 @@ window.modifyRunnerScan =
 
       }
 
+
       const scanQuery =
         query(
           collection(
@@ -4162,10 +4505,12 @@ window.modifyRunnerScan =
           )
         );
 
+
       const scanSnap =
         await getDocs(
           scanQuery
         );
+
 
       if (
         scanSnap.empty
@@ -4181,9 +4526,11 @@ window.modifyRunnerScan =
 
       }
 
+
       const [h, m, s] =
         time.split(":")
           .map(Number);
+
 
       const ms =
         (
@@ -4192,13 +4539,16 @@ window.modifyRunnerScan =
           s
         ) * 1000;
 
+
       const newTimestamp =
         new Date(
           startMs + ms
         );
 
+
       const scanDoc =
         scanSnap.docs[0];
+
 
       await updateDoc(
         scanDoc.ref,
@@ -4211,8 +4561,10 @@ window.modifyRunnerScan =
         }
       );
 
+
       const lockKey =
         `${dossard}_t${tour}`;
+
 
       const lockRef =
         doc(
@@ -4220,6 +4572,7 @@ window.modifyRunnerScan =
           "scansLocks",
           lockKey
         );
+
 
       await setDoc(
         lockRef,
@@ -4234,7 +4587,9 @@ window.modifyRunnerScan =
         }
       );
 
+
       await updateGlobalCache();
+
 
       globalCache.scans[
         lockKey
@@ -4250,19 +4605,24 @@ window.modifyRunnerScan =
 
       };
 
+
       globalCache.locks[
         lockKey
       ] = true;
 
+
       saveGlobalCache();
 
+
       await updateDossardButtonsState();
+
 
       statusDiv.innerHTML =
         `✅ Dossard ${dossard} corrigé avec succès (Tour ${tour}) !`;
 
       statusDiv.className =
         "message success";
+
 
       document.getElementById(
         "reactivate-dossard"
@@ -4276,6 +4636,7 @@ window.modifyRunnerScan =
         "reactivate-time"
       ).value = "";
 
+
     } catch (error) {
 
       statusDiv.innerHTML =
@@ -4287,6 +4648,7 @@ window.modifyRunnerScan =
     }
 
   };
+
 
 /* ============================================================
    RESET COUREURS
@@ -4319,6 +4681,7 @@ window.resetCoureurs =
       return;
     }
 
+
     try {
 
       const snap =
@@ -4329,8 +4692,10 @@ window.resetCoureurs =
           )
         );
 
+
       const batch =
         writeBatch(db);
+
 
       snap.forEach(
         docu =>
@@ -4339,27 +4704,34 @@ window.resetCoureurs =
           )
       );
 
+
       await batch.commit();
+
 
       globalCache.coureurs =
         {};
 
       saveGlobalCache();
 
+
       runnerStatuses =
         {};
 
+
       generateDossardButtons();
+
 
       document.getElementById(
         "reset-coureurs-status"
       ).innerHTML =
         "🗑️ Coureurs supprimés.";
 
+
       document.getElementById(
         "reset-coureurs-status"
       ).className =
         "message success";
+
 
     } catch (error) {
 
@@ -4376,6 +4748,7 @@ window.resetCoureurs =
     }
 
   };
+
 
 /* ============================================================
    RESET RESULTATS
@@ -4408,10 +4781,12 @@ window.resetResultats =
       return;
     }
 
+
     try {
 
       const batch =
         writeBatch(db);
+
 
       const locksSnap =
         await getDocs(
@@ -4421,12 +4796,14 @@ window.resetResultats =
           )
         );
 
+
       locksSnap.forEach(
         docu =>
           batch.delete(
             docu.ref
           )
       );
+
 
       const resultatsSnap =
         await getDocs(
@@ -4436,6 +4813,7 @@ window.resetResultats =
           )
         );
 
+
       resultatsSnap.forEach(
         docu =>
           batch.delete(
@@ -4443,7 +4821,9 @@ window.resetResultats =
           )
       );
 
+
       await batch.commit();
+
 
       globalCache.locks =
         {};
@@ -4451,13 +4831,17 @@ window.resetResultats =
       globalCache.scans =
         {};
 
+
       saveGlobalCache();
+
 
       runnerStatuses =
         {};
 
+
       const existingDossards =
         getExistingDossards();
+
 
       for (
         const dossard
@@ -4469,6 +4853,7 @@ window.resetResultats =
             `dossard-btn-${dossard}`
           );
 
+
         if (btn) {
 
           btn.classList.remove(
@@ -4478,6 +4863,7 @@ window.resetResultats =
             "scanned",
             "banned"
           );
+
 
           /*
              IMPORTANT :
@@ -4497,15 +4883,18 @@ window.resetResultats =
 
       }
 
+
       document.getElementById(
         "reset-resultats-status"
       ).innerHTML =
         "🗑️ Résultats supprimés.";
 
+
       document.getElementById(
         "reset-resultats-status"
       ).className =
         "message success";
+
 
     } catch (error) {
 
@@ -4522,6 +4911,7 @@ window.resetResultats =
     }
 
   };
+
 
 /* ============================================================
    RESET COMPLET
@@ -4554,10 +4944,12 @@ window.resetCompleteCourse =
       return;
     }
 
+
     try {
 
       const batch =
         writeBatch(db);
+
 
       batch.set(
         doc(
@@ -4573,6 +4965,7 @@ window.resetCompleteCourse =
         }
       );
 
+
       const locksSnap =
         await getDocs(
           collection(
@@ -4581,12 +4974,14 @@ window.resetCompleteCourse =
           )
         );
 
+
       locksSnap.forEach(
         docu =>
           batch.delete(
             docu.ref
           )
       );
+
 
       const resultatsSnap =
         await getDocs(
@@ -4596,12 +4991,14 @@ window.resetCompleteCourse =
           )
         );
 
+
       resultatsSnap.forEach(
         docu =>
           batch.delete(
             docu.ref
           )
       );
+
 
       const coureursSnap =
         await getDocs(
@@ -4611,6 +5008,7 @@ window.resetCompleteCourse =
           )
         );
 
+
       coureursSnap.forEach(
         docu =>
           batch.delete(
@@ -4618,20 +5016,29 @@ window.resetCompleteCourse =
           )
       );
 
+
       await batch.commit();
 
+
       startMs = null;
+
       currentTour = 0;
+
       lastTourStartTime =
         null;
+
       runnerStatuses =
         {};
+
 
       globalCache = {
 
         locks: {},
+
         scans: {},
+
         coureurs: {},
+
         limites:
           globalCache.limites ||
           {
@@ -4646,26 +5053,35 @@ window.resetCompleteCourse =
             t9: 16,
             t10: 13
           },
+
         startMs: null,
+
         lastUpdated: 0
 
       };
 
+
       saveGlobalCache();
 
+
       afficherChrono();
+
       updateChronoButtonState();
+
       generateDossardButtons();
+
 
       document.getElementById(
         "reset-course-status"
       ).innerHTML =
         "🔄 Course complètement réinitialisée !";
 
+
       document.getElementById(
         "reset-course-status"
       ).className =
         "message success";
+
 
     } catch (error) {
 
@@ -4682,6 +5098,7 @@ window.resetCompleteCourse =
     }
 
   };
+
 
 /* ============================================================
    RESET CACHE LOCAL
@@ -4698,6 +5115,7 @@ window.resetLocalCache =
       return;
     }
 
+
     try {
 
       /*
@@ -4710,7 +5128,9 @@ window.resetLocalCache =
       globalCache.scans = {};
       globalCache.lastUpdated = 0;
 
+
       saveGlobalCache();
+
 
       updateGlobalCache()
         .then(
@@ -4718,15 +5138,18 @@ window.resetLocalCache =
             updateDossardButtonsState()
         );
 
+
       document.getElementById(
         "reset-cache-status"
       ).innerHTML =
         "✅ Cache local réinitialisé !";
 
+
       document.getElementById(
         "reset-cache-status"
       ).className =
         "message success";
+
 
     } catch (error) {
 
@@ -4743,6 +5166,7 @@ window.resetLocalCache =
     }
 
   };
+
 
 /* ============================================================
    LIMITES TOURS
@@ -4769,8 +5193,10 @@ onSnapshot(
 
       }
 
+
       const data =
         snap.data();
+
 
       const tours =
         Object.keys(data)
@@ -4784,12 +5210,14 @@ onSnapshot(
               )
           );
 
+
       let html =
         `<table>
           <tr>
             <th>Tour</th>
             <th>Durée (min)</th>
           </tr>`;
+
 
       tours.forEach(
         t => {
@@ -4814,13 +5242,16 @@ onSnapshot(
         }
       );
 
+
       html +=
         "</table>";
+
 
       document.getElementById(
         "tour-settings"
       ).innerHTML =
         html;
+
 
     } catch (error) {
 
@@ -4833,6 +5264,7 @@ onSnapshot(
 
   }
 );
+
 
 /* ============================================================
    SAUVEGARDE LIMITES
@@ -4848,7 +5280,9 @@ window.saveTourDurations =
           "#tour-settings input"
         );
 
+
       const newData = {};
+
 
       inputs.forEach(
         input => {
@@ -4859,6 +5293,7 @@ window.saveTourDurations =
               ""
             );
 
+
           newData[key] =
             Number(
               input.value
@@ -4866,6 +5301,7 @@ window.saveTourDurations =
 
         }
       );
+
 
       await setDoc(
         doc(
@@ -4879,23 +5315,29 @@ window.saveTourDurations =
         }
       );
 
+
       globalCache.limites =
         newData;
+
 
       limites =
         newData;
 
+
       saveGlobalCache();
+
 
       document.getElementById(
         "tour-save-status"
       ).innerHTML =
         "✅ Durées enregistrées !";
 
+
       document.getElementById(
         "tour-save-status"
       ).className =
         "message success";
+
 
     } catch (error) {
 
@@ -4903,6 +5345,7 @@ window.saveTourDurations =
         "tour-save-status"
       ).innerHTML =
         `❌ Erreur : ${error.message}`;
+
 
       document.getElementById(
         "tour-save-status"
@@ -4912,6 +5355,7 @@ window.saveTourDurations =
     }
 
   };
+
 
 /* ============================================================
    DOM READY
@@ -4927,6 +5371,7 @@ document.addEventListener(
 
   }
 );
+
 
 /* ============================================================
    FERMETURE
