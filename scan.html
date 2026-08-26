@@ -513,9 +513,6 @@
 
       window._lastScan = { dossard, time: now };
 
-      // Synchroniser le cache avant de vérifier le coureur
-      await updateGlobalCache();
-
       if (!startMs) {
         feedback("⛔ Course non démarrée", "red");
         beepError.play();
@@ -527,6 +524,8 @@
         return;
       }
 
+      await updateGlobalCache();
+
       let coureur = globalCache.coureurs[dossard];
       if (!coureur) {
         const snap = await getDoc(doc(db, "coureurs", dossard));
@@ -537,7 +536,6 @@
         }
       }
 
-      // Bloquer les coureurs DNS/DNF/ELIMINE
       if (coureur && ["DNS", "DNF", "ELIMINE"].includes(coureur.statut)) {
         feedback(`⛔ ${coureur.statut}`, "red");
         beepEliminated.play();
@@ -545,6 +543,7 @@
       }
 
       currentTour = calculateCurrentTour(startMs, limites);
+
       const dernierTour = await getDernierTourCommence(dossard);
       const prochainTour = dernierTour + 1;
 
@@ -593,7 +592,7 @@
       }
 
       // Calculer si le coureur est hors délai
-      const horsDelai = await isHorsDelai(dossard, prochainTour);
+     const horsDelai = await isHorsDelai(dossard, prochainTour);
 
       // Créer le verrou
       await setDoc(lockRef, {
@@ -643,6 +642,7 @@
           globalCache.coureurs[dossard].statut = "ELIMINE";
           globalCache.coureurs[dossard].horsDelai = true;
           saveGlobalCache();
+          runnerStatuses[dossard] = "ELIMINE";
         }
       }
 
@@ -823,6 +823,105 @@
       saveGlobalCache();
       location.reload();
     };
+
+    async function changerStatut(dossard, type) {
+      await updateGlobalCache();
+
+      let coureur = globalCache.coureurs[dossard];
+      if (!coureur) {
+        const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
+        if (coureurSnap.exists()) {
+          coureur = coureurSnap.data();
+          globalCache.coureurs[dossard] = coureur;
+        }
+      }
+
+      if (!coureur) {
+        feedback("❌ Dossard inconnu", "red");
+        beepError.play();
+        return;
+      }
+
+      try {
+        const existingDnsDnf = await getDocs(query(
+          collection(db, "resultats"),
+          where("dossard", "==", dossard),
+          where("type", "in", ["DNS", "DNF"])
+        ));
+        if (!existingDnsDnf.empty) {
+          const existingData = existingDnsDnf.docs[0].data();
+          feedback(`⛔ Ce coureur a déjà un statut ${existingData.type} T${existingData.tour}`, "red");
+          beepError.play();
+          return;
+        }
+      } catch (e) {
+        console.error("Erreur vérification DNS/DNF:", e);
+        feedback("❌ Erreur de vérification", "red");
+        beepError.play();
+        return;
+      }
+
+      if (["DNF", "DNS", "ELIMINE"].includes(coureur.statut)) {
+        feedback(`⛔ Déjà ${coureur.statut}`, "red");
+        beepError.play();
+        return;
+      }
+
+      const dernierTour = await getDernierTourCommence(dossard);
+      const tour = Math.min(10, dernierTour + 1);
+
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        feedback("❌ Dossard inconnu", "red");
+        beepError.play();
+        return;
+      }
+      const coureurDoc = snap.docs[0];
+
+      try {
+        await runTransaction(db, async (transaction) => {
+          const existingRef = query(
+            collection(db, "resultats"),
+            where("dossard", "==", dossard),
+            where("type", "in", ["DNS", "DNF"])
+          );
+          const existingSnap = await getDocs(existingRef);
+          if (!existingSnap.empty) {
+            throw new Error("DNS/DNF déjà existant");
+          }
+
+          transaction.update(doc(db, "coureurs", coureurDoc.id), { statut: type });
+          const newDocRef = doc(collection(db, "resultats"));
+          transaction.set(newDocRef, {
+            dossard: dossard,
+            type: type,
+            tour: tour,
+            source: "MANUEL",
+            timestamp: serverTimestamp()
+          });
+          const lockRef = doc(db, "scansLocks", `${dossard}_t${tour}`);
+          transaction.set(lockRef, {
+            dossard: dossard,
+            tour: tour,
+            createdAt: serverTimestamp()
+          });
+        });
+
+        globalCache.coureurs[dossard].statut = type;
+        globalCache.locks[`${dossard}_t${tour}`] = true;
+        saveGlobalCache();
+
+        feedback(
+          type === "DNF" ? `🏳️ DNF ${dossard} T${tour}` : `🚫 DNS ${dossard} T${tour}`,
+          "orange"
+        );
+        beepError.play();
+      } catch (e) {
+        feedback("⛔ Erreur : " + (e.message || "Conflit détecté"), "red");
+        beepError.play();
+      }
+    }
 
     window.addEventListener("beforeunload", () => {
       if (scanner) {
