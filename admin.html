@@ -48,6 +48,15 @@ th{
   align-items:center;
   z-index:9999;
 }
+
+.button-disabled {
+  background-color: #8B0000 !important;
+  color: #FFF !important;
+  text-decoration: line-through !important;
+  cursor: not-allowed !important;
+  opacity: 0.7 !important;
+  pointer-events: none !important;
+}
 </style>
 </head>
 
@@ -107,6 +116,9 @@ function checkPwd(){
 <input id="add-dossard" type="text" placeholder="Dossard">
 <input id="add-tour" type="number" placeholder="Tour">
 <input id="add-time" type="text" placeholder="Temps (HH:MM:SS)">
+<label>
+  <input id="add-hors-delai" type="checkbox"> Hors délais
+</label>
 <button onclick="addScan()">Ajouter</button>
 
 <hr>
@@ -240,8 +252,6 @@ let startMs = null;
 let chronoInterval = null;
 
 // Cache local des données Firebase.
-// IMPORTANT : "Corriger un scan" utilise ce cache après synchronisation,
-// afin d'avoir exactement la même base de données que l'onglet Gestion des scans.
 let firebaseScansCache = [];
 
 async function chargerScansDepuisFirebase() {
@@ -267,7 +277,6 @@ window.syncFirebase = async function() {
     status.innerHTML =
       `✅ Firebase synchronisé : <b>${firebaseScansCache.length}</b> scan(s) chargé(s).`;
 
-    // Si une fiche coureur est déjà ouverte, on la recharge immédiatement.
     const dossardActuel =
       document.getElementById("search-dossard")?.value.trim();
 
@@ -301,6 +310,29 @@ function trouverScanCache(dossard, tour) {
     normaliserDossard(scan.dossard) === d &&
     normaliserTour(scan.tour) === t
   );
+}
+
+// Fonction pour vérifier si un coureur est éligible
+async function isRunnerEligible(dossard) {
+  const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+  const snap = await getDocs(q);
+
+  if (!snap.empty) {
+    const coureur = snap.docs[0].data();
+    if (coureur.statut === "DNS" || coureur.statut === "DNF" || coureur.statut === "ELIMINE") {
+      return false;
+    }
+  }
+
+  const scans = await getScansForRunner(dossard);
+  for (const scanDoc of scans) {
+    const scan = scanDoc.data();
+    if (scan.horsDelai) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 let chronoInterval = null;
@@ -497,7 +529,7 @@ window.findScanToFix = async function(){
           <p><b>Tour :</b> ${normalizeTour(r.tour) ?? "-"}</p>
           <p><b>Temps :</b> ${temps}</p>
           <p><b>Hors délai :</b> ${r.horsDelai ? "Oui" : "Non"}</p>
-          <button onclick="editScanById('${id}', '${dossard}', ${tour})">✏️ Corriger ce scan</button>
+          <button onclick="editScanById('${id}', '${dossard}', ${tour})" class="${await isRunnerEligible(dossard) ? '' : 'button-disabled'}">✏️ Corriger ce scan</button>
         </div>
       `;
     });
@@ -510,6 +542,12 @@ window.findScanToFix = async function(){
 };
 
 window.editScanById = async function(id, dossard, tour){
+  const isEligible = await isRunnerEligible(dossard);
+  if (!isEligible) {
+    alert("❌ Ce coureur n'est pas éligible pour être modifié (DNS, DNF, Éliminé ou Hors délais).");
+    return;
+  }
+
   const newTime = prompt(`Nouveau temps pour le dossard ${dossard}, tour ${tour} (HH:MM:SS) :`);
   if(!newTime) return;
 
@@ -567,11 +605,12 @@ window.searchRunner = async function(){
   }
 
   const data = snap.docs[0].data();
+  const isEligible = await isRunnerEligible(dossard);
 
   document.getElementById("runner-info").innerHTML = `
     <h3>${data.nom} ${data.prenom}</h3>
     <p>Dossard : ${data.dossard}</p>
-    <p>Statut : ${data.statut}</p>
+    <p>Statut : ${data.statut} ${!isEligible ? '(Non éligible)' : ''}</p>
   `;
 
   loadScans(dossard);
@@ -581,7 +620,6 @@ window.searchRunner = async function(){
    📄 LISTE DES SCANS
 --------------------------------------------------------- */
 async function loadScans(dossard){
-  // Si aucune synchronisation n'a encore été faite, on synchronise automatiquement.
   if (!firebaseScansCache.length) {
     await chargerScansDepuisFirebase();
   }
@@ -591,6 +629,8 @@ async function loadScans(dossard){
   const scans = firebaseScansCache.filter(r =>
     normaliserDossard(r.dossard) === d
   );
+
+  const isEligible = await isRunnerEligible(dossard);
 
   let html = `
     <h3>Scans Firebase</h3>
@@ -621,6 +661,8 @@ async function loadScans(dossard){
       temps = format(diff);
     }
 
+    const buttonClass = isEligible ? "" : "button-disabled";
+
     html += `
       <tr>
         <td>${r.tour ?? "-"}</td>
@@ -628,10 +670,10 @@ async function loadScans(dossard){
         <td>${r.horsDelai ? "Oui" : "Non"}</td>
         <td>${r.dossard ?? "-"}</td>
         <td>
-          <button onclick="editScan('${id}', ${Number(r.tour) || 0}, '${normaliserDossard(r.dossard)}')">
+          <button onclick="editScan('${id}', ${Number(r.tour) || 0}, '${normaliserDossard(r.dossard)}')" class="${buttonClass}">
             Modifier
           </button>
-          <button onclick="deleteScan('${id}')">Supprimer</button>
+          <button onclick="deleteScan('${id}')" class="${buttonClass}">Supprimer</button>
         </td>
       </tr>
     `;
@@ -665,6 +707,11 @@ function format(ms){
    ✏️ MODIFIER UN SCAN
 --------------------------------------------------------- */
 window.editScan = async function(id, tour, oldDossard){
+  const isEligible = await isRunnerEligible(oldDossard);
+  if (!isEligible) {
+    alert("❌ Ce coureur n'est pas éligible pour être modifié (DNS, DNF, Éliminé ou Hors délais).");
+    return;
+  }
 
   const newTime = prompt("Temps écoulé (HH:MM:SS) ?");
   if(!newTime) return;
@@ -698,6 +745,11 @@ window.editScan = async function(id, tour, oldDossard){
    ✏️ MODIFIER UN SCAN DEPUIS LA FICHE COUREUR
 --------------------------------------------------------- */
 window.editRunnerScan = async function(id, tour, dossard){
+  const isEligible = await isRunnerEligible(dossard);
+  if (!isEligible) {
+    alert("❌ Ce coureur n'est pas éligible pour être modifié (DNS, DNF, Éliminé ou Hors délais).");
+    return;
+  }
 
   const newTime = prompt("Nouveau temps pour le tour " + tour + " (HH:MM:SS) :");
   if(!newTime) return;
@@ -726,6 +778,16 @@ window.editRunnerScan = async function(id, tour, dossard){
    ❌ SUPPRIMER UN SCAN
 --------------------------------------------------------- */
 window.deleteScan = async function(id){
+  const scanDoc = await getDoc(doc(db, "resultats", id));
+  if (!scanDoc.exists()) return;
+
+  const scan = scanDoc.data();
+  const isEligible = await isRunnerEligible(scan.dossard);
+  if (!isEligible) {
+    alert("❌ Ce scan ne peut pas être supprimé car le coureur n'est pas éligible (DNS, DNF, Éliminé ou Hors délais).");
+    return;
+  }
+
   await deleteDoc(doc(db,"resultats",id));
   await chargerScansDepuisFirebase();
   alert("Scan supprimé et Firebase resynchronisé !");
@@ -740,8 +802,15 @@ window.addScan = async function(){
   const dossard = normalizeDossard(document.getElementById("add-dossard").value);
   const tour = normalizeTour(document.getElementById("add-tour").value);
   const time = document.getElementById("add-time").value;
+  const horsDelai = document.getElementById("add-hors-delai").checked;
 
   if(!dossard || !tour || !time) return alert("Champs incomplets");
+
+  const isEligible = await isRunnerEligible(dossard);
+  if (!isEligible) {
+    alert("❌ Ce coureur n'est pas éligible pour être scanné (DNS, DNF, Éliminé ou Hors délais).");
+    return;
+  }
 
   const [h,m,s] = time.split(":").map(Number);
   const ms = (h*3600 + m*60 + s) * 1000;
@@ -754,11 +823,21 @@ window.addScan = async function(){
   const timestamp = new Date(startMs + ms);
 
   await addDoc(collection(db,"resultats"), {
-    dossard: normaliserDossard(dossard),
+    dossard: normalizeDossard(dossard),
     tour: Number(tour),
     timestamp,
-    horsDelai: false
+    horsDelai: horsDelai
   });
+
+  // Si le scan est marqué comme "hors délais", mettre à jour le statut du coureur
+  if (horsDelai) {
+    const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const coureurId = snap.docs[0].id;
+      await updateDoc(doc(db, "coureurs", coureurId), { statut: "ELIMINE" });
+    }
+  }
 
   await chargerScansDepuisFirebase();
 
@@ -769,126 +848,6 @@ window.addScan = async function(){
 /* ---------------------------------------------------------
    🔄 MODIFIER STATUT
 --------------------------------------------------------- */
-window.corrigerScan = async function(){
-  const dossard = normaliserDossard(
-    document.getElementById("correct-scan-dossard").value
-  );
-  const tour = normaliserTour(
-    document.getElementById("correct-scan-tour").value
-  );
-  const zone = document.getElementById("correct-scan-result");
-
-  if (!dossard || tour === null) {
-    zone.innerHTML = "⚠️ Saisis un dossard et un numéro de tour.";
-    return;
-  }
-
-  try {
-    zone.innerHTML = "⏳ Recherche dans Firebase...";
-
-    // Toujours synchroniser AVANT la recherche de correction.
-    await chargerScansDepuisFirebase();
-
-    const scan = trouverScanCache(dossard, tour);
-
-    if (!scan) {
-      zone.innerHTML = `
-        <p style="color:#ff4444;font-weight:bold;">
-          ❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.
-        </p>
-        <p style="color:#aaa;">
-          ${firebaseScansCache.length} scan(s) ont été synchronisés depuis Firebase.
-        </p>
-      `;
-      return;
-    }
-
-    let tempsActuel = "--:--:--";
-
-    if (scan.timestamp && startMs) {
-      const ts = typeof scan.timestamp.toDate === "function"
-        ? scan.timestamp.toDate().getTime()
-        : new Date(scan.timestamp).getTime();
-
-      tempsActuel = format(ts - startMs);
-    }
-
-    zone.innerHTML = `
-      <div style="border:1px solid #444;padding:15px;margin:10px auto;max-width:600px;">
-        <h3>✅ Scan trouvé dans Firebase</h3>
-
-        <p>Dossard : <b>${scan.dossard}</b></p>
-        <p>Tour : <b>${scan.tour}</b></p>
-        <p>Temps actuel : <b>${tempsActuel}</b></p>
-        <p>ID Firebase : <small>${scan.id}</small></p>
-
-        <input id="correct-scan-time"
-               type="text"
-               value="${tempsActuel}"
-               placeholder="HH:MM:SS">
-
-        <button onclick="enregistrerCorrectionScan('${scan.id}', '${dossard}', ${tour})">
-          💾 Enregistrer la correction
-        </button>
-      </div>
-    `;
-  } catch (error) {
-    console.error("Erreur correction scan :", error);
-    zone.innerHTML =
-      "❌ Erreur lors de la recherche Firebase : " + error.message;
-  }
-};
-
-window.enregistrerCorrectionScan = async function(id, dossard, tour){
-  const input = document.getElementById("correct-scan-time");
-  const newTime = input?.value.trim();
-
-  if (!newTime) return;
-
-  const parts = newTime.split(":").map(Number);
-
-  if (
-    parts.length !== 3 ||
-    parts.some(n => !Number.isFinite(n)) ||
-    parts[0] < 0 ||
-    parts[1] < 0 || parts[1] > 59 ||
-    parts[2] < 0 || parts[2] > 59
-  ) {
-    alert("⚠️ Temps invalide. Utilise HH:MM:SS.");
-    return;
-  }
-
-  const [h,m,s] = parts;
-  const ms = (h * 3600 + m * 60 + s) * 1000;
-
-  if (!startMs) {
-    alert("⚠️ Chrono non défini, impossible de recalculer le timestamp.");
-    return;
-  }
-
-  try {
-    const timestamp = new Date(startMs + ms);
-
-    await updateDoc(doc(db, "resultats", id), {
-      timestamp
-    });
-
-    // Synchronisation Firebase immédiate après écriture.
-    await chargerScansDepuisFirebase();
-
-    document.getElementById("correct-scan-result").innerHTML = `
-      <p style="color:#00ff99;font-weight:bold;">
-        ✅ Scan du dossard ${dossard}, tour ${tour} corrigé !
-      </p>
-      <p>Nouveau temps : <b>${newTime}</b></p>
-      <p style="color:#aaa;">Firebase resynchronisé.</p>
-    `;
-  } catch (error) {
-    console.error("Erreur écriture scan :", error);
-    alert("❌ Impossible d'enregistrer la correction : " + error.message);
-  }
-};
-
 window.updateStatus = async function(){
 
   const dossard = document.getElementById("status-dossard").value.trim();
@@ -959,15 +918,17 @@ window.saveRunner = async function(){
 /* ---------------------------------------------------------
    📋 TABLEAU COMPLET DES COUREURS
 --------------------------------------------------------- */
-onSnapshot(collection(db, "coureurs"), snap => {
+onSnapshot(collection(db, "coureurs"), async snap => {
 
   let liste = [];
 
-  snap.forEach(docu => {
+  for (const docu of snap.docs) {
     const c = docu.data();
-    if (!c.dossard) return;
+    if (!c.dossard) continue;
+
+    c.isEligible = await isRunnerEligible(c.dossard);
     liste.push(c);
-  });
+  }
 
   liste.sort((a, b) => Number(a.dossard) - Number(b.dossard));
 
@@ -984,6 +945,8 @@ onSnapshot(collection(db, "coureurs"), snap => {
   `;
 
   liste.forEach(c => {
+    const buttonClass = c.isEligible ? "" : "button-disabled";
+
     html += `
       <tr>
         <td>${c.dossard}</td>
@@ -992,7 +955,7 @@ onSnapshot(collection(db, "coureurs"), snap => {
         <td>${c.categorie}</td>
         <td>${c.statut}</td>
         <td>
-          <button onclick="editRunner('${c.dossard}', '${c.nom}', '${c.prenom}', '${c.categorie}')">
+          <button onclick="editRunner('${c.dossard}', '${c.nom}', '${c.prenom}', '${c.categorie}')" class="${buttonClass}">
             Modifier
           </button>
         </td>
@@ -1107,6 +1070,146 @@ window.saveTourDurations = async function(){
 
   document.getElementById("tour-save-status").innerHTML =
     "✅ Durées mises à jour !";
+};
+
+/* ---------------------------------------------------------
+   🔄 CORRIGER UN SCAN
+--------------------------------------------------------- */
+window.corrigerScan = async function(){
+  const dossard = normaliserDossard(
+    document.getElementById("correct-scan-dossard").value
+  );
+  const tour = normaliserTour(
+    document.getElementById("correct-scan-tour").value
+  );
+  const zone = document.getElementById("correct-scan-result");
+
+  if (!dossard || tour === null) {
+    zone.innerHTML = "⚠️ Saisis un dossard et un numéro de tour.";
+    return;
+  }
+
+  try {
+    zone.innerHTML = "⏳ Recherche dans Firebase...";
+
+    await chargerScansDepuisFirebase();
+
+    const scan = trouverScanCache(dossard, tour);
+
+    if (!scan) {
+      zone.innerHTML = `
+        <p style="color:#ff4444;font-weight:bold;">
+          ❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.
+        </p>
+        <p style="color:#aaa;">
+          ${firebaseScansCache.length} scan(s) ont été synchronisés depuis Firebase.
+        </p>
+      `;
+      return;
+    }
+
+    let tempsActuel = "--:--:--";
+
+    if (scan.timestamp && startMs) {
+      const ts = typeof scan.timestamp.toDate === "function"
+        ? scan.timestamp.toDate().getTime()
+        : new Date(scan.timestamp).getTime();
+
+      tempsActuel = format(ts - startMs);
+    }
+
+    const isEligible = await isRunnerEligible(dossard);
+    const buttonClass = isEligible ? "" : "button-disabled";
+
+    zone.innerHTML = `
+      <div style="border:1px solid #444;padding:15px;margin:10px auto;max-width:600px;">
+        <h3>✅ Scan trouvé dans Firebase</h3>
+
+        <p>Dossard : <b>${scan.dossard}</b></p>
+        <p>Tour : <b>${scan.tour}</b></p>
+        <p>Temps actuel : <b>${tempsActuel}</b></p>
+        <p>ID Firebase : <small>${scan.id}</small></p>
+        <p>Hors délai : <b>${scan.horsDelai ? "Oui" : "Non"}</b></p>
+
+        <input id="correct-scan-time"
+               type="text"
+               value="${tempsActuel}"
+               placeholder="HH:MM:SS">
+        <label>
+          <input id="correct-scan-hors-delai" type="checkbox" ${scan.horsDelai ? 'checked' : ''}> Hors délais
+        </label>
+
+        <button onclick="enregistrerCorrectionScan('${scan.id}', '${dossard}', ${tour})" class="${buttonClass}">
+          💾 Enregistrer la correction
+        </button>
+      </div>
+    `;
+  } catch (error) {
+    console.error("Erreur correction scan :", error);
+    zone.innerHTML =
+      "❌ Erreur lors de la recherche Firebase : " + error.message;
+  }
+};
+
+window.enregistrerCorrectionScan = async function(id, dossard, tour){
+  const input = document.getElementById("correct-scan-time");
+  const newTime = input?.value.trim();
+  const horsDelai = document.getElementById("correct-scan-hors-delai").checked;
+
+  if (!newTime) return;
+
+  const parts = newTime.split(":").map(Number);
+
+  if (
+    parts.length !== 3 ||
+    parts.some(n => !Number.isFinite(n)) ||
+    parts[0] < 0 ||
+    parts[1] < 0 || parts[1] > 59 ||
+    parts[2] < 0 || parts[2] > 59
+  ) {
+    alert("⚠️ Temps invalide. Utilise HH:MM:SS.");
+    return;
+  }
+
+  const [h,m,s] = parts;
+  const ms = (h * 3600 + m * 60 + s) * 1000;
+
+  if (!startMs) {
+    alert("⚠️ Chrono non défini, impossible de recalculer le timestamp.");
+    return;
+  }
+
+  try {
+    const timestamp = new Date(startMs + ms);
+
+    await updateDoc(doc(db, "resultats", id), {
+      timestamp,
+      horsDelai: horsDelai
+    });
+
+    // Si le scan est marqué comme "hors délais", mettre à jour le statut du coureur
+    if (horsDelai) {
+      const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const coureurId = snap.docs[0].id;
+        await updateDoc(doc(db, "coureurs", coureurId), { statut: "ELIMINE" });
+      }
+    }
+
+    await chargerScansDepuisFirebase();
+
+    document.getElementById("correct-scan-result").innerHTML = `
+      <p style="color:#00ff99;font-weight:bold;">
+        ✅ Scan du dossard ${dossard}, tour ${tour} corrigé !
+      </p>
+      <p>Nouveau temps : <b>${newTime}</b></p>
+      <p style="color:#aaa;">Firebase resynchronisé.</p>
+    `;
+  } catch (error) {
+    console.error("Erreur écriture scan :", error);
+    alert("❌ Impossible d'enregistrer la correction : " + error.message);
+  }
 };
 </script>
 
