@@ -1,3 +1,67 @@
+
+
+Texte collé(20260826-134904).txt
+Document
+
+Texte collé (2)(2).txt
+Document
+analyse mon code, car j'ai des soucis sur mes scans, lorsqu'un coureur est hors délais, dns ou dnf, il doit être inscrit comme "éliminé" jusqu'a la fin (seul moyen de reintégrer la course est de modifier manuellement via le code admintest.html dans l'onglet gestion coureurs). or actuellement, un coureur hors delais dns ou dnf, son bouton reste cliquable, de plus au tour suivbant il est reinitiallisé comme étant encore en course... Corrige moi tout cela pour que ce soit fonctionnel !   
+
+Oui. J’ai analysé les deux codes complets et le problème vient bien de la gestion d’état, à plusieurs endroits.
+
+Ce qui provoquait le bug
+Les boutons admin ne bloquaient que ELIMINE, pas DNS et DNF.
+Donc après un DNS/DNF, le bouton redevenait actif au rafraîchissement/changement de tour. 
+
+
+Le scanner de course avait une protection DNS / DNF / ELIMINE, mais la logique n'était pas uniformisée avec celle des boutons/admin. 
+
+
+Le cache du scanner ne rechargeait que les locks et résultats du tour courant. Au passage au tour suivant, cela pouvait faire disparaître de son cache l'historique des tours précédents. C'est exactement le genre de situation qui peut donner l'impression qu'un coureur éliminé « revient en course ». 
+
+
+Certaines fonctions de réinitialisation du cache réactivaient directement les boutons avec btn.disabled = !startMs, sans recontrôler le statut du coureur.
+
+J'ai donc centralisé la règle :
+
+DNS, DNF et ELIMINE = coureur éliminé et non scannable jusqu'à réintégration manuelle.
+
+La réintégration existante reste le mécanisme prévu dans Gestion coureurs → Réintégrer un coureur. 
+
+
+Fichiers corrigés
+Télécharger admintest_corrige.html
+
+Télécharger scan_course_corrige.html
+
+Ce qui est maintenant garanti
+Hors délai → ELIMINE → bouton définitivement désactivé.
+
+DNF → bouton définitivement désactivé.
+
+DNS → bouton définitivement désactivé.
+
+Passage au tour suivant → le statut reste pris en compte.
+
+Rafraîchissement des boutons → un DNS/DNF/ELIMINE reste bloqué.
+
+Réinitialisation du cache local → un DNS/DNF/ELIMINE reste bloqué.
+
+Scan manuel admin → impossible de contourner le blocage.
+
+Scanner QR → impossible de rescanner un DNS/DNF/ELIMINE.
+
+Le scanner recharge désormais les locks/résultats de tous les tours, et non uniquement ceux du tour courant.
+
+Une relecture Firestore du coureur est effectuée avant l'écriture d'un scan afin d'éviter qu'un cache périmé permette un scan après élimination.
+
+Seule la réintégration manuelle repasse le coureur à OK.
+
+J'ai également conservé les statuts DNS et DNF dans Firebase plutôt que de les écraser artificiellement en ELIMINE, ce qui est préférable pour conserver la distinction dans les résultats ; opérationnellement, les trois sont maintenant traités exactement comme des coureurs éliminés. Le code existant prévoyait déjà cette distinction dans la fonction de réintégration. 
+
+
+Attention : j'ai corrigé les fichiers à partir de tes deux codes fournis ; avant mise en production, remplace tes deux fichiers actuels par ces versions et teste au minimum : OK → hors délai → tour suivant, OK → DNF → tour suivant, OK → DNS → tour suivant, puis réintégration → nouveau scan. 
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -401,6 +465,14 @@
         .sort((a, b) => a - b);
     }
 
+    // Un coureur DNS, DNF ou ELIMINE est considéré comme définitivement éliminé
+    // tant qu'il n'est pas réintégré manuellement depuis l'onglet Gestion coureurs.
+    function isRunnerEliminated(coureur) {
+      return !!coureur && ["DNS", "DNF", "ELIMINE"].includes(
+        String(coureur.statut || "").toUpperCase()
+      );
+    }
+
     async function updateGlobalCache() {
       const now = Date.now();
       if (now - globalCache.lastUpdated < 15000) return;
@@ -735,7 +807,17 @@
         btn.textContent = dossard;
         btn.className = "dossard-btn";
         btn.id = `dossard-btn-${dossard}`;
-        btn.onclick = function() { buttonScan(dossard); };
+
+        const coureur = globalCache.coureurs[dossard];
+        if (isRunnerEliminated(coureur)) {
+          btn.disabled = true;
+          btn.classList.add("invalid");
+          btn.title = `Éliminé (${String(coureur.statut).toUpperCase()})`;
+          btn.onclick = null;
+        } else {
+          btn.onclick = function() { buttonScan(dossard); };
+        }
+
         grid.appendChild(btn);
       }
 
@@ -750,12 +832,13 @@
       btn.disabled = false;
       btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
 
-      // Vérifier si le coureur est ELIMINE
+      // Vérifier si le coureur est éliminé (DNS / DNF / ELIMINE)
       const coureur = globalCache.coureurs[dossard];
-      if (coureur && coureur.statut === "ELIMINE") {
+      if (isRunnerEliminated(coureur)) {
         btn.disabled = true;
         btn.classList.add("invalid");
-        btn.title = "Éliminé (hors délai)";
+        btn.title = `Éliminé (${String(coureur.statut).toUpperCase()})`;
+        btn.onclick = null;
         return;
       }
 
@@ -893,11 +976,12 @@
         }
       }
 
-      if (coureur && coureur.statut === "ELIMINE") {
+      if (isRunnerEliminated(coureur)) {
         if (statusDiv) {
-          statusDiv.innerHTML = `❌ Coureur éliminé (ne peut plus être scanné).`;
+          statusDiv.innerHTML = `❌ Coureur éliminé (${String(coureur.statut).toUpperCase()}) : il ne peut plus être scanné.`;
           statusDiv.className = "message error";
         }
+        await updateDossardButton(dossard);
         return false;
       }
 
@@ -1251,9 +1335,10 @@
         }
       }
 
-      if (coureur && coureur.statut === "ELIMINE") {
-        statusDiv.innerHTML = `❌ Coureur éliminé (ne peut plus être scanné).`;
+      if (isRunnerEliminated(coureur)) {
+        statusDiv.innerHTML = `❌ Coureur éliminé (${String(coureur.statut).toUpperCase()}) : il ne peut plus être scanné.`;
         statusDiv.className = "message error";
+        await updateDossardButton(dossard);
         return;
       }
 
@@ -1381,6 +1466,7 @@
         await batch.commit();
         await updateGlobalCache();
         globalCache.coureurs[dossard].statut = "OK";
+        globalCache.coureurs[dossard].horsDelai = false;
         runnerStatuses[dossard] = "OK";
         saveGlobalCache();
         await updateDossardButtonsState();
@@ -1540,7 +1626,15 @@
           const btn = document.getElementById(`dossard-btn-${dossard}`);
           if (btn) {
             btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
-            btn.disabled = !startMs;
+
+            const coureur = globalCache.coureurs[dossard];
+            if (isRunnerEliminated(coureur)) {
+              btn.disabled = true;
+              btn.classList.add("invalid");
+              btn.title = `Éliminé (${String(coureur.statut).toUpperCase()})`;
+            } else {
+              btn.disabled = !startMs;
+            }
           }
         }
         document.getElementById("reset-resultats-status").innerHTML = "🗑️ Résultats supprimés.";
@@ -1601,9 +1695,17 @@
           const btn = document.getElementById(`dossard-btn-${dossard}`);
           if (btn) {
             btn.classList.remove("valid", "invalid", "waiting", "scanned", "banned");
-            btn.disabled = !startMs;
-            if (!startMs) btn.title = "Chrono non lancé";
-            else btn.title = `Prêt tour ${currentTour}`;
+
+            const coureur = globalCache.coureurs[dossard];
+            if (isRunnerEliminated(coureur)) {
+              btn.disabled = true;
+              btn.classList.add("invalid");
+              btn.title = `Éliminé (${String(coureur.statut).toUpperCase()})`;
+            } else {
+              btn.disabled = !startMs;
+              if (!startMs) btn.title = "Chrono non lancé";
+              else btn.title = `Prêt tour ${currentTour}`;
+            }
           }
         }
         document.getElementById("reset-cache-status").innerHTML = "✅ Cache local réinitialisé !";
@@ -1663,3 +1765,14 @@
   </script>
 </body>
 </html>
+
+
+admintest_corrige.html
+HTML
+
+
+scan_course_corrige.html
+HTML
+
+
+
