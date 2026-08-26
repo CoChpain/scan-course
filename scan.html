@@ -592,7 +592,7 @@
       }
 
       // Calculer si le coureur est hors délai
-      const horsDelai = await isHorsDelai(prochainTour);
+     const horsDelai = await isHorsDelai(dossard, prochainTour);
 
       // Créer le verrou
       await setDoc(lockRef, {
