@@ -19,7 +19,23 @@
       --btn-bg-warning: #ffaa00;
       --btn-bg-dark-red: #8B0000;
     }
+.scans-chrono {
+  text-align: center;
+  font-size: 2.5rem;
+  font-weight: bold;
+  padding: 15px;
+  margin: 10px auto 20px auto;
+  max-width: 500px;
+  background: #111;
+  border: 2px solid #00aaff;
+  border-radius: 10px;
+  color: #00ff99;
+  letter-spacing: 2px;
+}
 
+#scans-chrono-value {
+  font-family: monospace;
+}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg-primary);
@@ -577,25 +593,58 @@
     };
 
     function afficherChrono() {
-      const zone = document.getElementById("chrono-status");
-      if (!startMs) {
-        zone.innerHTML = "Chrono en attente…";
-        if (chronoInterval) clearInterval(chronoInterval);
-        return;
+  const zone = document.getElementById("chrono-status");
+  const scansChrono = document.getElementById("scans-chrono-value");
+
+  if (chronoInterval) {
+    clearInterval(chronoInterval);
+    chronoInterval = null;
+  }
+
+  function updateChronos() {
+    if (!startMs) {
+      zone.innerHTML = "Chrono en attente…";
+
+      if (scansChrono) {
+        scansChrono.textContent = "00:00:00";
       }
-      if (chronoInterval) clearInterval(chronoInterval);
-      chronoInterval = setInterval(() => {
-        const diff = Date.now() - startMs;
-        zone.innerHTML = `⏱ Temps écoulé : <b>${formatTime(diff)}</b>`;
-        currentTour = calculateCurrentTour(startMs, limites);
-        if (currentTour > 0 && lastTourStartTime) {
-          let cumulMs = 0;
-          for (let i = 1; i < currentTour; i++) {
-            cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
-          }
-          lastTourStartTime = startMs + cumulMs;
-        }
-      }, 1000);
+
+      return;
+    }
+
+    const diff = Date.now() - startMs;
+    const temps = formatTime(diff);
+
+    // Chrono dans l'onglet Chrono
+    zone.innerHTML = `⏱ Temps écoulé : <b>${temps}</b>`;
+
+    // Chrono dans l'onglet Gestion des scans
+    if (scansChrono) {
+      scansChrono.textContent = temps;
+    }
+
+    currentTour = calculateCurrentTour(startMs, limites);
+
+    if (currentTour > 0 && lastTourStartTime) {
+      let cumulMs = 0;
+
+      for (let i = 1; i < currentTour; i++) {
+        cumulMs += (limites[`t${i}`] || 0) * 60 * 1000;
+      }
+
+      lastTourStartTime = startMs + cumulMs;
+    }
+  }
+
+  // Mise à jour immédiate
+  updateChronos();
+
+  // Puis toutes les secondes
+  if (startMs) {
+    chronoInterval = setInterval(updateChronos, 1000);
+  }
+;
+      
     }
 
     function formatTime(ms) {
