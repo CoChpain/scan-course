@@ -2949,72 +2949,33 @@ async function performScan(
   saveGlobalCache();
 
 
-  /*
-     SI HORS DELAI :
-     LE COUREUR PASSE A ELIMINE
-  */
+ const nouveauStatut = horsDelai ? "ELIMINE" : "OK";
 
-  if (horsDelai) {
+const q = query(
+  collection(db, "coureurs"),
+  where("dossard", "==", dossard)
+);
 
-    const q =
-      query(
-        collection(
-          db,
-          "coureurs"
-        ),
-        where(
-          "dossard",
-          "==",
-          dossard
-        )
-      );
+const snap = await getDocs(q);
 
+if (!snap.empty) {
+  const coureurDoc = snap.docs[0];
 
-    const snap =
-      await getDocs(q);
-
-
-    if (!snap.empty) {
-
-      const coureurDoc =
-        snap.docs[0];
-
-
-      await updateDoc(
-        doc(
-          db,
-          "coureurs",
-          coureurDoc.id
-        ),
-        {
-          statut: "ELIMINE",
-          horsDelai: true
-        }
-      );
-
-
-      globalCache.coureurs[
-        dossard
-      ].statut =
-        "ELIMINE";
-
-      globalCache.coureurs[
-        dossard
-      ].horsDelai =
-        true;
-
-
-      runnerStatuses[
-        dossard
-      ] =
-        "ELIMINE";
-
-
-      saveGlobalCache();
-
+  await updateDoc(
+    doc(db, "coureurs", coureurDoc.id),
+    {
+      statut: nouveauStatut,
+      horsDelai: horsDelai
     }
+  );
 
-  }
+  globalCache.coureurs[dossard].statut = nouveauStatut;
+  globalCache.coureurs[dossard].horsDelai = horsDelai;
+
+  runnerStatuses[dossard] = nouveauStatut;
+
+  saveGlobalCache();
+}
 
 
   await updateDossardButton(
