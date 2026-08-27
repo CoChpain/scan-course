@@ -245,7 +245,7 @@
 
         const departDoc = await getDoc(doc(db, "course", "depart"));
         if (departDoc.exists()) {
-          globalCache.startMs = departDoc.data().startMs;
+          globalCache.startMs = normalizeStartMs(departDoc.data().startMs);
         }
 
         const coureursSnap = await getDocs(collection(db, "coureurs"));
@@ -305,6 +305,26 @@
 
     let scanner = null;
     let startMs = null;
+
+function normalizeStartMs(value) {
+  if (value == null) return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") {
+    const nanos = typeof value.nanoseconds === "number" ? value.nanoseconds : 0;
+    return value.seconds * 1000 + Math.floor(nanos / 1000000);
+  }
+  if (typeof value._seconds === "number") {
+    const nanos = typeof value._nanoseconds === "number" ? value._nanoseconds : 0;
+    return value._seconds * 1000 + Math.floor(nanos / 1000000);
+  }
+  return null;
+}
+
     let limites = {};
     let currentTour = 0;
     let lastTourStartTime = null;
@@ -314,7 +334,7 @@
     cacheChannel.onmessage = (e) => {
       if (e.data.type === 'cache-updated') {
         globalCache = e.data.data;
-        startMs = globalCache.startMs;
+        startMs = normalizeStartMs(globalCache.startMs);
         limites = globalCache.limites;
         currentTour = calculateCurrentTour(startMs, limites);
         runnerStatuses = {};
@@ -727,17 +747,17 @@
 
       const departDoc = await getDoc(doc(db, "course", "depart"));
       if (departDoc.exists()) {
-        const newStartMs = departDoc.data().startMs;
+        const newStartMs = normalizeStartMs(departDoc.data().startMs);
         if (newStartMs && newStartMs !== globalCache.startMs) {
           globalCache.locks = {};
           globalCache.scans = {};
-          globalCache.startMs = newStartMs;
+          globalCache.startMs = normalizeStartMs(newStartMs);
           saveGlobalCache();
         }
       }
 
       await updateGlobalCache();
-      startMs = globalCache.startMs;
+      startMs = normalizeStartMs(globalCache.startMs);
       limites = globalCache.limites;
       currentTour = calculateCurrentTour(startMs, limites);
       runnerStatuses = {};
@@ -755,8 +775,8 @@
 
       onSnapshot(doc(db, "course", "depart"), async (snap) => {
         if (snap.exists()) {
-          startMs = snap.data().startMs;
-          globalCache.startMs = startMs;
+          startMs = normalizeStartMs(snap.data().startMs);
+          globalCache.startMs = normalizeStartMs(startMs);
           currentTour = calculateCurrentTour(startMs, limites);
 
           if (startMs && currentTour > 0) {
