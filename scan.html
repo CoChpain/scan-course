@@ -245,18 +245,15 @@
 
         const departDoc = await getDoc(doc(db, "course", "depart"));
         if (departDoc.exists()) {
-          globalCache.startMs = normalizeStartMs(departDoc.data().startMs);
+          globalCache.startMs = departDoc.data().startMs;
         }
 
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         globalCache.coureurs = {};
-        coureursSnap.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data.dossard !== undefined && data.dossard !== null) {
-            globalCache.coureurs[data.dossard] = {
-              ...data,
-              _docId: docSnap.id
-            };
+        coureursSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.dossard) {
+            globalCache.coureurs[data.dossard] = data;
           }
         });
 
@@ -305,52 +302,6 @@
 
     let scanner = null;
     let startMs = null;
-
-function normalizeStartMs(value) {
-  if (value == null) return null;
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (value instanceof Date) {
-    const ms = value.getTime();
-    return Number.isFinite(ms) ? ms : null;
-  }
-
-  if (typeof value === "string") {
-    const n = Number(value);
-    if (Number.isFinite(n)) return n;
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  if (typeof value.toMillis === "function") {
-    const ms = value.toMillis();
-    return Number.isFinite(ms) ? ms : null;
-  }
-
-  if (typeof value.toDate === "function") {
-    const date = value.toDate();
-    if (date instanceof Date) {
-      const ms = date.getTime();
-      return Number.isFinite(ms) ? ms : null;
-    }
-  }
-
-  if (typeof value.seconds === "number") {
-    const nanos = typeof value.nanoseconds === "number" ? value.nanoseconds : 0;
-    return value.seconds * 1000 + Math.floor(nanos / 1000000);
-  }
-
-  if (typeof value._seconds === "number") {
-    const nanos = typeof value._nanoseconds === "number" ? value._nanoseconds : 0;
-    return value._seconds * 1000 + Math.floor(nanos / 1000000);
-  }
-
-  return null;
-}
-
     let limites = {};
     let currentTour = 0;
     let lastTourStartTime = null;
@@ -360,7 +311,7 @@ function normalizeStartMs(value) {
     cacheChannel.onmessage = (e) => {
       if (e.data.type === 'cache-updated') {
         globalCache = e.data.data;
-        startMs = normalizeStartMs(globalCache.startMs);
+        startMs = globalCache.startMs;
         limites = globalCache.limites;
         currentTour = calculateCurrentTour(startMs, limites);
         runnerStatuses = {};
@@ -579,10 +530,7 @@ function normalizeStartMs(value) {
       if (!coureur) {
         const snap = await getDoc(doc(db, "coureurs", dossard));
         if (snap.exists()) {
-          coureur = {
-            ...snap.data(),
-            _docId: snap.id
-          };
+          coureur = snap.data();
           globalCache.coureurs[dossard] = coureur;
           saveGlobalCache();
         }
@@ -679,50 +627,24 @@ function normalizeStartMs(value) {
       };
       saveGlobalCache();
 
-      // Mettre à jour le statut du coureur
-      // dans les délais -> OK / hors délai -> ELIMINE
-      const nouveauStatut = horsDelai ? "ELIMINE" : "OK";
-
-      let coureurDocId =
-        coureur?._docId ||
-        globalCache.coureurs[dossard]?._docId;
-
-      // Compatibilité avec un ancien cache sans _docId
-      if (!coureurDocId) {
-        const q = query(
-          collection(db, "coureurs"),
-          where("dossard", "==", String(dossard))
-        );
+      // Mettre à jour le statut du coureur si hors délai
+      if (horsDelai) {
+        const q = query(collection(db, "coureurs"), where("dossard", "==", dossard));
         const snap = await getDocs(q);
+
         if (!snap.empty) {
-          coureurDocId = snap.docs[0].id;
+          const docRef = snap.docs[0];
+          await updateDoc(doc(db, "coureurs", docRef.id), {
+            statut: "ELIMINE",
+            horsDelai: true
+          });
+
+          globalCache.coureurs[dossard].statut = "ELIMINE";
+          globalCache.coureurs[dossard].horsDelai = true;
+          saveGlobalCache();
+          runnerStatuses[dossard] = "ELIMINE";
         }
       }
-
-      if (!coureurDocId) {
-        console.error("Document Firestore introuvable pour", dossard);
-        feedback(`❌ Impossible de mettre à jour le statut de ${dossard}`, "red");
-        beepError.play();
-        return;
-      }
-
-      await updateDoc(
-        doc(db, "coureurs", coureurDocId),
-        {
-          statut: nouveauStatut,
-          horsDelai: horsDelai
-        }
-      );
-
-      globalCache.coureurs[dossard] = {
-        ...(globalCache.coureurs[dossard] || coureur || {}),
-        _docId: coureurDocId,
-        statut: nouveauStatut,
-        horsDelai: horsDelai
-      };
-
-      runnerStatuses[dossard] = nouveauStatut;
-      saveGlobalCache();
 
       // Feedback visuel et sonore
       let couleur = horsDelai ? "orange" : "lime";
@@ -773,17 +695,17 @@ function normalizeStartMs(value) {
 
       const departDoc = await getDoc(doc(db, "course", "depart"));
       if (departDoc.exists()) {
-        const newStartMs = normalizeStartMs(departDoc.data().startMs);
+        const newStartMs = departDoc.data().startMs;
         if (newStartMs && newStartMs !== globalCache.startMs) {
           globalCache.locks = {};
           globalCache.scans = {};
-          globalCache.startMs = normalizeStartMs(newStartMs);
+          globalCache.startMs = newStartMs;
           saveGlobalCache();
         }
       }
 
       await updateGlobalCache();
-      startMs = normalizeStartMs(globalCache.startMs);
+      startMs = globalCache.startMs;
       limites = globalCache.limites;
       currentTour = calculateCurrentTour(startMs, limites);
       runnerStatuses = {};
@@ -801,8 +723,8 @@ function normalizeStartMs(value) {
 
       onSnapshot(doc(db, "course", "depart"), async (snap) => {
         if (snap.exists()) {
-          startMs = normalizeStartMs(snap.data().startMs);
-          globalCache.startMs = normalizeStartMs(startMs);
+          startMs = snap.data().startMs;
+          globalCache.startMs = startMs;
           currentTour = calculateCurrentTour(startMs, limites);
 
           if (startMs && currentTour > 0) {
