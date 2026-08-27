@@ -4348,20 +4348,24 @@ window.reintegrateRunner =
    MODIFIER UN SCAN
 ============================================================ */
 
-wwindow.modifyRunnerScan = async function() {
+window.modifyRunnerScan = async function() {
   const dossard = document.getElementById("reactivate-dossard").value.trim();
   const tour = Number(document.getElementById("reactivate-tour").value);
   const time = document.getElementById("reactivate-time").value.trim();
   const statusDiv = document.getElementById("reactivate-status");
 
-  // Vérification des champs obligatoires
+  // Réinitialisation du message d'erreur
+  statusDiv.innerHTML = "";
+  statusDiv.className = "message";
+
+  // 1. Vérification des champs obligatoires
   if (!dossard || !tour || !time) {
-    statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
+    statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs (dossard, tour, temps).";
     statusDiv.className = "message error";
     return;
   }
 
-  // Validation du format du temps (HH:MM:SS)
+  // 2. Validation du format du temps (HH:MM:SS)
   const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
   if (!timeRegex.test(time)) {
     statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS (ex: 01:23:45).";
@@ -4369,7 +4373,7 @@ wwindow.modifyRunnerScan = async function() {
     return;
   }
 
-  // Validation des valeurs (heures < 24, minutes < 60, secondes < 60)
+  // 3. Validation des valeurs (heures < 24, minutes < 60, secondes < 60)
   const [h, m, s] = time.split(":").map(Number);
   if (h >= 24 || m >= 60 || s >= 60) {
     statusDiv.innerHTML = "❌ Temps invalide (heures < 24, minutes < 60, secondes < 60).";
@@ -4377,7 +4381,7 @@ wwindow.modifyRunnerScan = async function() {
     return;
   }
 
-  // Vérification que le chrono est lancé
+  // 4. Vérification que le chrono est lancé
   if (!startMs) {
     statusDiv.innerHTML = "❌ Le chrono n'a pas été lancé. Impossible de modifier un scan.";
     statusDiv.className = "message error";
@@ -4385,30 +4389,30 @@ wwindow.modifyRunnerScan = async function() {
   }
 
   try {
-    // Récupération du coureur
+    // 5. Vérification que le coureur existe
     let coureur = globalCache.coureurs[dossard];
     if (!coureur) {
+      // Si le coureur n'est pas dans le cache, on le récupère depuis Firebase
       const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
       if (coureurSnap.exists()) {
         coureur = coureurSnap.data();
         globalCache.coureurs[dossard] = coureur;
+        saveGlobalCache();
+      } else {
+        statusDiv.innerHTML = "❌ Coureur introuvable.";
+        statusDiv.className = "message error";
+        return;
       }
     }
 
-    if (!coureur) {
-      statusDiv.innerHTML = "❌ Coureur introuvable";
-      statusDiv.className = "message error";
-      return;
-    }
-
-    // Vérification que le coureur n'est pas éliminé
+    // 6. Vérification que le coureur n'est pas éliminé
     if (estCoureurElimine(coureur)) {
       statusDiv.innerHTML = `❌ Le coureur ${dossard} est ${coureur.statut}. Utilisez d'abord "Réintégrer".`;
       statusDiv.className = "message error";
       return;
     }
 
-    // Recherche du scan à modifier
+    // 7. Recherche du scan à modifier dans Firebase
     const scanQuery = query(
       collection(db, "resultats"),
       where("dossard", "==", dossard),
@@ -4422,11 +4426,11 @@ wwindow.modifyRunnerScan = async function() {
       return;
     }
 
-    // Calcul du nouveau timestamp
+    // 8. Calcul du nouveau timestamp
     const ms = (h * 3600 + m * 60 + s) * 1000;
     const newTimestamp = new Date(startMs + ms);
 
-    // Mise à jour du scan dans Firebase
+    // 9. Mise à jour du scan dans Firebase
     const scanDoc = scanSnap.docs[0];
     await updateDoc(scanDoc.ref, {
       timestamp: newTimestamp,
@@ -4434,7 +4438,7 @@ wwindow.modifyRunnerScan = async function() {
       source: "admin (corrigé)"
     });
 
-    // Mise à jour du verrou (lock)
+    // 10. Mise à jour du verrou (lock) dans Firebase
     const lockKey = `${dossard}_t${tour}`;
     const lockRef = doc(db, "scansLocks", lockKey);
     await setDoc(
@@ -4442,13 +4446,13 @@ wwindow.modifyRunnerScan = async function() {
       {
         dossard,
         tour,
-        createdAt: newTimestamp
+        createdAt: serverTimestamp() // Utilise serverTimestamp() pour la cohérence
       },
       { merge: true }
     );
 
-    // Mise à jour du cache global
-    await updateGlobalCache();
+    // 11. Mise à jour du cache local
+    await updateGlobalCache(); // Rafraîchit le cache depuis Firebase
     globalCache.scans[lockKey] = {
       dossard,
       tour,
@@ -4458,19 +4462,20 @@ wwindow.modifyRunnerScan = async function() {
     globalCache.locks[lockKey] = true;
     saveGlobalCache();
 
-    // Mise à jour des boutons
+    // 12. Mise à jour des boutons
     await updateDossardButtonsState();
 
-    // ✅ Affichage du message de succès avec le temps saisi (Option 1)
+    // 13. Affichage du message de succès
     statusDiv.innerHTML = `✅ Dossard ${dossard} corrigé avec succès (Tour ${tour}, temps: ${time}) !`;
     statusDiv.className = "message success";
 
-    // Réinitialisation des champs
+    // 14. Réinitialisation des champs
     document.getElementById("reactivate-dossard").value = "";
     document.getElementById("reactivate-tour").value = "";
     document.getElementById("reactivate-time").value = "";
 
   } catch (error) {
+    console.error("Erreur dans modifyRunnerScan :", error); // Log pour le débogage
     statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
     statusDiv.className = "message error";
   }
