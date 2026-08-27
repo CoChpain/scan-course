@@ -998,15 +998,18 @@ async function updateGlobalCache() {
 
     globalCache.coureurs = {};
 
-    coureursSnap.forEach(doc => {
+    coureursSnap.forEach(docSnap => {
 
-      const data = doc.data();
+      const data = docSnap.data();
 
-      if (data.dossard) {
+      if (data.dossard !== undefined && data.dossard !== null) {
 
         globalCache.coureurs[
           data.dossard
-        ] = data;
+        ] = {
+          ...data,
+          _docId: docSnap.id
+        };
 
       }
 
@@ -1955,19 +1958,20 @@ window.saveRunner =
 
       if (snap.empty) {
 
-        await addDoc(
-          collection(
-            db,
-            "coureurs"
-          ),
-          {
-            dossard,
-            nom,
-            prenom,
-            categorie: sexe,
-            statut: "OK"
-          }
-        );
+        const coureurRef =
+          await addDoc(
+            collection(
+              db,
+              "coureurs"
+            ),
+            {
+              dossard,
+              nom,
+              prenom,
+              categorie: sexe,
+              statut: "OK"
+            }
+          );
 
 
         globalCache.coureurs[
@@ -1977,7 +1981,8 @@ window.saveRunner =
           nom,
           prenom,
           categorie: sexe,
-          statut: "OK"
+          statut: "OK",
+          _docId: coureurRef.id
         };
 
 
@@ -2655,8 +2660,10 @@ async function performScan(
       coureurSnap.exists()
     ) {
 
-      coureur =
-        coureurSnap.data();
+      coureur = {
+        ...coureurSnap.data(),
+        _docId: coureurSnap.id
+      };
 
       globalCache.coureurs[
         dossard
@@ -2949,34 +2956,71 @@ async function performScan(
   saveGlobalCache();
 
 
- const nouveauStatut = horsDelai ? "ELIMINE" : "OK";
+  /*
+     MISE À JOUR DU STATUT :
+     - dans les délais  -> OK
+     - hors délai       -> ELIMINE
+  */
 
-const q = query(
-  collection(db, "coureurs"),
-  where("dossard", "==", dossard)
-);
+  const nouveauStatut =
+    horsDelai ? "ELIMINE" : "OK";
 
-const snap = await getDocs(q);
+  let coureurDocId =
+    coureur?._docId ||
+    globalCache.coureurs[dossard]?._docId;
 
-if (!snap.empty) {
-  const coureurDoc = snap.docs[0];
+  // Compatibilité avec un ancien cache qui ne contient pas _docId
+  if (!coureurDocId) {
+
+    const q =
+      query(
+        collection(db, "coureurs"),
+        where("dossard", "==", String(dossard))
+      );
+
+    const snap = await getDocs(q);
+
+    if (!snap.empty) {
+      coureurDocId = snap.docs[0].id;
+    }
+  }
+
+  if (!coureurDocId) {
+
+    console.error(
+      "Document Firestore introuvable pour le dossard",
+      dossard
+    );
+
+    if (statusDiv) {
+      statusDiv.innerHTML =
+        `❌ Impossible de mettre à jour le statut du dossard ${dossard}.`;
+      statusDiv.className =
+        "message error";
+    }
+
+    return false;
+  }
 
   await updateDoc(
-    doc(db, "coureurs", coureurDoc.id),
+    doc(db, "coureurs", coureurDocId),
     {
       statut: nouveauStatut,
       horsDelai: horsDelai
     }
   );
 
-  globalCache.coureurs[dossard].statut = nouveauStatut;
-  globalCache.coureurs[dossard].horsDelai = horsDelai;
+  globalCache.coureurs[dossard] = {
+    ...(globalCache.coureurs[dossard] || coureur || {}),
+    _docId: coureurDocId,
+    statut: nouveauStatut,
+    horsDelai: horsDelai
+  };
 
-  runnerStatuses[dossard] = nouveauStatut;
+  runnerStatuses[dossard] =
+    nouveauStatut;
 
   saveGlobalCache();
-}
-
 
   await updateDossardButton(
     dossard
