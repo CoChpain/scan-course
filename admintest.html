@@ -986,7 +986,7 @@ async function updateGlobalCache() {
     if (departDoc.exists()) {
 
       globalCache.startMs =
-        departDoc.data().startMs;
+        normalizeStartMs(departDoc.data().startMs);
 
     }
 
@@ -1113,6 +1113,26 @@ function calculateCurrentTour(
 ============================================================ */
 
 let startMs = null;
+
+function normalizeStartMs(value) {
+  if (value == null) return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") {
+    const nanos = typeof value.nanoseconds === "number" ? value.nanoseconds : 0;
+    return value.seconds * 1000 + Math.floor(nanos / 1000000);
+  }
+  if (typeof value._seconds === "number") {
+    const nanos = typeof value._nanoseconds === "number" ? value._nanoseconds : 0;
+    return value._seconds * 1000 + Math.floor(nanos / 1000000);
+  }
+  return null;
+}
+
 let chronoInterval = null;
 let currentRunnerDossard = null;
 let limites = {};
@@ -1137,7 +1157,7 @@ cacheChannel.onmessage = async (e) => {
       e.data.data;
 
     startMs =
-      globalCache.startMs;
+      normalizeStartMs(globalCache.startMs);
 
     limites =
       globalCache.limites;
@@ -1400,7 +1420,7 @@ window.checkPwd =
 
 
     startMs =
-      globalCache.startMs;
+      normalizeStartMs(globalCache.startMs);
 
     limites =
       globalCache.limites;
