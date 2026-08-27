@@ -308,20 +308,46 @@
 
 function normalizeStartMs(value) {
   if (value == null) return null;
-  if (typeof value === "number") return value;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+
   if (typeof value === "string") {
     const n = Number(value);
-    return Number.isFinite(n) ? n : null;
+    if (Number.isFinite(n)) return n;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
-  if (typeof value.toMillis === "function") return value.toMillis();
+
+  if (typeof value.toMillis === "function") {
+    const ms = value.toMillis();
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  if (typeof value.toDate === "function") {
+    const date = value.toDate();
+    if (date instanceof Date) {
+      const ms = date.getTime();
+      return Number.isFinite(ms) ? ms : null;
+    }
+  }
+
   if (typeof value.seconds === "number") {
     const nanos = typeof value.nanoseconds === "number" ? value.nanoseconds : 0;
     return value.seconds * 1000 + Math.floor(nanos / 1000000);
   }
+
   if (typeof value._seconds === "number") {
     const nanos = typeof value._nanoseconds === "number" ? value._nanoseconds : 0;
     return value._seconds * 1000 + Math.floor(nanos / 1000000);
   }
+
   return null;
 }
 
