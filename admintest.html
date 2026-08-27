@@ -4348,306 +4348,124 @@ window.reintegrateRunner =
    MODIFIER UN SCAN
 ============================================================ */
 
-window.modifyRunnerScan =
-  async function() {
+window.modifyRunnerScan = async function() {
+  const dossard = document.getElementById("reactivate-dossard").value.trim();
+  const tour = Number(document.getElementById("reactivate-tour").value);
+  const time = document.getElementById("reactivate-time").value.trim();
+  const statusDiv = document.getElementById("reactivate-status");
 
-    const dossard =
-      document.getElementById(
-        "reactivate-dossard"
-      ).value.trim();
+  if (!dossard || !tour || !time) {
+    statusDiv.innerHTML = "⚠️ Veuillez remplir tous les champs.";
+    statusDiv.className = "message error";
+    return;
+  }
 
+  const timeRegex = /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
+  if (!timeRegex.test(time)) {
+    statusDiv.innerHTML = "❌ Format de temps invalide. Utilisez HH:MM:SS";
+    statusDiv.className = "message error";
+    return;
+  }
 
-    const tour =
-      Number(
-        document.getElementById(
-          "reactivate-tour"
-        ).value
-      );
+  // Vérifier que les valeurs h, m, s sont valides
+  const [h, m, s] = time.split(":").map(Number);
+  if (h >= 24 || m >= 60 || s >= 60) {
+    statusDiv.innerHTML = "❌ Temps invalide (heures < 24, minutes < 60, secondes < 60).";
+    statusDiv.className = "message error";
+    return;
+  }
 
+  if (!startMs) {
+    statusDiv.innerHTML = "❌ Le chrono n'a pas été lancé. Impossible de modifier un scan.";
+    statusDiv.className = "message error";
+    return;
+  }
 
-    const time =
-      document.getElementById(
-        "reactivate-time"
-      ).value.trim();
-
-
-    const statusDiv =
-      document.getElementById(
-        "reactivate-status"
-      );
-
-
-    if (
-      !dossard ||
-      !tour ||
-      !time
-    ) {
-
-      statusDiv.innerHTML =
-        "⚠️ Veuillez remplir tous les champs.";
-
-      statusDiv.className =
-        "message error";
-
-      return;
-
+  try {
+    let coureur = globalCache.coureurs[dossard];
+    if (!coureur) {
+      const coureurSnap = await getDoc(doc(db, "coureurs", dossard));
+      if (coureurSnap.exists()) {
+        coureur = coureurSnap.data();
+        globalCache.coureurs[dossard] = coureur;
+      }
     }
 
-
-    const timeRegex =
-      /^([0-9]{2}):([0-9]{2}):([0-9]{2})$/;
-
-
-    if (
-      !timeRegex.test(time)
-    ) {
-
-      statusDiv.innerHTML =
-        "❌ Format de temps invalide. Utilisez HH:MM:SS";
-
-      statusDiv.className =
-        "message error";
-
+    if (!coureur) {
+      statusDiv.innerHTML = "❌ Coureur introuvable";
+      statusDiv.className = "message error";
       return;
-
     }
 
+    if (estCoureurElimine(coureur)) {
+      statusDiv.innerHTML = `❌ Le coureur ${dossard} est ${coureur.statut}. Utilisez d'abord "Réintégrer" si vous souhaitez le remettre en course.`;
+      statusDiv.className = "message error";
+      return;
+    }
 
-    try {
+    const scanQuery = query(
+      collection(db, "resultats"),
+      where("dossard", "==", dossard),
+      where("tour", "==", tour)
+    );
+    const scanSnap = await getDocs(scanQuery);
 
-      let coureur =
-        globalCache.coureurs[
-          dossard
-        ];
+    if (scanSnap.empty) {
+      statusDiv.innerHTML = `❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.`;
+      statusDiv.className = "message error";
+      return;
+    }
 
+    // Calculer le nouveau timestamp
+    const ms = (h * 3600 + m * 60 + s) * 1000;
+    const newTimestamp = new Date(startMs + ms);
 
-      if (!coureur) {
+    const scanDoc = scanSnap.docs[0];
+    await updateDoc(scanDoc.ref, {
+      timestamp: newTimestamp,
+      horsDelai: false,
+      source: "admin (corrigé)"
+    });
 
-        const coureurSnap =
-          await getDoc(
-            doc(
-              db,
-              "coureurs",
-              dossard
-            )
-          );
-
-
-        if (
-          coureurSnap.exists()
-        ) {
-
-          coureur =
-            coureurSnap.data();
-
-          globalCache.coureurs[
-            dossard
-          ] = coureur;
-
-        }
-
-      }
-
-
-      if (!coureur) {
-
-        statusDiv.innerHTML =
-          "❌ Coureur introuvable";
-
-        statusDiv.className =
-          "message error";
-
-        return;
-
-      }
-
-
-      /*
-         IMPORTANT :
-
-         Un coureur DNS/DNF/ELIMINE
-         ne peut PAS être réactivé ici.
-
-         Pour cela :
-         utiliser "Réintégrer".
-      */
-
-      if (
-        estCoureurElimine(coureur)
-      ) {
-
-        statusDiv.innerHTML =
-          `❌ Le coureur ${dossard} est ${coureur.statut}. Utilisez d'abord "Réintégrer" si vous souhaitez le remettre en course.`;
-
-        statusDiv.className =
-          "message error";
-
-        return;
-
-      }
-
-
-      const scanQuery =
-        query(
-          collection(
-            db,
-            "resultats"
-          ),
-          where(
-            "dossard",
-            "==",
-            dossard
-          ),
-          where(
-            "tour",
-            "==",
-            tour
-          )
-        );
-
-
-      const scanSnap =
-        await getDocs(
-          scanQuery
-        );
-
-
-      if (
-        scanSnap.empty
-      ) {
-
-        statusDiv.innerHTML =
-          `❌ Aucun scan trouvé pour le dossard ${dossard} au tour ${tour}.`;
-
-        statusDiv.className =
-          "message error";
-
-        return;
-
-      }
-
-
-      const [h, m, s] =
-        time.split(":")
-          .map(Number);
-
-
-      const ms =
-        (
-          h * 3600 +
-          m * 60 +
-          s
-        ) * 1000;
-
-
-      const newTimestamp =
-        new Date(
-          startMs + ms
-        );
-
-
-      const scanDoc =
-        scanSnap.docs[0];
-
-
-      await updateDoc(
-        scanDoc.ref,
-        {
-          timestamp:
-            newTimestamp,
-          horsDelai: false,
-          source:
-            "admin (corrigé)"
-        }
-      );
-
-
-      const lockKey =
-        `${dossard}_t${tour}`;
-
-
-      const lockRef =
-        doc(
-          db,
-          "scansLocks",
-          lockKey
-        );
-
-
-      await setDoc(
-        lockRef,
-        {
-          dossard,
-          tour,
-          createdAt:
-            newTimestamp
-        },
-        {
-          merge: true
-        }
-      );
-
-
-      await updateGlobalCache();
-
-
-      globalCache.scans[
-        lockKey
-      ] = {
-
+    const lockKey = `${dossard}_t${tour}`;
+    const lockRef = doc(db, "scansLocks", lockKey);
+    await setDoc(
+      lockRef,
+      {
         dossard,
         tour,
+        createdAt: newTimestamp
+      },
+      { merge: true }
+    );
 
-        timestamp:
-          newTimestamp.getTime(),
+    await updateGlobalCache();
 
-        horsDelai: false
+    globalCache.scans[lockKey] = {
+      dossard,
+      tour,
+      timestamp: newTimestamp.getTime(),
+      horsDelai: false
+    };
+    globalCache.locks[lockKey] = true;
+    saveGlobalCache();
 
-      };
+    await updateDossardButtonsState();
 
+    // Afficher le temps corrigé pour confirmation
+    const formattedTime = formatTime(ms);
+    statusDiv.innerHTML = `✅ Dossard ${dossard} corrigé avec succès (Tour ${tour}, temps: ${formattedTime}) !`;
+    statusDiv.className = "message success";
 
-      globalCache.locks[
-        lockKey
-      ] = true;
+    document.getElementById("reactivate-dossard").value = "";
+    document.getElementById("reactivate-tour").value = "";
+    document.getElementById("reactivate-time").value = "";
 
-
-      saveGlobalCache();
-
-
-      await updateDossardButtonsState();
-
-
-      statusDiv.innerHTML =
-        `✅ Dossard ${dossard} corrigé avec succès (Tour ${tour}) !`;
-
-      statusDiv.className =
-        "message success";
-
-
-      document.getElementById(
-        "reactivate-dossard"
-      ).value = "";
-
-      document.getElementById(
-        "reactivate-tour"
-      ).value = "";
-
-      document.getElementById(
-        "reactivate-time"
-      ).value = "";
-
-
-    } catch (error) {
-
-      statusDiv.innerHTML =
-        `❌ Erreur : ${error.message}`;
-
-      statusDiv.className =
-        "message error";
-
-    }
-
-  };
+  } catch (error) {
+    statusDiv.innerHTML = `❌ Erreur : ${error.message}`;
+    statusDiv.className = "message error";
+  }
+};
 
 
 /* ============================================================
