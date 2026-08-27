@@ -250,10 +250,13 @@
 
         const coureursSnap = await getDocs(collection(db, "coureurs"));
         globalCache.coureurs = {};
-        coureursSnap.forEach(doc => {
-          const data = doc.data();
-          if (data.dossard) {
-            globalCache.coureurs[data.dossard] = data;
+        coureursSnap.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.dossard !== undefined && data.dossard !== null) {
+            globalCache.coureurs[data.dossard] = {
+              ...data,
+              _docId: docSnap.id
+            };
           }
         });
 
@@ -530,7 +533,10 @@
       if (!coureur) {
         const snap = await getDoc(doc(db, "coureurs", dossard));
         if (snap.exists()) {
-          coureur = snap.data();
+          coureur = {
+            ...snap.data(),
+            _docId: snap.id
+          };
           globalCache.coureurs[dossard] = coureur;
           saveGlobalCache();
         }
@@ -627,33 +633,50 @@
       };
       saveGlobalCache();
 
-     const nouveauStatut = horsDelai ? "ELIMINE" : "OK";
+      // Mettre à jour le statut du coureur
+      // dans les délais -> OK / hors délai -> ELIMINE
+      const nouveauStatut = horsDelai ? "ELIMINE" : "OK";
 
-const q = query(
-  collection(db, "coureurs"),
-  where("dossard", "==", dossard)
-);
+      let coureurDocId =
+        coureur?._docId ||
+        globalCache.coureurs[dossard]?._docId;
 
-const snap = await getDocs(q);
+      // Compatibilité avec un ancien cache sans _docId
+      if (!coureurDocId) {
+        const q = query(
+          collection(db, "coureurs"),
+          where("dossard", "==", String(dossard))
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          coureurDocId = snap.docs[0].id;
+        }
+      }
 
-if (!snap.empty) {
-  const docRef = snap.docs[0];
+      if (!coureurDocId) {
+        console.error("Document Firestore introuvable pour", dossard);
+        feedback(`❌ Impossible de mettre à jour le statut de ${dossard}`, "red");
+        beepError.play();
+        return;
+      }
 
-  await updateDoc(
-    doc(db, "coureurs", docRef.id),
-    {
-      statut: nouveauStatut,
-      horsDelai: horsDelai
-    }
-  );
+      await updateDoc(
+        doc(db, "coureurs", coureurDocId),
+        {
+          statut: nouveauStatut,
+          horsDelai: horsDelai
+        }
+      );
 
-  globalCache.coureurs[dossard].statut = nouveauStatut;
-  globalCache.coureurs[dossard].horsDelai = horsDelai;
+      globalCache.coureurs[dossard] = {
+        ...(globalCache.coureurs[dossard] || coureur || {}),
+        _docId: coureurDocId,
+        statut: nouveauStatut,
+        horsDelai: horsDelai
+      };
 
-  runnerStatuses[dossard] = nouveauStatut;
-
-  saveGlobalCache();
-}
+      runnerStatuses[dossard] = nouveauStatut;
+      saveGlobalCache();
 
       // Feedback visuel et sonore
       let couleur = horsDelai ? "orange" : "lime";
