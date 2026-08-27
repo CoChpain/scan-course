@@ -4352,7 +4352,7 @@ window.reintegrateRunner =
 window.modifyRunnerScan = async function() {
   const dossard = document.getElementById("reactivate-dossard").value.trim();
   const tour = Number(document.getElementById("reactivate-tour").value);
-  const dureeTour = document.getElementById("reactivate-time").value.trim(); // Temps du tour (ex: 03:00:00)
+  const dureeTour = document.getElementById("reactivate-time").value.trim();
   const statusDiv = document.getElementById("reactivate-status");
 
   // Réinitialisation du message
@@ -4419,23 +4419,20 @@ window.modifyRunnerScan = async function() {
       return;
     }
 
-    // 7. Calcul de la durée du tour en millisecondes (pour le timestamp absolu)
+    // 7. Calcul de la durée du tour en millisecondes
     const dureeTourMs = (h * 3600 + m * 60 + s) * 1000;
 
-    // 8. Calcul du timestamp absolu (pour la compatibilité)
-    //    On récupère le timestamp du tour précédent et on ajoute la durée du tour actuel.
-    //    Si c'est le tour 1, on utilise startMs + dureeTourMs.
+    // 8. Calcul du timestamp absolu
     let newTimestamp;
     if (tour === 1) {
+      // Pour le tour 1, on utilise startMs + dureeTourMs
       newTimestamp = new Date(startMs + dureeTourMs);
     } else {
-      // Récupérer le timestamp du tour précédent (tour - 1)
+      // Pour les tours suivants, on récupère le timestamp du tour précédent (tour - 1)
       const prevTourQuery = query(
         collection(db, "resultats"),
         where("dossard", "==", dossard),
-        where("tour", "==", tour - 1),
-        orderBy("timestamp", "desc"),
-        limit(1)
+        where("tour", "==", tour - 1)
       );
       const prevTourSnap = await getDocs(prevTourQuery);
 
@@ -4445,7 +4442,11 @@ window.modifyRunnerScan = async function() {
         return;
       }
 
-      const prevTourTimestamp = prevTourSnap.docs[0].data().timestamp;
+      // ✅ Trie côté client pour obtenir le dernier scan du tour précédent
+      const prevTourDocs = prevTourSnap.docs.sort(
+        (a, b) => b.data().timestamp.toMillis() - a.data().timestamp.toMillis()
+      );
+      const prevTourTimestamp = prevTourDocs[0].data().timestamp;
       newTimestamp = new Date(prevTourTimestamp.toMillis() + dureeTourMs);
     }
 
@@ -4453,7 +4454,7 @@ window.modifyRunnerScan = async function() {
     const scanDoc = scanSnap.docs[0];
     await updateDoc(scanDoc.ref, {
       timestamp: newTimestamp,
-      dureeTour: dureeTour, // ✅ On stocke la durée du tour (ex: "03:00:00")
+      dureeTour: dureeTour, // Stocke la durée du tour
       horsDelai: false,
       source: "admin (corrigé)"
     });
@@ -4477,7 +4478,7 @@ window.modifyRunnerScan = async function() {
       dossard,
       tour,
       timestamp: newTimestamp.getTime(),
-      dureeTour: dureeTour, // ✅ On stocke aussi la durée du tour
+      dureeTour: dureeTour,
       horsDelai: false
     };
     globalCache.locks[lockKey] = true;
